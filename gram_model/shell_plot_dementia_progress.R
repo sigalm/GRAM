@@ -58,5 +58,5 @@ dementia_data$hisp_black <- ifelse(dementia_data$race_eth %in% c("black", "hisp"
 dementia_data$obesity_num <- ifelse(dementia_data$obesity == "n", 0, 1)
 
 #-------- Call the “plot_dementia_progress” function 
-source("/Users/geenakim/Desktop/UCSF - Dementia/Men/plot_dementia_progress_18Mar2024.R")
+source("/Users/geenakim/Desktop/UCSF - Dementia/Men/plot_dementia_progress_24Mar2024.R")
 plot_dementia_progress(-5.0, 0.001, -0.0001, 0.00005 , 0.001, 0.001, 0.001, -0.002, -0.002, -0.002)
