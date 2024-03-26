@@ -1,8 +1,5 @@
 .DS_Store
 
-#Admin folder
-project_admin/
-
 # History files
 .Rhistory
 .Rapp.history
