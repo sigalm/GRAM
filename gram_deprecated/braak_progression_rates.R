@@ -12,7 +12,7 @@
 # These transitions are the complements of one another, so we can simplify the transition probabilities table to only include the "stay put" probabilities at each stage
 # The prob of progressing one step will be the complement of these probabilities. 
 
-braak_stages <- c("B0","B1","B2","B3","B4","B5","B6")
+braak_stages <- c(0,1,2,3,4,5,6)
 
 b00 <- 0.956
 b11 <- 1
@@ -99,7 +99,7 @@ trans_probs <- melt(optimized_matrix, varnames = c("baseline","followup"),value.
 trans_probs <- trans_probs[order(trans_probs$baseline, trans_probs$followup), ]
 rownames(trans_probs) <- NULL
 
-trans_probs_abbr <- trans_probs[trans_probs$baseline == trans_probs$followup, ]
+trans_probs_abbr <- trans_probs[trans_probs$baseline == trans_probs$followup, -2]
 
 
 

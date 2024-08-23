@@ -1,0 +1,33 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 GRAM - GBHI Resource Allocation Model\
+\
+A microsimulation study to estimate the health and economic impacts of Alzheimer\'92s dementia in a given setting. The model starts with the underlying, unobserved tau pathology (described by Braak stages), which is measured by tau-PET, accounting for test sensitivity variance due to disease severity. Model is calibrated such that annual rates of change in PET-based Braak staging reflects empirical data. The PET-based Braak stage is then utilized to determine clinical, cognitive, and functional impairment, quality of life, and costs.\
+\
+Data sets: \
+\
+1. trans_probs_abbr.RDS: The PET-based annual probabilities of non-transition by Braak stage. One-year probabilities adjusted to match two-year probabilities observed in {\field{\*\fldinst{HYPERLINK "https://www.nature.com/articles/s43587-022-00204-0"}}{\fldrslt Therriault et al (2022)}}. Calculated in break_progression_rates.R.\
+\
+2. tau_tangle_trans_probs_calibrated.RDS: Annual non-transition probabilities by Braak stage for the underlying histology (i.e., tau tangles in brain tissue) such that when measured via tau-PET leads to empirically observed PET-based Braak staging (as in Therriault et al 2022). This calibration is done in tau_histology_calibration.R.\
+\
+Scripts:\
+\
+1. amyloid_biomarker.R: An early test model based on the amyloid process and biomarker test performance. Discarded as of May 21, 2024, since transitioning to tau-based modeling approach.\
+\
+2. amyloid_model.R: A function that portrays changes in amyloid plaques over time in a sample of individuals with Alzheimer\'92s disease pathology. Discarded as of May 21, 2024.\
+\
+3. plaque_deposition.R: Short script to run amyloid_model, discarded as of May 21, 2024.\
+\
+4. braak_progression_rates.R: This script runs an optimization to achieve the best one-year tau-PET non-transition probabilities that leads to given two-year non-transition probabilities. The output is saved in trans_probs_abbr.RDS.\
+\
+5. tau_braak_model.R: A function portraying change in histologic tau and PET-based tau over time, accounting for tau-PET sensitivity for Braak staging. \
+\
+6. tau_histology_calibration.R: Calculates underlying transition probabilities for histologic tau progression given PET-tau sensitivity by disease severity and empirical transition probabilities for PET-based Braak stages. Output is saved in tau_tangle_trans_probs_calibrated.RDS.\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 7. scratchpad.R: This script is essentially a notepad. It\'92s a place to jot down small snippets of code that may eventually be useful.}

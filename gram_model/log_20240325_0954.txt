@@ -1,4 +1,0 @@
-2024-03-25 09:54:06.173738 [100] Starting simulation for n_i = 3000 and n_t = 50. 
-2024-03-25 09:54:06.189339 [3] Simulating cycle t=1/50 
-2024-03-25 09:54:08.062955 [3] Simulating cycle t=2/50 
-2024-03-25 09:54:09.950648 [3] Simulating cycle t=3/50 
