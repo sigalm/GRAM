@@ -6,7 +6,6 @@
 # # technical
 # library(tidyverse)
 # save_output <- TRUE # save output to csv files on disk yes/no
-# setwd("/Users/smaya/Documents/GitHub/GRAM/gram_model") # point to folder on disk to where inputs and outputs are stored
 
 ######################################## 1. DEFINE MODEL INPUTS ########################################
 
@@ -374,10 +373,8 @@ f.update_COG <- function(v.SYN, v.SYN.lag, v.COG.lag, p.land_dist, random_cycle,
   cog[healthy] <- 0
   
   # Assign initial CDR-SB score for those who develop MCI in the current cycle
-  # The "round(score*2)/2" ensures that scores are increments of 0.5 
   # Cut-off values from: O'Bryant et al 2012 (PMC3409562) Table 2
   mci_new <- v.SYN==1 & v.SYN.lag==0
-  # cog[mci_new] <- rbeta(n=sum(mci_new), shape1 = 2, shape2 = 5) * (4.0 - 0.5) + 0.5
   cog[mci_new] <- runif(n=sum(mci_new), min = 0.5, max = 4.0)
   
   # Update CDR-SB score for those who remain in MCI
@@ -612,6 +609,8 @@ f.run <- function(a.random, l.inputs) {
     
   }
   
+  
+  # The "round(score*2)/2" ensures that scores are increments of 0.5 
   a.out[,"COG",] <- round(a.out[,"COG",] * 2) / 2
   
   # run time
