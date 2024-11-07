@@ -10,7 +10,9 @@
 ######################################## 1. DEFINE MODEL INPUTS ########################################
 
 # vector of attribute names (see supplemental 'Attribute names')
-v.attr_names <- c("TIME","ALIVE","AGE","SEX","TX","SYN","COG","SEV", "FUN","EDU","RACEETH","OBES","AGE_MCI",
+v.attr_names <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCOME","MEDBUR","APOE4","TX","SYN","BHA","CDR_track","CDR",
+                  "CDRfast_sd1","CDRslow_sd1","CDR_obs",
+                  "SEV","SEV_obs","FUN","AGE_MCI",
                   "BEH","INSTIT","QALY","COST_care", "COST_tx")
 n.attr <- length(v.attr_names) # number        of attributes
 
@@ -19,10 +21,11 @@ v.ALIVE_val <- c(0,1)    # 0 = dead, 1 = alive
 v.SEX_val <- c(1,2)      # 1 = male, 2 = female
 v.EDU_val <- c(1,2,3)    # 1 = college or more, 2 = high school or GED, 3 = less than high school 
 v.RACEETH_val <- c(0,1) # 0 = not Hispanic or Black, 1 = Hispanic or Black
-v.OBES_val <- c(0,1)      # 0 = not obese, 1 = obese
-v.APOE4_val <- c(0,1,2)    # 0 = non-carrier, 1 = hetero, 2 = homo
-v.SYN_val <- c(0,1,2)     # 0 = healthy, 1 = MCI, 2 = dementia
-v.SEV_val <- c(1,2,3)    # 1 = mild, 2 = moderate, 3 = severe
+v.INCOME_val <- c(0,1,2)  # 0 = low (<$9000/y), 1 = medium ($9000-$36000/y), 2 = high (>$36000/y)
+v.MEDBUR_val <- 0:15      # count of additional health conditions (15 considered, see documentation)
+v.APOE4_val <- c(0,1)    # 0 = non-carrier, 1 = carrier (hetero- or homozygous)
+v.SYN_val <- c(0,1)     # 0 = healthy, 1 = cognitively impaired
+v.SEV_val <- c(0,1,2,3)    # 0 = MCI, 1 = mild dementia, 2 = moderate dementia, 3 = severe dementia
 v.AB_val <- c(0,1)         # 0 = no amyloid beta (normal), 1 = has amyloid beta (AD pathology)
 v.TX_val <- c(0,1)       # 0 = Tx on / provided / active, 1 = Tx off / not provided / stopped
 
@@ -43,12 +46,16 @@ l.inputs[["strategy_strat2"]] <- "intervention_diseasemodifying"
 l.inputs[["Tx"]] <- 0 # empty parameter to be filled in as part of the strategies
 l.inputs[["Tx_strat1"]] <- 0
 l.inputs[["Tx_strat2"]] <- 1
-l.inputs[["seed_pa"]] <- 12345 # seed for generating random values that drive probabilistic analysis
+l.inputs[["seed_pa"]] <- 20241022 # seed for generating random values that drive probabilistic analysis
 l.inputs[["n.psa"]] <- 10 # number of PSA iterations
+l.inputs[["r.discount_QALY"]] <- 0.03
+l.inputs[["r.discount_COST"]] <- 0.03
 
 
 ######################################## 1.2. EXTERNAL MODEL INPUTS ########################################
 # model inputs for deterministic analysis
+
+## Demographic inputs
 l.inputs[["AGE_start_mean"]] <- 50
 l.inputs[["AGE_start_sd"]] <- 0
 
@@ -56,51 +63,61 @@ l.inputs[["p.SEX_start_male"]] <- 0.5
 l.inputs[["p.SEX_start_female"]] <- 0.5
 
 l.inputs[["p.EDU_start"]] <- c(0.4, 0.5, 0.1) # p for college, high school, less than high school, respectively. must add to 1.
-l.inputs[["p.OBES_start"]] <- c(0.95, 0.05) # p for OBES = 0 and OBES = 1, respectively
 l.inputs[["p.RACEETH_start"]] <- c(0.65, 0.35) # p for RACEETH = 0 (not Hisp/Black) and RACEETH = 1 (Hisp/Black)
+l.inputs[["p.INCOME_start"]] <- c(0.35, 0.55, 0.1) # p for low, medium, high income, respectively
+l.inputs[["p.APOE4_start"]] <- c(0.7, 0.3) # p for non-carrier and carrier, respectively
 
+
+## Mortality
 l.inputs[["hr.mort_mci"]] <- 1.82
 l.inputs[["hr.mort_mil"]] <- 2.92
 l.inputs[["hr.mort_mod"]] <- 3.85
 l.inputs[["hr.mort_sev"]] <- 9.52
 
-l.inputs[["logit_intercept"]] <- -5.0
-l.inputs[["logit_b1"]] <- 0.001
-l.inputs[["logit_b11"]] <- -0.0001
-l.inputs[["logit_b12"]] <- 0.00005
-l.inputs[["logit_b2"]] <- 0.001
-l.inputs[["logit_b3"]] <- 0.001
-l.inputs[["logit_b4"]] <- 0.001
-l.inputs[["logit_b1EDU"]] <- -0.002
-l.inputs[["logit_b1RACEETH"]] <- -0.002
-l.inputs[["logit_b1OBES"]] <- -0.002
+l.inputs[["m.lifetable"]] <- array(data = read.csv("../gram_data/table_prob_die_next_year.csv")[ , 2], dim = c(51,1),
+                                   dimnames = list(50:100, "q"))
 
-l.inputs[["weibull_mu"]] <- -1.53141
-l.inputs[["weibull_gamma"]] <- 0.757504
+## Logistic regression for transition to MCI from Healthy
 
-l.inputs[["p.land_dist"]] <- c(0.75,0.20,0.05)  # PLACEHOLER p for landing at mild, moderate, or severe dementia
+l.inputs[["m.hr_mci"]] <- array(data = readRDS("../gram_data/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
+                                dimnames = list(50:100, "r")) / 1000 # Divide by 1000 to scale from 1000 person-years to annual rate
 
-# l.inputs[["instit_constant"]] <- -4.255301
-# l.inputs[["instit_COG2"]] <- 0.2345492
-# l.inputs[["instit_COG3"]] <- 0.3538726
-# l.inputs[["instit_FUN2"]] <- 0.7485477
-# l.inputs[["instit_FUN3"]] <- 1.4328740
-# l.inputs[["instit_BEH2"]] <- 0.2494476
-# l.inputs[["instit_BEH3"]] <- 0.6015229
+l.inputs[["log_EDU"]] <- log(0.95)
+l.inputs[["log_APOE4"]] <- log(1.18)
+l.inputs[["log_MEDBUR"]] <- log(1.09)
+l.inputs[["log_INCOMEmed"]] <- log(0.80)
+l.inputs[["log_INCOMEhi"]] <- log(0.73)
 
+## Cognitive test scoring and progression
+l.inputs[["cutoff_CDR"]] <- c("healthy" = 0, 
+                              "mci" = 0.5, 
+                              "mild" = 4.5, 
+                              "moderate" = 9.5,
+                              "severe" = 16.5,
+                              "max" = 18.0)  # 0 is healthy, 0.5-4.0 is MCI, 4.5-9.0 is mild, 9.5-16.0 mod, 16.5-18.0 severe 
+
+l.inputs[["r.CDRfast_mean"]] <- 1.43
+l.inputs[["r.CDRfast_sd1"]] <- 0.3
+l.inputs[["r.CDRslow_mean"]] <- 1.1
+l.inputs[["r.CDRslow_sd1"]] <- 0.4
+l.inputs[["r.CDR_sd2"]] <- 1
+l.inputs[["r.CDR_sd3"]] <- 1
+
+
+## Cognitive test performance
+# Source: Possin 2018, MCI due to AD vs. control
+l.inputs[["sens_BHA"]] <- 0.72
+l.inputs[["spec_BHA"]] <- 0.85
+
+
+## Health state utilities
 l.inputs[["u.healthy"]] <- 0.85 # PLACEHOLDER - do we want to apply age-related decreases to this?
 l.inputs[["u.mci"]] <- 0.73
 l.inputs[["u.mil"]] <- 0.69
 l.inputs[["u.mod"]] <- 0.53
 l.inputs[["u.sev"]] <- 0.38
 
-# l.inputs[["c.mci_home"]] <- 13364
-# l.inputs[["c.mil_home"]] <- 26727
-# l.inputs[["c.mod_home"]] <- 31644
-# l.inputs[["c.sev_home"]] <- 40645
-# l.inputs[["c.mil_instit"]] <- 111902
-# l.inputs[["c.mod_instit"]] <- 111902
-# l.inputs[["c.sev_instit"]] <- 113523
+## Costs
 l.inputs[["c.healthy"]] <- 0 # PLACEHOLDER - do we want to apply age-related decreases to this?
 l.inputs[["c.mci"]] <- 13364
 l.inputs[["c.mil"]] <- 26727
@@ -108,12 +125,11 @@ l.inputs[["c.mod"]] <- 31644
 l.inputs[["c.sev"]] <- 40645
 l.inputs[["c.Tx"]] <- 5000
 
+## Treatments
 l.inputs[["rr.Tx_mci"]] <- 0.8
 l.inputs[["Tx_t_max"]] <- 5
-l.inputs[["r.discount_QALY"]] <- 0.03
-l.inputs[["r.discount_COST"]] <- 0.03
-l.inputs[["m.lifetable"]] <- array(data = read.csv("../gram_data/table_prob_die_next_year.csv")[ , 2], dim = c(51,1),
-                                   dimnames = list(50:100, "q"))
+
+
 
 
 
@@ -310,11 +326,11 @@ f.update_RACEETH <- function(v.RACEETH.lag) {
   return(raceeth)
 }
 
-######################################## OBES
+######################################## INCOME
 
-f.update_OBES <- function(v.OBES.lag) {
-  obes <- v.OBES.lag
-  return(obes)
+f.update_INCOME <- function(v.INCOME.lag) {
+  income <- v.INCOME.lag
+  return(income)
 }
 
 ######################################## EDU
@@ -324,95 +340,151 @@ f.update_EDU <- function(v.EDU.lag) {
   return(edu)
 }
 
-######################################## SYN
+######################################## MEDBUR
 
-f.update_SYN <- function(l.inputs, v.AGE.lag, v.EDU.lag, v.RACEETH.lag, v.OBES.lag, 
-                         v.time, v.time.lag, mu, gamma, v.SYN.lag, v.TX.lag, rr.Tx_mci, random_cycle, n.alive) {
+f.update_MEDBUR <- function(v.MEDBUR.lag) {
+  medbur <- v.MEDBUR.lag
+  return(medbur)
+}
+
+######################################## APOE4
+
+f.update_APOE4 <- function(v.APOE4.lag) {
+  apoe4 <- v.APOE4.lag
+  return(apoe4)
+}
+
+######################################## MCI
+
+f.update_SYN <- function(l.inputs, v.AGE.lag, v.EDU.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, v.SYN.lag, random_cycle, n.alive) {
   
   # start with empty vector
   symptoms <- rep(NA, n.alive)
+
+  # look up hazard rate given age
+  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE.lag,0), ncol = 1) - 50 + 1]
   
-  # logistic regression (determine healthy --> MCI)
-  x <- l.inputs[["logit_intercept"]] + 
-    l.inputs[["logit_b1"]] * (v.AGE.lag - 50) + 
-    l.inputs[["logit_b2"]] * v.EDU.lag + 
-    l.inputs[["logit_b3"]] * v.RACEETH.lag + 
-    l.inputs[["logit_b4"]] * v.OBES.lag + 
-    l.inputs[["logit_b11"]] * (v.AGE.lag - 50)^2 + 
-    l.inputs[["logit_b12"]] * (v.AGE.lag - 50)^3 + 
-    l.inputs[["logit_b1EDU"]] * (v.AGE.lag - 50) * v.EDU.lag  + 
-    l.inputs[["logit_b1RACEETH"]] * (v.AGE.lag - 50) * v.RACEETH.lag + 
-    l.inputs[["logit_b1OBES"]] * (v.AGE.lag - 50) * v.OBES.lag
+  # calculate hazard at current cycle given coefficients, convert to probability
+  hazard <- hazards.age * exp(
+    l.inputs[["log_EDU"]] * v.EDU.lag + 
+    l.inputs[["log_APOE4"]] * v.APOE4.lag + 
+    l.inputs[["log_MEDBUR"]] * v.MEDBUR.lag + 
+    l.inputs[["log_INCOMEmed"]] * (v.INCOME.lag == 1) + 
+    l.inputs[["log_INCOMEhi"]] * (v.INCOME.lag == 2))
   
-  TP_none_to_mci <- exp(x) / (1 + exp(x))    
-  
-  # survival function (determine MCI --> dementia)
-  temp <- (1 - f.predict_weibull(time = v.time, mu = mu, gamma = gamma) / f.predict_weibull(time = v.time.lag, mu = mu, gamma = gamma))
-  
-  # RR related to treatment effect
-  TP_mci_to_dementia <- temp * v.TX.lag * rr.Tx_mci + temp * !v.TX.lag * 1
+  prob_none_to_mci <- 1 - exp(-hazard)
   
   # apply dependent on previous state
-  symptoms[v.SYN.lag==0] <- as.numeric(TP_none_to_mci[v.SYN.lag==0] > random_cycle[v.SYN.lag==0])
-  symptoms[v.SYN.lag==1] <- as.numeric(TP_mci_to_dementia[v.SYN.lag==1] > random_cycle[v.SYN.lag==1]) * 2
-  symptoms[v.SYN.lag==1 & symptoms!=2] <- 1
-  symptoms[v.SYN.lag==2] <- 2
+  symptoms[v.SYN.lag == 0] <- as.numeric(prob_none_to_mci[v.SYN.lag==0] > random_cycle[v.SYN.lag==0])
+  symptoms[v.SYN.lag == 1] <- 1
   
-  # return
   return(symptoms)
 }
 
+######################################## BHA
 
-######################################## CDR-SB
-
-f.update_COG <- function(v.SYN, v.SYN.lag, v.COG.lag, p.land_dist, random_cycle, n.alive) {
-  #discuss the issue of median vs. mean rate of change
-  cog <- rep(NA, n.alive)
-  
-  healthy <- v.SYN==0
-  cog[healthy] <- 0
-  
-  # Assign initial CDR-SB score for those who develop MCI in the current cycle
-  # Cut-off values from: O'Bryant et al 2012 (PMC3409562) Table 2
-  mci_new <- v.SYN==1 & v.SYN.lag==0
-  cog[mci_new] <- runif(n=sum(mci_new), min = 0.5, max = 4.0)
-  
-  # Update CDR-SB score for those who remain in MCI
-  mci_still <- v.SYN==1 & v.SYN.lag==1
-  cog[mci_still]  <- pmin(v.COG.lag[mci_still] * (1 + 1.67/18), 4.0)
-  
-  # Assign CDR-SB score for those who develop dementia in the current cycle
-  dementia_new <- v.SYN==2 & v.SYN.lag!=2
-  mild <- dementia_new & (p.land_dist[1] > random_cycle)
-  moderate <- dementia_new & between(random_cycle, p.land_dist[1], (p.land_dist[1] + p.land_dist[2]))
-  severe <- dementia_new & (random_cycle > (p.land_dist[1] + p.land_dist[2]))
+f.update_BHA <- function(v.SYN, v.SYN.lag, sens_BHA, spec_BHA, random_cycle, n.alive) {
     
-  cog[mild] <- runif(n=sum(mild), min = 4.5, max = 9.0)
-  cog[moderate] <-runif(n=sum(moderate), min = 9.5, max = 15.5)
-  cog[severe] <- runif(n=sum(severe), min = 16.0, max = 18.0)
+  bha <- rep(NA, n.alive)
+
+  healthy <- v.SYN == 0
+  bha[healthy] <- as.numeric((1-spec_BHA) > random_cycle[healthy])  # If healthy, specificity gives the probability of positive BHA
   
-  #Update CDR-SB score for those who remain in dementia
-  dementia_still <- v.SYN==2 & v.SYN.lag==2
-  cog[dementia_still] <- pmin(v.COG.lag[dementia_still] * (1 + 2/18), 18.0)
+  mci_new <- v.SYN == 1 & v.SYN.lag == 0
+  bha[mci_new] <- as.numeric(sens_BHA > random_cycle[mci_new])  # If new MCI, sensitivity gives the probability of positive BHA
   
-  # return
-  return(cog)
+  mci_still <- v.SYN == 1 & v.SYN.lag == 1
+  bha[mci_still] <- 1                                           # If already impaired, positive BHA by default (no re-test)
+  #TODO: discuss if this is the right approach.
+  return(bha)
 }
+
+######################################## CDR-SB fast/slow track
+
+f.update_CDR_track <- function(v.MEDBUR, random_cycle, n.alive) {
+  
+  track <- rep(NA, n.alive)
+  
+  x <- 0.5 * v.MEDBUR
+  prob_fast <- exp(x) / (1 + exp(x))
+  
+  track <- prob_fast > random_cycle
+  
+  return(track)
+}
+
+######################################## CDR-SB - true disease status
+
+f.update_CDR <- function(v.SYN, v.SYN.lag, cutoff_CDR, v.CDR.lag, 
+                              r.CDRfast_mean, r.CDRslow_mean, v.CDR_track,
+                              v.CDRfast_sd1, v.CDRslow_sd1, r.CDR_sd2, random_cycle, n.alive) {
+  
+  # CDR-SB cut-off values from: O'Bryant et al 2012 (PMC3409562) Table 2
+  
+  cdr <- rep(NA, n.alive)
+  
+  # Assign zero to those who are healthy
+  healthy <- v.SYN == 0
+  cdr[healthy] <- qunif(p = random_cycle[healthy], min = cutoff_CDR["healthy"], max = cutoff_CDR["mci"])
+  
+  # Assign initial CDR-SB score for new cases. Assume all enter in mild cognitive impairment, skewed right
+  mci_new <- v.SYN == 1 & v.SYN.lag == 0
+  cdr[mci_new] <- qunif(p = random_cycle[mci_new], min = cutoff_CDR["mci"], max = cutoff_CDR["mild"])  # TODO: Skew right.
+  
+  # Progress CDR-SB score for those already with impairment
+  mci_still <- v.SYN == 1 & v.SYN.lag == 1 
+  cdr[mci_still] <- v.CDR.lag[mci_still] + 
+    (r.CDRfast_mean * v.CDR_track[mci_still] + r.CDRslow_mean * (1-v.CDR_track[mci_still])) +                               # Add mean increase in CDR-SB score
+    (v.CDRfast_sd1[mci_still] * v.CDR_track[mci_still] + v.CDRslow_sd1[mci_still] * (1-v.CDR_track[mci_still])) +  # Add individual-level deviation from mean
+    qnorm(p = random_cycle[mci_still], mean = 0, sd = r.CDR_sd2)                                    # Add within-individual deviation
+  
+  return(cdr)
+}
+
+
+######################################## CDR-SB - observed disease status
+
+f.update_CDR_obs <- function(v.BHA, v.CDR, r.CDR_sd3, random_cycle, n.alive) {
+  
+  cdr_obs <- rep(NA, n.alive)
+  
+  cdr_obs[v.BHA == 1] <- v.CDR[v.BHA == 1] + 
+    qnorm(p = random_cycle[v.BHA == 1], mean = 0, sd = r.CDR_sd3)        # Add measurement error (rater reliability)
+  
+  return(cdr_obs)
+}
+
 
 ######################################## SEV
 
-f.update_SEV <- function(v.SYN, v.COG, n.alive) {
+f.update_SEV <- function(v.SYN, v.CDR, cutoff_CDR, n.alive) {
   
   # Assign dementia severity based on cognitive score
-  dementia <- v.SYN==2
   sev <- rep(NA, n.alive)
   
-  sev[v.COG >= 4.5 & v.COG < 9.5] <- 1
-  sev[v.COG >= 9.5 & v.COG < 16.0] <- 2
-  sev[v.COG >= 16.0] <- 3
+  sev[v.SYN == 1 & between(v.CDR, cutoff_CDR["mci"], cutoff_CDR["mild"])] <- 0
+  sev[v.SYN == 1 & between(v.CDR, cutoff_CDR["mild"], cutoff_CDR["moderate"])] <- 1
+  sev[v.SYN == 1 & between(v.CDR, cutoff_CDR["moderate"], cutoff_CDR["severe"])]<- 2
+  sev[v.SYN == 1 & v.CDR >= cutoff_CDR["severe"]] <- 3
   
   return(sev)
 }
+
+######################################## SEV_obs
+
+f.update_SEV_obs <- function(v.CDR_obs, cutoff_CDR, n.alive) {
+  
+  # Assign dementia severity based on cognitive score
+  sev_obs <- rep(NA, n.alive)
+  
+  sev_obs[between(v.CDR_obs, cutoff_CDR["mci"], cutoff_CDR["mild"])] <- 0
+  sev_obs[between(v.CDR_obs, cutoff_CDR["mild"], cutoff_CDR["moderate"])] <- 1
+  sev_obs[between(v.CDR_obs, cutoff_CDR["moderate"], cutoff_CDR["severe"])]<- 2
+  sev_obs[v.CDR_obs >= cutoff_CDR["severe"]] <- 3
+  
+  return(sev_obs)
+}
+
 ######################################## FAQ
 
 f.update_FAQ <- function(l.inputs, v.SYN.lag, v.bSEV, v.APOE4) {
@@ -480,15 +552,24 @@ f.run <- function(a.random, l.inputs) {
   a.out[1,"SEX",]       <- f.qcat(p_rand = a.random[1,"SEX",], p_cat = c(l.inputs[["p.SEX_start_male"]], 
                                                                          l.inputs[["p.SEX_start_female"]]), values = v.SEX_val)
   a.out[1,"EDU",]       <- f.qcat(p_rand = a.random[1,"EDU",], p_cat = l.inputs[["p.EDU_start"]], values = v.EDU_val)
-  a.out[1,"OBES",]      <- f.qcat(p_rand = a.random[1,"OBES",], p_cat = l.inputs[["p.OBES_start"]], values = v.OBES_val)
-  a.out[1,"RACEETH",]  <- f.qcat(p_rand = a.random[1,"RACEETH",], p_cat = l.inputs[["p.RACEETH_start"]], values = v.RACEETH_val)
+  a.out[1,"RACEETH",]   <- f.qcat(p_rand = a.random[1,"RACEETH",], p_cat = l.inputs[["p.RACEETH_start"]], values = v.RACEETH_val)
+  a.out[1,"INCOME",]    <- f.qcat(p_rand = a.random[1,"INCOME",], p_cat = l.inputs[["p.INCOME_start"]], values = v.INCOME_val)
+  a.out[1,"MEDBUR",]    <- qunif(p = a.random[1,"APOE4",], min = min(v.MEDBUR_val), max = max(v.MEDBUR_val))
+  a.out[1,"APOE4",]     <- f.qcat(p_rand = a.random[1,"APOE4",], p_cat = l.inputs[["p.APOE4_start"]], values = v.APOE4_val)
+  
   
   a.out[1,"TX",]        <- 0
   # as.numeric(l.inputs[["Tx"]]==1)
-  a.out[1,"SYN",]       <- 0
-  a.out[1,"SEV",]       <- NA    # Will be assigned as people develop dementia
-  a.out[1,"COG",]       <- 0    # CDR-SB -- everyone starts cognitively normal
-  a.out[1,"FUN",]       <- 0     # FAQ -- everyone starts with no functional impairment
+  a.out[1,"SYN",]        <- 0    # Everyone starts healthy
+  a.out[1,"BHA",]        <- NA   # Will be assigned as people are tested
+  a.out[1,"CDR_track",]  <- NA   # Will be determined based on attributes
+  a.out[1,"CDRfast_sd1",] <- qnorm(p = a.random[1,"CDRfast_sd1",], mean = 0, sd = l.inputs[["r.CDRfast_sd1"]])  # Random number
+  a.out[1,"CDRslow_sd1",] <- qnorm(p = a.random[1,"CDRslow_sd1",], mean = 0, sd = l.inputs[["r.CDRslow_sd1"]])  # Random number
+  a.out[1,"CDR",]       <- 0    # CDR-SB true score -- everyone starts cognitively normal
+  a.out[1,"CDR_obs",]   <- NA   # CDR-SB observed score -- will be assigned as people are tested
+  a.out[1,"SEV",]       <- NA   # Will be assigned as people are tested
+  a.out[1,"SEV_obs",]   <- NA   # Will be assigned as people are tested
+  a.out[1,"FUN",]       <- 0    # FAQ -- everyone starts with no functional impairment
   a.out[1,"BEH",]       <- NA
   a.out[1,"INSTIT",]    <- 0
   a.out[1,"QALY",]      <- NA
@@ -545,52 +626,106 @@ f.run <- function(a.random, l.inputs) {
       v.EDU.lag = a.out[t-1,"EDU",alive]
     )
     
-    # OBES
-    a.out[t,"OBES",alive] <- f.update_OBES(
-      v.OBES.lag = a.out[t-1,"OBES",alive]
-    )
-    
     # RACEETH
     a.out[t,"RACEETH",alive] <- f.update_RACEETH(
       v.RACEETH.lag = a.out[t-1,"RACEETH",alive]
     )
     
-    # SYN
+    # INCOME
+    a.out[t,"INCOME",alive] <- f.update_INCOME(
+      v.INCOME.lag = a.out[t-1,"INCOME",alive]
+    )
+    
+    # MEDBUR
+    a.out[t,"MEDBUR",alive] <- f.update_MEDBUR(
+      v.MEDBUR.lag = a.out[t-1,"MEDBUR",alive]
+    )
+    
+    # APOE4
+    a.out[t,"APOE4",alive] <- f.update_APOE4(
+      v.APOE4.lag = a.out[t-1,"APOE4",alive]
+    )
+    
+    # MCI
     a.out[t,"SYN",alive] <- f.update_SYN(
       l.inputs        = l.inputs,
       v.AGE.lag       = a.out[t-1,"AGE",alive],
       v.EDU.lag       = a.out[t-1,"EDU",alive],
-      v.RACEETH.lag   = a.out[t-1,"RACEETH",alive],
-      v.OBES.lag      = a.out[t-1,"OBES",alive],
-      v.time.lag      = a.out[t-1,"TIME",alive], 
+      v.APOE4.lag     = a.out[t-1,"APOE4",alive],
+      v.MEDBUR.lag      = a.out[t-1,"MEDBUR",alive],
+      v.INCOME.lag    = a.out[t-1,"INCOME",alive],
       v.SYN.lag       = a.out[t-1,"SYN",alive], 
-      v.TX.lag        = a.out[t-1,"TX",alive], 
-      v.time          = a.out[t,"TIME",alive], 
       random_cycle    = a.random[t,"SYN",alive], 
-      mu              = l.inputs[["weibull_mu"]],
-      gamma           = l.inputs[["weibull_gamma"]], 
-      rr.Tx_mci       = l.inputs[["rr.Tx_mci"]],
       n.alive         = n.alive
     )
     
-    # COG
-    a.out[t,"COG",alive] <- f.update_COG(
-      n.alive          = n.alive, 
+    # BHA
+    a.out[t,"BHA",alive] <- f.update_BHA(
       v.SYN            = a.out[t,"SYN",alive],
       v.SYN.lag        = a.out[t-1,"SYN",alive],
-      v.COG.lag        = a.out[t-1,"COG",alive],
-      p.land_dist      = l.inputs[["p.land_dist"]], 
-      random_cycle     = a.random[t,"COG",alive]
+      sens_BHA         = l.inputs[["sens_BHA"]],
+      spec_BHA         = l.inputs[["spec_BHA"]],
+      random_cycle     = a.random[t,"BHA",alive],
+      n.alive          = n.alive
+      )
+    
+    # CDR_track
+    a.out[t,"CDR_track",alive] <- f.update_CDR_track(
+      v.MEDBUR         = a.out[t,"MEDBUR",alive],
+      random_cycle     = a.random[t,"CDR_track",alive],
+      n.alive          = n.alive
     )
     
-    # SEV
+    # CDRfast_sd1, CDRslow_sd1
+    a.out[t,"CDRfast_sd1",alive] <- a.out[t-1,"CDRfast_sd1",alive]
+    a.out[t,"CDRslow_sd1",alive] <- a.out[t-1,"CDRslow_sd1",alive]
+    
+    # CDR (true)
+    a.out[t,"CDR",alive] <- f.update_CDR(
+      v.SYN            = a.out[t,"SYN",alive],
+      v.SYN.lag        = a.out[t-1,"SYN",alive],
+      cutoff_CDR       = l.inputs[["cutoff_CDR"]],
+      v.CDR.lag   = a.out[t-1,"CDR",alive], 
+      r.CDRfast_mean   = l.inputs[["r.CDRfast_mean"]],
+      r.CDRslow_mean   = l.inputs[["r.CDRslow_mean"]],
+      v.CDR_track      = a.out[t,"CDR_track",alive],
+      v.CDRfast_sd1    = a.out[t,"CDRfast_sd1",alive],
+      v.CDRslow_sd1    = a.out[t,"CDRslow_sd1",alive],
+      r.CDR_sd2        = l.inputs[["r.CDR_sd2"]],
+      random_cycle     = a.random[t,"CDR",alive],
+      n.alive          = n.alive
+    )
+    
+    
+    # CDR_obs
+    a.out[t,"CDR_obs",alive] <- f.update_CDR_obs(
+      v.BHA            = a.out[t,"BHA",alive],
+      v.CDR       = a.out[t,"CDR",alive],
+      r.CDR_sd3        = l.inputs[["r.CDR_sd3"]],
+      random_cycle     = a.random[t,"CDR_obs",alive],
+      n.alive          = n.alive
+    )
+
+    # SEV (true)
     a.out[t,"SEV",alive] <- f.update_SEV(
       v.SYN          = a.out[t,"SYN",alive],
-      v.COG          = a.out[t,"COG",alive],
+      v.CDR     = a.out[t,"CDR",alive],
+      cutoff_CDR     = l.inputs[["cutoff_CDR"]],
       n.alive        = n.alive
     )
     
+    
+    # SEV_obs
+    a.out[t,"SEV_obs",alive] <- f.update_SEV_obs(
+      v.CDR_obs     = a.out[t,"CDR_obs",alive],
+      cutoff_CDR     = l.inputs[["cutoff_CDR"]],
+      n.alive        = n.alive
+    ) 
+    
+    
     # FAQ 
+    
+    
     
     # TX
     a.out[t,"TX",alive] <- f.update_TX(
@@ -611,7 +746,8 @@ f.run <- function(a.random, l.inputs) {
   
   
   # The "round(score*2)/2" ensures that scores are increments of 0.5 
-  a.out[,"COG",] <- round(a.out[,"COG",] * 2) / 2
+  a.out[,"CDR",] <- round(a.out[,"CDR",] * 2) / 2
+  a.out[,"CDR_obs",] <- round(a.out[,"CDR_obs",] * 2) / 2
   
   # run time
   print(proc.time() - ptm)
@@ -628,10 +764,10 @@ f.qaly_cost <- function(a.out, l.inputs) {
   
   # QALY
   QALY0 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==0) * l.inputs[["u.healthy"]]
-  QALY1 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1) * l.inputs[["u.mci"]]
-  QALY2 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==1) * l.inputs[["u.mil"]] +
-    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==2) * l.inputs[["u.mod"]] +
-    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==3) * l.inputs[["u.sev"]]
+  QALY1 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==0) * l.inputs[["u.mci"]]
+  QALY2 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==1) * l.inputs[["u.mil"]] +
+    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==2) * l.inputs[["u.mod"]] +
+    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==3) * l.inputs[["u.sev"]]
   QALY3 <- as.numeric(a.out[,"TIME",]==0 & a.out[,"TX",])
   QALY0[is.na(QALY0)] <- 0
   QALY1[is.na(QALY1)] <- 0
@@ -644,10 +780,10 @@ f.qaly_cost <- function(a.out, l.inputs) {
   
   # COST: care
   COST_care0 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==0) * l.inputs[["c.healthy"]]
-  COST_care1 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1) * l.inputs[["c.mci"]]
-  COST_care2 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==1) * l.inputs[["c.mil"]] + 
-    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==2) * l.inputs[["c.mod"]] + 
-    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==2 & a.out[,"SEV",]==0) * l.inputs[["c.sev"  ]]
+  COST_care1 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==0) * l.inputs[["c.mci"]]
+  COST_care2 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==1) * l.inputs[["c.mil"]] + 
+    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==2) * l.inputs[["c.mod"]] + 
+    as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==1 & a.out[,"SEV",]==3) * l.inputs[["c.sev"  ]]
   COST_care0[is.na(COST_care0)] <- 0
   COST_care1[is.na(COST_care1)] <- 0
   COST_care2[is.na(COST_care2)] <- 0
@@ -675,35 +811,41 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["alive.trc.dis"]] <- as.matrix(f.discount(x = l.out[["alive.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["alive.sum.dis"]] <- sum(l.out[["alive.trc.dis"]])
   
+  
   # mean time healthy
   l.out[["healthy.trc"]] <- as.matrix(apply(X = a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   l.out[["healthy.sum"]] <- sum(l.out[["healthy.trc"]])
   l.out[["healthy.trc.dis"]] <- as.matrix(f.discount(x = l.out[["healthy.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["healthy.sum.dis"]] <- sum(l.out[["healthy.trc.dis"]])
+  l.out[["healthy_obs.trc"]] <- as.matrix(apply(X = a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   
   # time in MCI
-  l.out[["MCI.trc"]] <- as.matrix(apply(X = a.out[,"SYN",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
+  l.out[["MCI.trc"]] <- as.matrix(apply(X = a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   l.out[["MCI.sum"]] <- sum(l.out[["MCI.trc"]])
   l.out[["MCI.trc.dis"]] <- as.matrix(f.discount(x = l.out[["MCI.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["MCI.sum.dis"]] <- sum(l.out[["MCI.trc.dis"]])
+  l.out[["MCI_obs.trc"]] <- as.matrix(apply(X = a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   
   # time in mild dementia
   l.out[["SEV1.trc"]] <- as.matrix(apply(X = a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   l.out[["SEV1.sum"]] <- sum(l.out[["SEV1.trc"]])
   l.out[["SEV1.trc.dis"]] <- as.matrix(f.discount(x = l.out[["SEV1.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["SEV1.sum.dis"]] <- sum(l.out[["SEV1.trc.dis"]])
+  l.out[["SEV1_obs.trc"]] <- as.matrix(apply(X = a.out[,"SEV_obs",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   
   # time in moderate dementia
   l.out[["SEV2.trc"]] <- as.matrix(apply(X = a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   l.out[["SEV2.sum"]] <- sum(l.out[["SEV2.trc"]])
   l.out[["SEV2.trc.dis"]] <- as.matrix(f.discount(x = l.out[["SEV2.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["SEV2.sum.dis"]] <- sum(l.out[["SEV2.trc.dis"]])
+  l.out[["SEV2_obs.trc"]] <- as.matrix(apply(X = a.out[,"SEV_obs",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   
   # time in severe dementia
   l.out[["SEV3.trc"]] <- as.matrix(apply(X = a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   l.out[["SEV3.sum"]] <- sum(l.out[["SEV3.trc"]])
   l.out[["SEV3.trc.dis"]] <- as.matrix(f.discount(x = l.out[["SEV3.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["SEV3.sum.dis"]] <- sum(l.out[["SEV3.trc.dis"]])
+  l.out[["SEV3_obs.trc"]] <- as.matrix(apply(X = a.out[,"SEV_obs",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
   
   # temporary to select outcomes
   l.out[["mean_time_alive"]] <- l.out[["alive.sum.dis"]]
@@ -719,7 +861,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   # time in full-time care
   # l.out[["mean_time_FTC"]] <- sum(a.out[,"INSTIT",]==1, na.rm=TRUE)/l.inputs[["n.ind"]]
   
-  # state trace (undiscounted)
+  # state trace (undiscounted) (true states)
   l.out[["state_trace"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 6, dimnames = list(NULL,c("healthy","mci","mil","mod","sev","dth")))
   l.out[["state_trace"]][,"healthy"] <- l.out[["healthy.trc"]]
   l.out[["state_trace"]][,"mci"] <- l.out[["MCI.trc"]]
@@ -731,6 +873,18 @@ f.out_aggregate <- function(a.out, l.inputs) {
   rowSums(l.out[["state_trace"]])
   # trace institutionalized
   # l.out[["state_trace_instit"]] <- as.matrix((apply(X = a.out[,"INSTIT",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]]))
+  
+  # state trace (undiscounted) (observed states)
+  l.out[["state_trace_obs"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 6, dimnames = list(NULL,c("healthy","mci","mil","mod","sev","dth")))
+  l.out[["state_trace_obs"]][,"healthy"] <- l.out[["healthy.trc"]]
+  l.out[["state_trace_obs"]][,"mci"] <- l.out[["MCI_obs.trc"]]
+  l.out[["state_trace_obs"]][,"mil"] <- l.out[["SEV1_obs.trc"]]
+  l.out[["state_trace_obs"]][,"mod"] <- l.out[["SEV2_obs.trc"]]
+  l.out[["state_trace_obs"]][,"sev"] <- l.out[["SEV3_obs.trc"]]
+  l.out[["state_trace_obs"]][,"dth"] <- apply(X = a.out[,"ALIVE",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]]
+  # check rowsum
+  rowSums(l.out[["state_trace"]])
+  
   
   # QALY
   l.out[["QALY"]] <- as.matrix(apply(X = a.out[,"QALY",], MARGIN = 1, FUN = sum, na.rm = TRUE)/l.inputs[["n.ind"]])
