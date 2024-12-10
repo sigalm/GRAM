@@ -129,7 +129,7 @@ for (t in 1:(n_t-1)) {                    # start loop for time cycles: “t in 
         #-- (3) Then, we calculate the probability of the reference group (with the cognitively intact people) dying next year. 
         
         #-- Numerator: v_total_pop_alive[t] * all cause mortality m_p_dead_next_yr_all_cause[age_index, 2]
-        age_index < 
+        age_index <- m.age[i, t] - 50 + 1 
         numerator <- v_total_pop_alive[t] * m_p_dead_next_yr_all_cause[age_index, 2]   # same for all individual i
         
         #-- Denominator: depends on the Relative Risk (RR). 
