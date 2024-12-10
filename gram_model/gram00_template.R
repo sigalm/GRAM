@@ -4,9 +4,9 @@
 
 # TECHNICAL ##### 
 # run only once, do not delete
-source("gram_01setup.r")
-source("gram_02helpers.r")
-source("gram_03simulation.r")
+source("gram_model/gram_01setup.r")
+source("gram_model/gram_02helpers.r")
+source("gram_model/gram_03simulation.r")
 # ***************
 
 

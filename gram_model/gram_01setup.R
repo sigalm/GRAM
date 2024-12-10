@@ -82,12 +82,12 @@ l.inputs[["hr.mort_sev"]] <- 9.52
 l.inputs[["hr.mort_age"]] <- c(1,0.6,0.3)
 
 l.inputs[["m.lifetable"]] <- array(data = as.matrix(
-  readRDS("../gram_data/non_dementia_mortality_prob_by_age_v2.RDS")[ , "prob_non_dementia"]), 
+  readRDS("gram_data/non_dementia_mortality_prob_by_age_v2.RDS")[ , "prob_non_dementia"]), 
   dim = c(51,1), dimnames = list(50:100, "q"))
 
 
 ## Logistic regression for transition to MCI from Healthy
-l.inputs[["m.hr_mci"]] <- array(data = readRDS("../gram_data/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
+l.inputs[["m.hr_mci"]] <- array(data = readRDS("gram_data/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
                                 dimnames = list(50:100, "r")) / 1000 # divide by 1000 to scale from 1000 person-years to annual rate
 
 l.inputs[["log_EDU"]] <- log(0.95)

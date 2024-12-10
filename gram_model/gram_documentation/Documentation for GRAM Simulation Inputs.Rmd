@@ -1,0 +1,323 @@
+---
+title: "Documentation for GRAM Simulation Inputs"
+author: "Sigal Maya"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+# Overview
+
+This script defines the input parameters and settings for **Global Brain Health Institute (GBHI) Resource Allocation Model (GRAM)**, a microsimulation model that portrays the natural progression of dementia, simulating individual trajectories across various attributes over time.
+
+------------------------------------------------------------------------
+
+# Data Sources and Rationale
+
+## External Inputs
+
+1.  **Non-Dementia Mortality Probabilities by Age**
+    -   **Source**: `non_dementia_mortality_prob_by_age_v2.RDS`
+    -   **Rationale**: Provides age-specific probabilities essential for accurate mortality modeling in the absence of dementia.
+    -   **Details**: Contains annual probabilities of non-dementia mortality for ages 50-100, used to construct the life table. The probabilities in the table were calculated from CDC Wonder data by subtracting dementia-related mortality rates from all-cause mortality rates. See `calculate_non_dementia_death_rates.R` for the calculation.
+2.  **MCI Incidence Rates by Age**
+    -   **Source**: `mci_incidence_rate_by_age.RDS`
+    -   **Rationale**: Supplies age-specific rates of mild cognitive impairment (MCI) incidence, scaled to annual rates for consistency in the model. See `generate_mci_incidence_rate_by_age.R` for the calculation.
+3.  **CDR-SB Progression Rates**
+    -   **Source**: Article from **PMC2809036**, Table 4
+    -   **Rationale**: Provides empirical means and standard deviations for fast and slow CDR progression rates, enabling variability across individuals. Source values used as initial inputs, then calibrated by visual inspection of survival graphs.
+4.  **BHA Sensitivity and Specificity**
+    -   **Source**: **Possin 2018** study
+    -   **Rationale**: Validates the performance of the Brain Health Assessment (BHA) in differentiating MCI and dementia from controls.
+
+### Notes on Missing Information:
+
+-   Placeholders for **health state utilities** (`u.healthy`) and **costs** (`c.healthy`) require further elaboration, particularly regarding age-related adjustments.
+
+------------------------------------------------------------------------
+
+# Model Inputs
+
+### Naming Convention for Model Inputs
+
+The model uses a specific naming convention with prefixes to indicate the type and purpose of each parameter:
+
+-   `p.`: **Probability** (e.g., `p.SEX_start_male`)
+-   `hr.`: **Hazard ratio** (e.g., `hr.mort_mci`)
+-   `r.`: **Rate** (e.g., `r.CDRfast_mean`)
+-   `u.`: **Utility** (e.g., `u.mci`)
+-   `c.`: **Cost** (e.g., `c.mci`)
+-   `m.`: **Matrix** or **array** (e.g., `m.lifetable`)
+-   `log_`: **Logarithm of a coefficient** (e.g., `log_EDU`)
+-   `Tx`: **Treatment-related parameters** (e.g., `Tx_t_max`)
+
+This naming convention helps organize and identify parameters efficiently within the model.
+
+## 1. Attribute Names and Possible Values
+
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| **Attribute Name** | **Description**                                  | **Possible Values**                                |
++====================+==================================================+====================================================+
+| `TIME`             | Time cycle                                       | Integer values, starting at 1                      |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `ALIVE`            | Alive status                                     | 0 = dead\                                          |
+|                    |                                                  | 1 = alive                                          |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `AGE`              | Age                                              | Starting at 50, increments by cycle                |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `SEX`              | Sex                                              | 1 = male\                                          |
+|                    |                                                  | 2 = female                                         |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `EDU`              | Education level                                  | 1 = college or more\                               |
+|                    |                                                  | 2 = high school or GED\                            |
+|                    |                                                  | 3 = less than high school                          |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `RACEETH`          | Race/Ethnicity                                   | 0 = not Hispanic or Black\                         |
+|                    |                                                  | 1 = Hispanic or Black                              |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `INCOME`           | Income level                                     | 0 = low (\<\$9,000/year)\                          |
+|                    |                                                  | 1 = medium (\$9,000–\$36,000/year)\                |
+|                    |                                                  | 2 = high (\>\$36,000/year)                         |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `MEDBUR`           | Medical burden                                   | Integer from 0 to 15 (number of health conditions) |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `APOE4`            | APOE4 status                                     | 0 = non-carrier\                                   |
+|                    |                                                  | 1 = carrier                                        |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `TX`               | Treatment status                                 | 0 = off/not provided/stopped\                      |
+|                    |                                                  | 1 = on/provided/active                             |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `SYN`              | Cognitive health                                 | 0 = healthy\                                       |
+|                    |                                                  | 1 = cognitively impaired                           |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `BHA`              | Brain Health Assessment result                   | 0 = negative BHA result (cognitively normal)\      |
+|                    |                                                  | 1 = positive BHA result (cognitively impaired)     |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `CDR_track`        | CDR progression group membership flag            | 0 = slow progressor\                               |
+|                    |                                                  | 1 = fast progressor                                |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `CDR`              | Clinical Dementia Rating - Sum of Boxes (CDR-SB) | Numeric score, range 0 - 18                        |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `CDRfast_sd1`      | CDR fast progressor individual-level variation   | Numeric                                            |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `CDRslow_sd1`      | CDR slow progressor individual-level variation   | Numeric                                            |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `CDR_obs`          | Observed CDR-SB score                            | Numeric score, range 0 - 18.                       |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `SEV`              | Dementia severity                                | 0 = mild cognitive impairment\                     |
+|                    |                                                  | 1 = mild dementia\                                 |
+|                    |                                                  | 2 = moderate dementia\                             |
+|                    |                                                  | 3 = severe dementia                                |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `SEV_obs`          | Observed dementia severity                       | 0 = mild cognitive impairment\                     |
+|                    |                                                  | 1 = mild dementia\                                 |
+|                    |                                                  | 2 = moderate dementia\                             |
+|                    |                                                  | 3 = severe dementia                                |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `FUN`              | Functional score                                 | *[Details needed] - not implemented*               |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `AGE_MCI`          | Age at MCI onset                                 | Numeric - not implemented                          |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `BEH`              | Behavior                                         | *[Details needed] - not implemented*               |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `INSTIT`           | Institutionalization status                      | *[Details needed] - not implemented*               |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `QALY`             | Quality-Adjusted Life Years                      | Numeric                                            |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `COST_care`        | Cost of care                                     | Numeric                                            |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+| `COST_tx`          | Cost of treatment                                | Numeric                                            |
++--------------------+--------------------------------------------------+----------------------------------------------------+
+
+## 2. User-Defined Model Settings
+
+| **Parameter** | **Default Value** | **Description** |
+|----|----|----|
+| `scenario` | "GRAM natural course of disease" | Name of the scenario |
+| `n.ind` | 10,000 | Number of individuals to simulate |
+| `n.cycle` | 50 | Number of cycles to simulate (years) |
+| `seed_stochastic` | 20240202 | Seed for stochastic processes |
+| `strategy` | `NA` | Strategy parameter (to be defined in comparative runs) |
+| `strategy_strat1` | "control" | Name of strategy 1 |
+| `strategy_strat2` | "intervention_dmt" | Name of strategy 2 |
+| `Tx` | 0 | Treatment status (to be defined) |
+| `Tx_strat1` | 0 | Treatment status for strategy 1 |
+| `Tx_strat2` | 1 | Treatment status for strategy 2 |
+| `seed_pa` | 20241022 | Seed for probabilistic analysis |
+| `n.psa` | 10 | Number of PSA iterations |
+| `r.discount_QALY` | 0.03 | Discount rate for QALYs |
+| `r.discount_COST` | 0.03 | Discount rate for costs |
+
+## 3. External Model Inputs
+
+| **Demographic Inputs** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| **AGE** |  |  |  |
+| \- Mean (SD) | `AGE_start_mean` | 50 (0) | [Source Needed] |
+| **SEX** |  |  |  |
+| \- Male | `p.SEX_start_male` | 0.5 | [Source Needed] |
+| \- Female | `p.SEX_start_female` | 0.5 | [Source Needed] |
+| **EDUCATION** |  |  |  |
+| \- College or more | `p.EDU_start[1]` | 0.419 | [Source Needed] |
+| \- High school or GED | `p.EDU_start[2]` | 0.476 | [Source Needed] |
+| \- Less than high school | `p.EDU_start[3]` | 0.105 | [Source Needed] |
+| **RACE/ETHNICITY** |  |  |  |
+| \- Not Hispanic or Black | `p.RACEETH_start[1]` | 0.65 | [Source Needed] |
+| \- Hispanic or Black | `p.RACEETH_start[2]` | 0.35 | [Source Needed] |
+| **INCOME** |  |  |  |
+| \- Low (\<\$9,000/year) | `p.INCOME_start[1]` | 0.05 | [Source Needed] |
+| \- Medium (\$9,000–\$36,000/yr) | `p.INCOME_start[2]` | 0.45 | [Source Needed] |
+| \- High (\>\$36,000/year) | `p.INCOME_start[3]` | 0.50 | [Source Needed] |
+| **APOE4 Carrier Status** |  |  |  |
+| \- Non-carrier | `p.APOE4_start[1]` | 0.75 | [Source Needed] |
+| \- Carrier | `p.APOE4_start[2]` | 0.25 | [Source Needed] |
+
+------------------------------------------------------------------------
+
+| **Mortality Inputs** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| **Hazard Ratios for Mortality by Dementia Severity** |  |  |  |
+| \- MCI vs. Healthy | `hr.mort_mci` | 1.82 | [Source Needed] |
+| \- Mild Dementia vs. Healthy | `hr.mort_mil` | 2.92 | [Source Needed] |
+| \- Moderate Dementia vs. Healthy | `hr.mort_mod` | 3.85 | [Source Needed] |
+| \- Severe Dementia vs. Healthy | `hr.mort_sev` | 9.52 | [Source Needed] |
+| **Adjustments for Hazard Ratios for Mortality by Age Group** |  |  |  |
+| \- Age 50–64 | `hr.mort_age[1]` | 1 | [Source Needed] |
+| \- Age 65–74 | `hr.mort_age[2]` | 0.6 | [Source Needed] |
+| \- Age 75+ | `hr.mort_age[3]` | 0.3 | [Source Needed] |
+| **Life Table Probabilities** | `m.lifetable` | Data from `non_dementia_mortality_prob_by_age_v2.RDS` | [Data File] |
+
+------------------------------------------------------------------------
+
+| **MCI Transition Inputs** | **Variable Name** | \*\* Default Value\*\* | **Source** |
+|----|----|----|----|
+| **MCI Incidence Rates by Age** | `m.hr_mci` | Data from `mci_incidence_rate_by_age.RDS` | [Data File] |
+| **Logistic Regression Coefficients** |  |  |  |
+| \- Education Level | `log_EDU` | log(0.95) | [Source Needed] |
+| \- APOE4 Status | `log_APOE4` | log(1.18) | [Source Needed] |
+| \- Medical Burden | `log_MEDBUR` | log(1.09) | [Source Needed] |
+| \- Medium Income | `log_INCOMEmed` | log(0.80) | [Source Needed] |
+| \- High Income | `log_INCOMEhi` | log(0.73) | [Source Needed] |
+
+------------------------------------------------------------------------
+
+| **Cognitive Test Scoring and Progression** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| **CDR-SB Cutoff Scores** |  |  |  |
+| \- Healthy | `cutoff_CDR_healthy` | 0 | [Source Needed] |
+| \- MCI | `cutoff_CDR_mci` | 0.5 | [Source Needed] |
+| \- Mild Dementia | `cutoff_CDR_mild` | 4.5 | [Source Needed] |
+| \- Moderate Dementia | `cutoff_CDR_moderate` | 9.5 | [Source Needed] |
+| \- Severe Dementia | `cutoff_CDR_severe` | 16.5 | [Source Needed] |
+| \- Maximum Score | `cutoff_CDR_max` | 18.0 | [Source Needed] |
+| **CDR-SB Progression Rates** |  |  |  |
+| \- Fast Progressors Mean | `r.CDRfast_mean` | 1.6 | [PMC2809036](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2809036/) |
+| \- Fast Progressors SD | `r.CDRfast_sd1` | 2.2 / sqrt(160) | [PMC2809036] |
+| \- Slow Progressors Mean | `r.CDRslow_mean` | 0.6 | [PMC2809036] |
+| \- Slow Progressors SD | `r.CDRslow_sd1` | 1.2 / sqrt(358) | [PMC2809036] |
+
+------------------------------------------------------------------------
+
+| **Cognitive Test Performance (BHA)** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| **Sensitivity** |  |  |  |
+| \- MCI vs. Control | `sens_BHA[1]` | 0.72 | Possin et al. (2018) |
+| \- Dementia vs. Control | `sens_BHA[2]` | 0.99 | Possin et al. (2018) |
+| **Specificity** | `spec_BHA` | 0.85 | Possin et al. (2018) |
+
+------------------------------------------------------------------------
+
+| **Health State Utilities** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| \- Healthy | `u.healthy` | 0.85 (*Placeholder*) | [Source Needed] |
+| \- MCI | `u.mci` | 0.73 | [Source Needed] |
+| \- Mild Dementia | `u.mil` | 0.69 | [Source Needed] |
+| \- Moderate Dementia | `u.mod` | 0.53 | [Source Needed] |
+| \- Severe Dementia | `u.sev` | 0.38 | [Source Needed] |
+
+------------------------------------------------------------------------
+
+| **Costs**            | **Variable Name** | **Default Value**   | **Source**      |
+|----------------------|-------------------|---------------------|-----------------|
+| \- Healthy           | `c.healthy`       | \$0 (*Placeholder*) | [Source Needed] |
+| \- MCI               | `c.mci`           | \$13,364            | [Source Needed] |
+| \- Mild Dementia     | `c.mil`           | \$26,727            | [Source Needed] |
+| \- Moderate Dementia | `c.mod`           | \$31,644            | [Source Needed] |
+| \- Severe Dementia   | `c.sev`           | \$40,645            | [Source Needed] |
+| \- Treatment Cost    | `c.Tx`            | \$5,000             | [Source Needed] |
+
+------------------------------------------------------------------------
+
+| **Treatments** | **Variable Name** | **Default Value** | **Source** |
+|----|----|----|----|
+| \- Relative Risk for MCI | `rr.Tx_mci` | 0.70 | [Source Needed] |
+| \- Max Duration of Treatment (years) | `Tx_t_max` | 3 | [Source Needed] |
+| \- Probability of DMT Ineligibility | `p.Tx[1]` | 0 | [Source Needed] |
+| \- Probability of DMT Eligibility | `p.Tx[2]` | 1 | [Source Needed] |
+| \- Risk Ratio for Prevention | `rr.Px_mci` | 1 | [Source Needed] |
+
+# Methodology
+
+## Key Steps
+
+1.  **Attribute Definitions**:\
+    The script defines a comprehensive set of individual attributes (e.g., `AGE`, `SEX`, `MEDBUR`) used to track demographic, clinical, and economic aspects of each simulated individual.
+
+2.  **User-Defined Inputs**:\
+    Includes:
+
+    -   Scenario details (e.g., `"GRAM natural course of disease"`).
+    -   Simulation size (`10,000 individuals`, `50 cycles`).
+    -   Probabilistic sensitivity analysis (PSA) settings.
+
+3.  **External Data Integration**:
+
+    -   Non-dementia life table probabilities and MCI incidence rates are read into R arrays and appropriately scaled.
+    -   Inputs for regression coefficients (e.g., `log_EDU`, `log_APOE4`) and health state utilities are set based on external sources and placeholders.
+
+------------------------------------------------------------------------
+
+# Outputs
+
+Outputs are saved to the global environment. In future versions, outputs will be saved a config files to gram_model to be sourced in model run scripts.
+
+-   Input list (`l.inputs`) containing parameters, probabilities, and settings for simulation.
+-   Arrays and vectors for attributes, probabilities, and regression coefficients.
+
+------------------------------------------------------------------------
+
+# To-Do / Notes
+
+-   Clarify and expand on placeholders for `u.healthy` and `c.healthy` to decide if age-related decreases apply.
+-   Provide detailed citations for sources, particularly those referenced in comments (e.g., **PMC2809036** and **Possin 2018**).
+-   Verify whether treatment cost (`c.Tx`) and utilities align with the intended model assumptions.
+
+------------------------------------------------------------------------
+
+# Reproducibility
+
+To ensure the script runs successfully:
+
+1.  **Data Files**
+    -   Place the required RDS files (`non_dementia_mortality_prob_by_age_v2.RDS`, `mci_incidence_rate_by_age.RDS`) in the `../gram_data/` directory.
+2.  **R Libraries**
+    -   Install the necessary libraries:
+
+        ``` r
+        install.packages(c("tidyverse", "scales"))
+        ```
+3.  **Working Directory**
+    -   Set the working directory to the script's location to ensure relative paths function correctly.
+4.  **Seeds**
+    -   Use the specified seeds (`seed_stochastic` and `seed_pa`) for reproducibility.
+
+------------------------------------------------------------------------
+
+# References
+
+-   **Possin, K. L., et al. (2018)**. "The Brain Health Assessment for Detecting and Diagnosing Neurocognitive Disorders." *Alzheimer's & Dementia*. [Add complete citation]
+
+-   **PMC Article**: [PMC2809036](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2809036/)
+
+-   **Mortality and MCI Data Sources**: *[Specific references needed]*
