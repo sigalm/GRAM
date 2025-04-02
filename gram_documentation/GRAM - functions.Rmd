@@ -1,0 +1,722 @@
+---
+title: "GRAM Simulation"
+subtitle: "Simulation Functions"
+author: "Sigal Maya"
+date: "02/18/2025"
+output:
+  html_notebook: default
+  word_document: default
+bibliography: references.bib
+---
+
+# Overview
+
+This script describes the helper and core functions that make up the **Global Brain Health Institute (GBHI) Resource Allocation Model (GRAM)**, a microsimulation model that portrays the natural progression of dementia, simulating individual trajectories across various attributes over time. The model is adapted from IPECAD 1.2.
+
+------------------------------------------------------------------------
+
+# 1. Generic Helpers
+
+## Adjust Probabilities
+
+**Description**
+
+Adjusts probabilities from one time frame to another (e.g., from monthly to annual) and/or for a given risk ratio.
+
+**Usage**
+
+`f.adjustprobability(p, t_new, t_old, RR)`
+
+**Arguments**
+
+`p` Probability to be adjusted
+
+`t_new` Targeted time period
+
+`t_old` Current time period
+
+`RR` Risk ratio
+
+**Details**
+
+The given probability `p` is first converted to a rate, then adjusted for time and risk ratio, and finally converted back to a probability.
+
+**Value**
+
+A numeric value containing the new probability.
+
+**Source**
+
+Gidwani & Russell 2020 <https://link.springer.com/article/10.1007/s40273-020-00937-z>
+
+## Sample from a categorical variable
+
+**Description**
+
+Samples from a categorical variable using pre-defined uniform random values. The function supports both vector and matrix formats for probabilities and allows optional mapping of categories to specific values.
+
+**Usage**
+
+`f.qcat(p_rand, p_cat, values = NULL)`
+
+**Arguments**
+
+`p_rand` A vector of random values drawn from a uniform distribution (0,1). Used to assign categories based on probabilities.
+
+`p_cat` A vector or matrix of probabilities representing the distribution of the categorical variable. If vector, probabilities for each category, summing to 1. If matrix, columns represent probability distributions for independent trials, with each column summing to 1.
+
+`values` Optional vector of values corresponding to categories in `p_cat`. Must be the same length as `p_cat` (if a vector) or the number of rows in `p_cat` (if a matrix). If `NULL`, defaults to sequential integers starting from 1.
+
+**Details**
+
+For vector `p_cat`, the function checks that:
+
+1.  The probabilities sum to 1 (with tolerance for rounding errors).
+
+2.  The length of p_cat matches values if provided.
+
+3.  Probabilities of 0 or 1 are slightly shifted to avoid errors in categorization.
+
+For matrix `p_cat`, the function checks that:
+
+1.  Each column sums to 1.
+
+2.  The number of rows matches the length of values, if provided.
+
+3.  The number of columns matches the length of p_rand.
+
+4.  The function uses cut() for vector inputs and manual indexing for matrix inputs to assign categories based on cumulative probabilities.
+
+**Value**
+
+A vector of sampled categories corresponding to `p_rand`.
+
+For vector `p_cat`, returns values mapped to the defined probabilities. For matrix `p_cat`, returns a vector of sampled categories, one for each column of `p_cat`. Returns `NULL` for invalid input or issues during processing.
+
+## Discounting
+
+**Description**
+
+Applies discounting to a scalar, vector, or matrix over a specified number of cycles, based on a given discount rate.
+
+**Usage**
+
+`f.discount(x, discount_rate, n.cycle)`
+
+**Arguments**
+
+`x` A scalar, vector, or matrix to be discounted.
+
+`discount_rate` The annual discount rate, expressed as a decimal (e.g., 0.03 for 3%).
+
+`n.cycle` The number of cycles over which discounting is applied.
+
+**Details**
+
+Divides the input `x` by a discount factor calculated as `(1 + discount_rate)^t`, where `t` represents the cycle index (0 to `n.cycle - 1`).
+
+If `x` is a matrix, discounting is applied element-wise, assuming each row corresponds to a time period.
+
+**Value**
+
+A matrix containing the discounted values of `x`.
+
+# 2. Updating Attributes
+
+## Update time
+
+**Description**
+
+Updates the time variable (representing model cycles) by incrementing it by a fixed cycle length of one year.
+
+**Usage**
+
+`f.update_TIME(v.TIME.lag)`
+
+**Arguments**
+
+`v.TIME.lag` A numeric vector representing the time at the previous cycle.
+
+**Details**
+
+Assumes a fixed cycle length of one year. It adds 1 to each element of `v.TIME.lag` to calculate the updated time for the current cycle.
+
+**Value**
+
+A numeric vector containing the updated time values.
+
+## Update alive status
+
+**Description**
+
+Updates the alive status of individuals based on age, cognitive status, life table data, and relative mortality risks.
+
+**Usage**
+
+`f.update_ALIVE(alive.lag, v.AGE.lag, v.SYN.lag, v.SEV.lag, m.lifetable, hr.mort_mci, hr.mort_mil, hr.mort_mod, hr.mort_sev, hr.mort_age, random_cycle)`
+
+**Arguments**
+
+`alive.lag` A numeric vector indicating the alive status in the previous cycle.
+
+`v.AGE.lag` A numeric vector of ages at the previous cycle.
+
+`v.SYN.lag` A numeric vector indicating cognitive impairment status at the previous cycle.
+
+`v.SEV.lag` A numeric vector indicating cognitive impairment severity at the previous cycle.
+
+`m.lifetable` A numeric matrix of age-specific probabilities of death.
+
+`hr.mort_mci` Hazard ratio for mortality associated with mild cognitive impairment.
+
+`hr.mort_mil` Hazard ratio for mortality associated with mild dementia.
+
+`hr.mort_mod` Hazard ratio for mortality associated with moderate dementia.
+
+`hr.mort_sev` Hazard ratio for mortality associated with severe dementia.
+
+`hr.mort_age` A numeric vector of age-specific hazard ratios for moderate and severe dementia (adjusted for age ranges: \<70, 70-79, ≥80).
+
+`random_cycle` A numeric vector of random values to compare with death probabilities and draw random outcomes.
+
+**Details**
+
+1.  Looks up age-specific mortality probabilities using a life table and matrix coordinates based on rounded ages (`v.AGE.lag`).
+2.  Assigns relative mortality risks based on cognitive status (`v.SYN.lag`) and disease severity (`v.SEV.lag`), adjusted further for age when severity is moderate or severe (i.e., lower relative risk of death from dementia compared to other causes when older).
+3.  Adjusts probabilities using the `f.adjustprobability` function for cycle length (as needed) and relative risks.
+4.  Compares calculated death probabilities with random values to update the alive status.
+5.  Performs error checks for missing or invalid values in the updated alive status.
+
+**Value**
+
+A numeric vector indicating the updated alive status for each individual.
+
+## Update age
+
+**Description**
+
+Updates the age of individuals by incrementing it by a fixed cycle length of one year.
+
+**Usage**
+
+`f.update_AGE(v.AGE.lag)`
+
+**Arguments**
+
+`v.AGE.lag` A numeric vector representing the age at the previous cycle.
+
+**Details**
+
+Assumes a fixed cycle length of one year. It increments each element of `v.AGE.lag` by 1 to calculate the updated age for the current cycle.
+
+**Value**
+
+A numeric vector containing the updated age values.
+
+## Iterate sex
+
+**Description**
+
+Iterates the sex variable from the previous cycle without modification.
+
+**Usage**
+
+`f.update_SEX(v.SEX.lag)`
+
+**Arguments**
+
+`v.SEX.lag` A numeric vector representing the sex at the previous cycle.
+
+**Details**
+
+Directly assigns the input `v.SEX.lag` to the output without any changes. It is assumed that sex will not change over time.
+
+**Value**
+
+A vector containing the iterated sex values.
+
+## Iterate race/ethnicity
+
+**Description**
+
+Iterates the race/ethnicity variable from the previous cycle without modification. By definition, race/ethnicity does not change over time.
+
+**Usage**
+
+`f.update_RACEETH(v.RACEETH.lag)`
+
+**Arguments**
+
+`v.RACEETH.lag` A numeric vector representing the race/ethnicity at the previous cycle.
+
+**Details**
+
+Directly assigns the input `v.RACEETH.lag` to the output without any changes.
+
+**Value**
+
+A vector containing the iterated race/ethnicity values.
+
+## Update income
+
+**Description**
+
+Iterates the income variable from the previous cycle without modification.
+
+**Usage**
+
+`f.update_INCOME(v.INCOME.lag)`
+
+**Arguments**
+
+`v.INCOME.lag` A numeric vector representing the income at the previous cycle.
+
+**Details**
+
+Directly assigns the input `v.INCOME.lag` to the output without any changes. Can be modified in the future to account for income mobility over time.
+
+**Value**
+
+A vector containing the iterated income values.
+
+## Update years of education
+
+**Description**
+
+Iterates the education variable from the previous cycle without modification.
+
+**Usage**
+
+`f.update_EDU(v.EDU.lag)`
+
+**Arguments**
+
+`v.EDU.lag` A numeric vector representing the education level at the previous cycle.
+
+**Details**
+
+Directly assigns the input `v.EDU.lag` to the output without any changes. It is assumed that education level does not significantly change in the age groups of interest.
+
+**Value**
+
+A vector containing the iterated education values.
+
+## Update medical burden (number of multi-morbid conditions)
+
+**Description**
+
+Updates the medical burden (`MEDBUR`) of individuals based on age, prior burden, and a logistic growth model.
+
+**Usage**
+
+`f.update_MEDBUR(v.MEDBUR.lag, v.AGE.lag, coef_MEDBUR, amplification, max_MEDBUR, random_cycle, n.alive)`
+
+**Arguments**
+
+`v.MEDBUR.lag` A numeric vector representing the medical burden at the previous cycle.
+
+`v.AGE.lag` A numeric vector of ages at the previous cycle.
+
+`coef_MEDBUR` A numeric coefficient controlling the logistic increase in medical burden with age.
+
+`amplification` A numeric factor adjusting the contribution of previous medical burden to future burden.
+
+`max_MEDBUR` The maximum possible value for medical burden.
+
+`random_cycle` A numeric vector of random values used to probabilistically determine new medical burden levels.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes a placeholder vector for updated medical burden.
+2. Computes an age-based probability of increased burden using a logistic function centered at age 90. SM: Why 90? Is this a typo? Did I mean 50??
+3. Adjusts the probability by incorporating previous medical burden scaled by the amplification factor.
+4. Samples new medical burden values from a binomial distribution with probability `prob_adj` and maximum value `max_MEDBUR`.
+5. Ensures that medical burden does not decrease: 
+   - If the new sampled burden is greater than or equal to the previous value, the new value is assigned.
+   - Otherwise, the previous burden is retained.
+
+**Value**
+
+A numeric vector containing the updated medical burden values.
+
+
+## Iterate APOE4 carrier status
+
+**Description**
+
+Iterates the APOE4 genotype variable from the previous cycle without modification.
+
+**Usage**
+
+`f.update_APOE4(v.APOE4.lag)`
+
+**Arguments**
+
+`v.APOE4.lag` A numeric vector representing the APOE4 genotype at the previous cycle.
+
+**Details**
+
+Directly assigns the input `v.APOE4.lag` to the output without any changes. APOE4 genetic status does not change over time.
+
+**Value**
+
+A vector containing the iterated APOE4 genotype values.
+
+## Update cognitive impairment status
+
+**Description**
+
+Updates the true (unobserved) cognitive impairment status (`SYN`) of individuals based on age, education, APOE4 genotype, medical burden, income, and random variability.
+
+**Usage**
+
+`f.update_SYN(l.inputs, v.AGE.lag, v.EDU.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, v.SYN.lag, random_cycle, n.alive)`
+
+**Arguments**
+
+`l.inputs` A list of input parameters, including: - `m.hr_mci`: A matrix of age-specific hazard rates for transitioning to MCI. - `log_EDU`, `log_APOE4`, `log_MEDBUR`, `log_INCOMEmed`, `log_INCOMEhi`: Coefficients for predictors influencing the hazard rate. - `rr.Px_mci`: Relative risk adjustment for the probability of transitioning to MCI (e.g., if a hypothetical preventive intervention was available).
+
+`v.AGE.lag` A numeric vector of ages at the previous cycle.
+
+`v.EDU.lag` A numeric vector representing the education level at the previous cycle.
+
+`v.APOE4.lag` A numeric vector indicating the APOE4 genotype at the previous cycle.
+
+`v.MEDBUR.lag` A numeric vector representing the medical burden at the previous cycle.
+
+`v.INCOME.lag` A numeric vector indicating income level at the previous cycle.
+
+`v.SYN.lag` A numeric vector indicating cognitive impairment status at the previous cycle.
+
+`random_cycle` A numeric vector of random values to compare with transition probabilities and draw random outcomes.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1.  Retrieves age-specific incidence from `m.hr_mci` based on rounded ages.
+2.  Calculates the hazard rate for each individual based on the hazard function from Angevaare et al, 2021.
+3.  Converts the hazard rate into the probability of transitioning from no impairment to MCI, adjusted by a relative risk factor reflecting a hypothetical preventive intervention (default value of this relative risk is 1, meaning no intervention).
+4.  For those who were cognitively unimpaired in the previous cycles, assigns new cognitive impairment statuses based on the calculated probability and random values. Those who had MCI in the previous cycle remain with MCI.
+
+**Value**
+
+A numeric vector with the updated cognitive impairment status for each individual (0 = no impairment, 1 = MCI or more severe).
+
+## Update fast- vs. slow-progressor status
+
+**Description**
+
+Updates the progression rate group of individuals based on cognitive impairment status. Those with MCI progress slower than those with dementia.
+
+**Usage**
+
+`f.update_CDR_track(v.SEV.lag, n.alive)`
+
+**Arguments**
+
+`v.SEV.lag` A numeric vector indicating the severity of cognitive impairment status at the previous cycle.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1.  Assigns 0 (slow) when `v.SEV.lag` is 0 (MCI), and 1 (fast) when `v.SEV.lag` is greater than or equal to 1 (dementia of any severity).
+
+**Value**
+
+A numeric vector with the updated impairment progression track for each individual (0 = slow, 1 = fast).
+
+## Update true impairment severity (Clinical Dementia Rating - Sum of Boxes)
+
+**Description**
+
+Updates the Clinical Dementia Rating–Sum of Boxes (CDR-SB) score for individuals based on cognitive impairment status, previous CDR-SB values, progression rates, and treatment effects (if treatment is on).
+
+**Usage**
+
+`f.update_CDR(v.SYN, v.SYN.lag, cutoff_CDR, v.CDR.lag, r.CDRfast_mean, r.CDRslow_mean, v.CDR_track, v.CDRfast_sd1, v.CDRslow_sd1, r.CDR_sd2, v.TX.lag, rr.Tx_mci, random_cycle, n.alive)`
+
+**Arguments**
+
+`v.SYN` A numeric vector indicating cognitive impairment status at the current cycle (0 = healthy, 1 = impaired).
+
+`v.SYN.lag` A numeric vector indicating cognitive impairment status at the previous cycle.
+
+`cutoff_CDR` A named numeric vector specifying CDR-SB cut-off values for different stages of impairment.
+
+`v.CDR.lag` A numeric vector containing CDR-SB scores from the previous cycle.
+
+`r.CDRfast_mean` Mean annual progression rate for individuals classified as fast progressors.
+
+`r.CDRslow_mean` Mean annual progression rate for individuals classified as slow progressors.
+
+`v.CDR_track` A numeric vector indicating whether an individual follows the fast (1) or slow (0) progression trajectory.
+
+`v.CDRfast_sd1` Individual-level standard deviation for fast progressors.
+
+`v.CDRslow_sd1` Individual-level standard deviation for slow progressors.
+
+`r.CDR_sd2` Standard deviation for within-individual variability in CDR-SB progression.
+
+`v.TX.lag` A numeric vector indicating whether an individual was receiving treatment in the previous cycle (1 = treated, 0 = untreated).
+
+`rr.Tx_mci` Relative reduction in CDR-SB progression for treated individuals.
+
+`random_cycle` A numeric vector of random values used for stochastic sampling of new CDR-SB scores and progression variability.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes an empty vector for updated CDR-SB scores.
+2. Assigns scores to healthy individuals (`SYN = 0`) by sampling from a uniform distribution between the healthy and MCI cut-offs.
+3. Assigns an initial CDR-SB score for newly impaired individuals (`SYN = 1` and `SYN.lag = 0`), assuming all enter at mild cognitive impairment, by sampling from a uniform distribution between the MCI and mild dementia cut-offs.
+4. Progresses CDR-SB for individuals already impaired (`SYN = 1` and `SYN.lag = 1`) by:
+   - Adding the mean progression rate based on the individual's fast/slow classification.
+   - Incorporating individual-level deviations from the mean.
+   - Adding within-individual variability using a normal distribution.
+   - Applying treatment effects by reducing progression for treated individuals.
+5. Ensures that updated CDR-SB scores do not exceed the defined maximum cut-off. Note that CDR-SB scores are semi-continuous and increase with 0.5 increments. However, the model uses a continuous scale and captures unobservable changes. All CDR-SB scores are rounded to the nearest 0.5 at the end of the model run.
+
+**Value**
+
+A numeric vector containing the updated CDR-SB scores for each individual.
+
+## Update categorical dementia severity
+
+**Description**
+
+Assigns categorical dementia severity levels based on an individual's cognitive impairment status (`SYN`) and CDR-SB score (`CDR`). This is the true dementia severity and may differ from observed severity.
+
+**Usage**
+
+`f.update_SEV(v.SYN, v.CDR, cutoff_CDR, n.alive)`
+
+**Arguments**
+
+`v.SYN` A numeric vector indicating cognitive impairment status at the current cycle (0 = healthy, 1 = impaired).
+
+`v.CDR` A numeric vector of current CDR-SB scores.
+
+`cutoff_CDR` A named numeric vector specifying CDR-SB cut-off values for different severity levels.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes an empty vector for severity classification.
+2. Assigns severity levels only for individuals with cognitive impairment (`SYN = 1`):
+   - `0` (MCI) if `CDR < cutoff_CDR["mci"]` or within `cutoff_CDR["mci"]` to `cutoff_CDR["mild"]`.
+   - `1` (Mild Dementia) if `CDR` is between `cutoff_CDR["mild"]` and `cutoff_CDR["moderate"]`.
+   - `2` (Moderate Dementia) if `CDR` is between `cutoff_CDR["moderate"]` and `cutoff_CDR["severe"]`.
+   - `3` (Severe Dementia) if `CDR >= cutoff_CDR["severe"]`.
+3. Severity is left as `NA` for individuals without cognitive impairment (`SYN = 0`).
+
+**Value**
+
+A numeric vector indicating true dementia severity levels (0 = MCI, 1 = mild dementia, 2 = moderate dementia, 3 = severe dementia).
+
+## Update subjective cognitive concerns
+
+**Description**
+
+Determines the probability of reporting memory concerns based on age, cognitive impairment status (`SYN`), dementia severity (`SEV`), and a lookup matrix of probabilities.
+
+**Usage**
+
+`f.update_COGCON(v.AGE, v.SYN, v.SEV, m.cogcon, random_cycle, n.alive)`
+
+**Arguments**
+
+`v.AGE` A numeric vector representing the current age of individuals.
+
+`v.SYN` A numeric vector indicating cognitive impairment status (0 = healthy, 1 = impaired).
+
+`v.SEV` A numeric vector indicating dementia severity (0 = MCI, 1 = mild, 2 = moderate, 3 = severe).
+
+`m.cogcon` A numeric matrix containing probabilities of reporting memory concerns based on age and cognitive status.
+
+`random_cycle` A numeric vector of random values used to determine whether an individual reports memory concerns.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes a placeholder vector (`cogcon`) with a default value of `-9`.
+2. Selects the appropriate column in `m.cogcon` based on cognitive status:
+   - Column 2 for cognitively healthy individuals (`SYN = 0`).
+   - Column 3 for individuals with MCI (`SEV = 0`).
+   - Column 4 for individuals with dementia (`SEV >= 1`).
+3. Constructs lookup coordinates using rounded age values and selected columns.
+4. Extracts the probability of reporting memory concerns from `m.cogcon` based on age and cognitive status.
+5. Assigns a `1` if the probability exceeds a corresponding random value (`random_cycle`), otherwise assigns `0`.
+
+**Value**
+
+A numeric vector indicating whether an individual reports memory concerns (`1 = reports concerns, 0 = does not report concerns`).
+
+## Evaluate Brain Health Assessment
+
+**Description**
+
+Determines the outcome of the Brain Health Assessment (BHA) based on cognitive concern (`COGCON`), cognitive impairment status (`SYN`), dementia severity (`SEV`), and test sensitivity and specificity.
+
+**Usage**
+
+`f.update_BHA(v.COGCON, v.SYN, v.SEV, sens_BHA, spec_BHA, random_cycle, n.alive)`
+
+**Arguments**
+
+`v.COGCON` A numeric vector indicating whether an individual reports memory concerns (1 = reports concerns, 0 = does not report concerns).
+
+`v.SYN` A numeric vector indicating cognitive impairment status (0 = healthy, 1 = impaired).
+
+`v.SEV` A numeric vector indicating dementia severity (0 = MCI, 1 = mild, 2 = moderate, 3 = severe). It is `NA` is cognitively healthy (`v.SYN == 0`).
+
+`sens_BHA` A numeric vector of sensitivity values for detecting impairment, with different values for MCI and dementia.
+
+`spec_BHA` A numeric value representing the specificity of the assessment for correctly identifying healthy individuals.
+
+`random_cycle` A numeric vector of random values used to determine BHA outcomes.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes a placeholder vector (`bha`) with a default value of `-9`.
+2. Assigns values based on the following conditions:
+   - If no cognitive concern (`COGCON = 0`), the result remains `-9` (not assessed).
+   - If cognitively healthy (`SYN = 0`), assigns `1` (false positive) with probability `1 - spec_BHA`.
+   - If MCI (`SYN = 1 & SEV = 0`), assigns `1` (true positive) with probability `sens_BHA[1]`.
+   - If dementia (`SYN = 1 & SEV >= 1`), assigns `1` (true positive) with probability `sens_BHA[2]`.
+
+**Value**
+
+A numeric vector indicating the BHA result (`1 = positive for impairment, 0 = negative for impairment, -9 = not assessed`).
+
+## Update observed cognitive impairment (CDR-SB score)
+
+**Description**
+
+Generates the observed Clinical Dementia Rating–Sum of Boxes (CDR-SB) score for individuals who undergo assessment (`BHA = 1`), incorporating measurement error. Note that CDR-SB is a semi-continuous scale, increasing in increments of 0.5. For modeling purposes, we assume the scale is continuous throughout the cycles, and round all scores to the nearest 0.5 once all cycles are evaluated. 
+
+**Usage**
+
+`f.update_CDR_obs(v.BHA, v.CDR, r.CDR_sd3, random_cycle, n.alive)`
+
+**Arguments**
+
+`v.BHA` A numeric vector indicating whether an individual underwent assessment (`1 = assessed, 0 or -9 = not assessed`).
+
+`v.CDR` A numeric vector of true CDR-SB scores.
+
+`r.CDR_sd3` Standard deviation of the measurement error introduced by rater reliability.
+
+`random_cycle` A numeric vector of random values used to introduce measurement error.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes a placeholder vector (`cdr_obs`) with a default value of `-9` (not observed).
+2. Updates observed CDR-SB scores only for individuals who were assessed (`BHA = 1`).
+3. Adds measurement error to the true CDR-SB score using a normal distribution with mean 0 and standard deviation `r.CDR_sd3` to account for rater variability.
+
+**Value**
+
+A numeric vector containing the observed CDR-SB scores for assessed individuals, with `-9` for those not assessed.
+
+## Update observed categorical dementia severity
+
+**Description**
+
+Assigns observed dementia severity levels based on the observed CDR-SB score (`CDR_obs`).
+
+**Usage**
+
+`f.update_SEV_obs(v.CDR_obs, cutoff_CDR, n.alive)`
+
+**Arguments**
+
+`v.CDR_obs` A numeric vector of observed CDR-SB scores.
+
+`cutoff_CDR` A named numeric vector specifying CDR-SB cut-off values for different severity levels.
+
+`n.alive` The number of individuals currently alive.
+
+**Details**
+
+1. Initializes a placeholder vector (`sev_obs`) with a default value of `-9` (not observed).
+2. Assigns severity levels based on observed CDR-SB scores:
+   - `0` (MCI) if `CDR_obs` is within the range of `cutoff_CDR["healthy"]` to `cutoff_CDR["mild"]`.
+   - `1` (Mild Dementia) if `CDR_obs` is between `cutoff_CDR["mild"]` and `cutoff_CDR["moderate"]`.
+   - `2` (Moderate Dementia) if `CDR_obs` is between `cutoff_CDR["moderate"]` and `cutoff_CDR["severe"]`.
+   - `3` (Severe Dementia) if `CDR_obs >= cutoff_CDR["severe"]`.
+
+**Value**
+
+A numeric vector indicating the observed dementia severity levels (0 = MCI, 1 = mild, 2 = moderate, 3 = severe, -9 = not observed).
+
+# 3. Running Model
+
+## Run model
+
+**Description**
+
+Executes a microsimulation model over a defined number of cycles, tracking the progression of individuals based on demographic, cognitive, and other health-related attributes.
+
+**Usage**
+
+`f.run(l.inputs, microdata, printLevel)`
+
+**Arguments**
+
+`l.inputs` A list of input parameters, including cycle length, transition probabilities, hazard rates, and other model-specific settings. This can be generated by running the script `gram_01setup.R`.
+
+`microdata` A dataset containing baseline individual attributes, if available. If `NULL`, initial attributes are sampled from distributions provided in `l.inputs`.
+
+`printLevel` An integer indicating the level of output detail:
+- `0`: No progress updates.
+- `1`: Basic summary.
+- `2+`: Displays a progress bar and runtime information.
+
+**Details**
+
+1. **Initialization**:
+   - Creates empty arrays of size `n.cycle`x`n.attr`x`n.ind` to store random values (`a.random`) and simulation outputs (`a.out`).
+   - Populates `a.random` with uniformly distributed random values.
+
+2. **First Cycle (Baseline Assignment)**:
+   - Initializes time, alive status, and individual attributes such as age, sex, race/ethnicity, education, income, medical burden, and APOE4 status. If `microdata` is provided, assigns values from data. Otherwise, defaults to sampling from distributions defined in `l.inputs`.
+   - Sets all individuals as cognitively normal (`SYN = 0`).
+   - Assigns baseline values for cognitive and functional measures.
+
+3. **Simulation Loop (Subsequent Cycles)**:
+   - Iterates through the specified number of cycles (`n.cycle`).
+   - Updates each individual’s attributes using helper functions, ensuring logical progression (e.g., age increases, health conditions evolve, cognitive impairment may develop).
+   - Applies probability-based transitions using pre-computed hazard rates and random draws.
+
+4. **Key Model Components**:
+   - **Mortality:** Determines survival status based on age, cognitive status, and mortality risk factors.
+   - **Medical Burden:** Adjusts health burden over time based on age and previous burden.
+   - **Cognitive Decline:** Updates cognitive status (`SYN`), CDR-SB scores, and severity (`SEV`).
+   - **Assessment & Diagnosis:** Simulates memory concerns, testing outcomes (BHA), and observed CDR-SB scores.
+   - **Treatment:** Updates treatment status (if a treatment is being modeled) for individuals based on their observed cognitive severity.
+
+5. **Post-Processing**:
+   - Converts unobserved values to `NA` where necessary.
+   - Ensures CDR-SB scores follow standard increments of 0.5.
+   - Displays runtime details if `printLevel > 1`.
+
+**Value**
+
+A 3D array (`a.out`) containing simulation results, where:
+- **Rows** represent cycles,
+- **Columns** represent attributes,
+- **Slices** represent individuals.
+
+**Notes**
+Several wrapper and formatting functions are provided to calculate aggregate results using `a.out`. These are not discussed in the detail but the code is available in the GitHub repository.
