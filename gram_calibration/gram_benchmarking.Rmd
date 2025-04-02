@@ -1,0 +1,333 @@
+---
+title: "GRAM Simulation"
+subtitle: "Calibration and Benchmarking - Exploration of Scenarios"
+author: "Sigal Maya"
+date: "Updated 03/06/2025"
+output: html_notebook
+knit_root_dir: "/Users/smaya/Documents/GitHub/GRAM"
+
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+library(tableone)
+library(kableExtra)
+library(tibble)
+library(patchwork)
+```
+
+```{r source files, include = FALSE}
+# The following will only run properly when knit. While working on document, run this chunk in the console.
+# source("gram_model/gram_01setup.r")
+# source("gram_model/gram_02helpers.r")
+# source("gram_model/gram_03simulation.r")
+# source("gram_calibration/gram_benchmarking_helpers.r")
+```
+
+```{r sim1 - base model, include = FALSE}
+l.inputs1 <- l.inputs # seed_stochastic is 20240202
+l.inputs1[["n.cycle"]] <- 51  # in order to see age 100, since cycle = 1 is age 50
+sample1 <- readRDS("../gram_data/acs_data/acs_sample_1.rds")
+
+sim1 <- f.wrap_run(l.inputs1, microdata = sample1)
+```
+
+```{r sim2 - different seed, include = FALSE}
+l.inputs2 <- l.inputs1 # seed_stochastic is 20240202
+l.inputs2[["seed_stochastic"]] <- 12345
+
+sim2 <- f.wrap_run(l.inputs2, microdata = sample1)
+```
+
+```{r benchmark data, include = FALSE}
+benchmark_values <- tribble(
+  ~Variable,                    ~`Benchmark Value`,     ~Source,
+  "n",                          "",                     "",
+  "AGE",                        "",                     "",
+  "SEX: Male",                  "49.0%",                "ACS data",
+  "SEX: Female",                "51.0%",                "ACS data",
+  "RACEETH: Non-Hispanic White","64.0%",                "ACS data",
+  "RACEETH: Non-Hispanic Black","14.0%",                "ACS data",
+  "RACEETH: Hispanic",          "22.0%",                "ACS data",
+  "EDU",                        "13.6 (??)",            "UNDP-HDI",
+  "INCOME: Low",                "5.0%",                 "ACS data",
+  "INCOME: Medium",             "17.0%",                "ACS data",
+  "INCOME: High",               "78.0%",                "ACS data",
+  "MEDBUR",                     "2.25 (??)",            "Mossadeghi et al 2023",
+  "APOE4: Not Carrier",         "75.0%",                "Di Battista et al 2016",
+  "APOE4: Carrier",             "25.0%",                "Di Battista et al 2016",
+  "SYN: Cognitively Healthy",   "",                     ""
+)
+
+lifetable <- read.csv("../gram_data/table_prob_die_next_year.csv") # these are probs, convert to rates
+lifetable <- lifetable %>%
+  mutate(rate = - log(1 - qx))
+
+benchmark_prev_by_age <- data.frame(
+  age = c(65, 70, 75, 80, 85, 90),
+  raceeth = "Overall",
+  condition = c(rep("benchmark_dem", times = 6), rep("benchmark_mci", times = 6)),
+  prev = c(0.03, 0.04, 0.09, 0.18, 0.26, 0.35,
+           0.22, 0.20, 0.21, 0.25, 0.22, 0.27)
+)
+
+benchmark_prev_by_race <- data.frame(
+  age = rep(74, times = 3),
+  raceeth = c("NHW","NHB","Hisp"),
+  condition = c(rep("benchmark_dem", times = 3), rep("benchmark_mci", times = 3)),
+  prev = c(0.11, 0.15, 0.10,
+           0.23, 0.22, 0.28)
+)
+
+benchmark_reside_time <- data.frame(
+  age_group = "Benchmark",
+  condition = c("benchmark_mci", "benchmark_dem"),
+  duration = c(3.85, 7)
+)
+
+# Note that the benchmark dementia duration is a guess based on conversations with Kelly and Kate.
+
+benchmark_age_of_onset <- 71.5
+```
+
+# Comparison of synthetic cohort to US population
+```{r compare starting demographics}
+tableone_vars <- c("AGE","SEX","RACEETH","EDU","INCOME","MEDBUR","APOE4","SYN")
+factor_vars <- list(
+  SEX  = c("1" = "Male", "2" = "Female"),
+  RACEETH   = c("0" = "Non-Hispanic White", "1" = "Non-Hispanic Black", "2" = "Hispanic"),
+  SYN  = c("0" = "Cognitively Healthy", "1" = "Cognitively Impaired"),
+  APOE4  = c("0" = "Not Carrier", "1" = "Carrier"),
+  INCOME = c("0" = "Low Income", "1" = "Medium Income", "2" = "High Income")
+)
+
+cycle1 <- as.data.frame(t(sim1$output[1, , ]))  %>% # transpose output so rows are indivs and cols are attrs
+  mutate(across(names(factor_vars), ~ factor(.x, levels = names(factor_vars[[cur_column()]]), 
+                                             labels = factor_vars[[cur_column()]])))
+
+table1 <- CreateTableOne(vars = tableone_vars, data = cycle1, factorVars = names(factor_vars)) %>%
+  print(showAllLevels = TRUE, printToggle = FALSE)
+comparison_table <- cbind(
+  rownames(table1),
+  table1,
+  benchmark_values[,c(2:3)])
+
+row.names(comparison_table) <- NULL
+colnames(comparison_table) <- c("Attribute", "", "Modeled Value", "Benchmark Value", "Source")
+kable(comparison_table, caption = "Table 1. Representativeness of synthetic cohort of the US population")
+```
+Starting population seems to line up well with empirical data, as expected. Income categories are imperfect, because benchmark data categorization uses slightly different income cutoffs (e.g., low income in model is defined as <9,000/yr, whereas benchmark data is <10,000/yr).
+
+# Comparison of modeled mortality with empirical mortality data
+
+```{r mortality sim1}
+mort_sim1 <- compare_mortality(sim1, "sim1: original model")
+```
+
+
+```{r mortality sim2, include = FALSE}
+mort_sim2 <- compare_mortality(sim2, "sim2: different seed")
+```
+Not very different with a different starting seed, as expected. As people get older, model deviates more from benchmark. We have fewer and fewer people, so we are not very precise, which may be contributing to the issue. But overall, GRAM seems to overestimate mortality, especially at older ages. This is likely to do with inaccuracies in dementia-related mortality. Presumably, the dementia-adjustment in the base mortality data is not removing all dementia- and MCI-related deaths, so when we add back in the heightened relative risk of mortality with these diseases, we overestimate overall mortality.
+
+These rates are per 1000, so we are up to 50% off... Assuming the above reasoning is accurate, let's reduce baseline mortality.
+
+## Reduced mortality after age 70
+Mortality rates adjusted iteratively, by looking at the residuals for annual mortality rate. In final sim3, baseline mortality was adjusted as follows:
+```{r}
+adjustment_table <- tribble(
+  ~Age, ~`Adjustment Factor`,
+  "50-60", "1.50",
+  "61-70", "1.00",
+  "71-80", "0.75",
+  "81-90", "0.85",
+  "91-100","0.95"
+)
+
+kable(adjustment_table)
+```
+
+```{r sim3 - reduced mortality after age 70}
+l.inputs3 <- l.inputs1
+l.inputs3[["m.lifetable"]] <- c(
+  l.inputs3[["m.lifetable"]][1:11]  * 1.50,   # 50% higher value up to age 60
+  l.inputs3[["m.lifetable"]][12:21] * 1.00,   # same value up to age 61-70
+  l.inputs3[["m.lifetable"]][22:31] * 0.75,   # 75% of the values at ages 71-80
+  l.inputs3[["m.lifetable"]][32:41] * 0.85,   # 85% of the values at ages 81-90
+  l.inputs3[["m.lifetable"]][42:51] * 0.95)   # 90% of the values at ages 91-100
+
+sim3 <- f.wrap_run(l.inputs3, microdata = sample1)
+```
+
+```{r mortality sim3}
+mort_sim3 <- compare_mortality(sim3, "sim3: reduced mortality in older ages")
+```
+That's better. Keeping sim3 with the adjusted mortality rates. Annual error ranges from -2.5% to 6.0%. Cumulative mortality error is approximately 12%.
+
+# Comparison of MCI and dementia prevalence by race and age
+
+Benchmark data from [Manly et al 2022 (Table 2)](https://jamanetwork.com/journals/jamaneurology/fullarticle/2797274), based on a nationally representative cohort of adults 65+, including healthy agers. Benchmark prevalence values by race/ethnicity were not further disaggregated by age, so they are shown at the sample mean age.
+
+```{r prevalence by race and age sim3}
+prev_sim3 <- compare_prevalence(sim3,"sim3: reduced mortality in older ages")
+```
+Very poor fit (this is with the adjusted mortality rates). MCI prevalence in model is too low, and dementia is too high. Potential reasons:
+
+1. MCI incidence is too low.
+```{r}
+l.inputs8 <- l.inputs1
+l.inputs8[["m.hr_mci"]] <- l.inputs1[["m.hr_mci"]] * 4
+
+sim8 <- f.wrap_run(l.inputs8, sample1)
+prev_sim8 <- compare_prevalence(sim8, "sim8: greater baseline MCI incidence")
+```
+```{r}
+l.inputs9 <- l.inputs1
+l.inputs9[["m.hr_mci"]] <- l.inputs8[["m.hr_mci"]]
+l.inputs9[["r.CDRslow_mean"]] <- l.inputs1[["r.CDRslow_mean"]] * 0.75
+
+sim9 <- f.wrap_run(l.inputs9, sample1)
+prev_sim9 <- compare_prevalence(sim9, "sim9: sim8 + slower CDR progression in MCI")
+```
+
+```{r}
+l.inputs10 <- l.inputs1
+l.inputs10[["m.hr_mci"]] <- l.inputs8[["m.hr_mci"]]
+l.inputs10[["r.CDRslow_mean"]] <- l.inputs9[["r.CDRslow_mean"]]
+l.inputs10[["m.lifetable"]] <- l.inputs3[["m.lifetable"]]
+
+sim10 <- f.wrap_run(l.inputs10, sample1)
+prev_sim10 <- compare_prevalence(sim10, "sim10: sim9 + reduced mortality")
+```
+
+
+1. We start with a healthy cohort, so it takes time for MCI prevalence to rise. Try starting with a prevalent cohort (`sim4`).
+```{r sim4 prevalent population}
+l.inputs4 <- l.inputs1
+l.inputs4[["m.lifetable"]] <- l.inputs3[["m.lifetable"]] 
+l.inputs4[["p.SYN_start"]] <- c(0.90, 0.10)  # (healthy, impaired)
+
+sim4 <- f.wrap_run(l.inputs4, microdata = sample1)
+prev_sim4 <- compare_prevalence(sim4,"sim4: sim3 + prevalent cohort")
+```
+That did not solve the issue.
+
+1. People progress to dementia quickly and don't spend enough time in MCI such that with new cases prevalence would rise (but noting that our reside time estimates were spot on). Try decreasing CDR progression rate while in MCI (`sim5`).
+```{r sim5 slower CDR progression}
+l.inputs5 <- l.inputs1
+l.inputs5[["m.lifetable"]] <- l.inputs3[["m.lifetable"]] 
+l.inputs5[["r.CDRslow_mean"]] <- l.inputs1[["r.CDRslow_mean"]] * 0.50
+
+sim5 <- f.wrap_run(l.inputs5, microdata = sample1)
+prev_sim5 <- compare_prevalence(sim5,"sim5: sim3 + slower CDR progress while in MCI")
+```
+That's much better. Try combining the above two changes in `sim6`:
+```{r sim6: prevalent population and slower progression}
+l.inputs6 <- l.inputs1
+# l.inputs6[["m.lifetable"]] <- l.inputs3[["m.lifetable"]] 
+l.inputs6[["p.SYN_start"]] <- l.inputs4[["p.SYN_start"]]  # (0.90 healthy, 0.10 impaired)
+l.inputs6[["r.CDRslow_mean"]] <- l.inputs5[["r.CDRslow_mean"]]
+
+sim6 <- f.wrap_run(l.inputs6, microdata = sample1)
+prev_sim6 <- compare_prevalence(sim6, "sim6: sim3 + prevalent population + slower CDR progression")
+```
+
+This will have changed mortality. Reviewing mortality for `sim6`:
+```{r sim6 mortality}
+mort_sim6 <- compare_mortality(sim6,"sim6: sim3 + prevalent population + slower CDR progression")
+```
+
+
+
+
+
+Also note that Alzheimer's Association reports slightly lower values (12-18% MCI among those 60 and older).
+
+The model adjusts baseline MCI hazard rates to account for mix of risk factors in the population (i.e., remove the effect of risk factors that are present in published rates, so that they can be added back in during the simulation). This adjustment factor is arbitrarily set at 4. In `sim7`, try a different adjustment factor: no adjustment up to age 70, 50% increase after age 71.
+
+```{r sim4 - greater baseline MCI hazard}
+l.inputs7 <- l.inputs1
+l.inputs7[["m.lifetable"]] <- l.inputs3[["m.lifetable"]] 
+l.inputs7[["p.SYN_start"]] <- l.inputs4[["p.SYN_start"]]  # (0.90 healthy, 0.10 impaired)
+l.inputs7[["r.CDRslow_mean"]] <- l.inputs5[["r.CDRslow_mean"]]
+l.inputs7[["m.hr_mci"]] <-  l.inputs1[["m.hr_mci"]] / 4    # remove the adjustment factor
+l.inputs7[["m.hr_mci"]] <- c(
+  l.inputs7[["m.hr_mci"]][1:21]  * 1.50,    # same value up to age 70
+  l.inputs7[["m.hr_mci"]][23:51] * 2.00)    # 50% higher after age 71
+
+sim7 <- f.wrap_run(l.inputs7, microdata = sample1)
+prev_sim7 <- compare_prevalence(sim7, "sim6 + lower MCI incidence")
+```
+
+```{r prevalence by race and age sim4}
+prev_sim4 <- compare_prevalence(sim4,"4")
+```
+Now dementia prevalence (overall) fits better, but still have this issue with MCI. I think it's because we start with a healthy cohort, not a prevalent one. I want to try starting with a prevalent cohort (10% MCI, rest healthy).
+
+```{r sim5 - MCI prevalent cohort}
+l.inputs5 <- l.inputs4
+l.inputs5[["p.SYN_start"]] <- c(0.90, 0.10)  # (healthy, MCI)
+
+sim5 <- f.wrap_run(l.inputs5, microdata = sample1)
+```
+
+```{r prevalence by race and age sim5}
+prev_sim5 <- compare_prevalence(sim5,"5")
+```
+It looks like those with MCI are progressing to dementia faster than new cases of MCI can occur (even with increased incidence). Two options: (1) further increase MCI incidence or (2) reduce CDR rate of change. Since time spent in MCI was accurate in the previous models, I will start by further increasing MCI incidence. sim6 increased incidence from baseline by 50% up to age 70, and 100% after age 71.
+
+```{r sim6 - increase MCI incidence}
+l.inputs6 <- l.inputs5
+l.inputs6[["m.hr_mci"]] <- l.inputs1[["m.hr_mci"]] 
+l.inputs6[["m.hr_mci"]] <- c(
+  l.inputs6[["m.hr_mci"]][1:21]  * 1.50,    # 50% higher up to age 70
+  l.inputs6[["m.hr_mci"]][22:51] * 2.00)    # 50% higher after age 71
+
+sim6 <- f.wrap_run(l.inputs6, microdata = sample1)
+```
+
+```{r prevalence by race and age sim6}
+prev_sim6 <- compare_prevalence(sim6,"6")
+```
+
+```{r mortality sim6}
+mort6 <- compare_mortality(sim6,6)
+```
+Mortality is again a bit too high. Reduce again. 
+
+```{r sim7 - greater MCI incidence, mortality back to baseline}
+l.inputs7 <- l.inputs6
+l.inputs7[["m.lifetable"]] <- c(
+  l.inputs1[["m.lifetable"]][1:11]  * 1.50,   # 50% higher value up to age 60
+  l.inputs1[["m.lifetable"]][12:21] * 1.00,   # same value up to age 61-70
+  l.inputs1[["m.lifetable"]][22:31] * 0.50,   # 75% of the values at ages 71-80
+  l.inputs1[["m.lifetable"]][32:41] * 0.75,   # 85% of the values at ages 81-90
+  l.inputs1[["m.lifetable"]][42:51] * 0.85)   # 90% of the values at ages 91-100
+sim7 <- f.wrap_run(l.inputs7, microdata = sample1)
+```
+
+```{r mortality sim7}
+mort7 <- compare_mortality(sim7,7)
+```
+
+Now look again at prevalence:
+```{r prevalence sim7}
+prev_sim7 <- compare_prevalence(sim7,7)
+```
+
+
+
+
+# Reside time in MCI and dementia by age of onset
+```{r reside time}
+reside_sim7 <- compare_reside_time(sim7, "7")
+```
+
+
+# Compare average age on MCI onset
+```{r}
+age_onset_sim7 <- compare_age_onset(sim7,"7")
+```
+

@@ -1,0 +1,146 @@
+---
+title: "Calculating Non-Dementia Mortality"
+author: "Sigal Maya"
+date: "Updated 02-20-2025"
+output: 
+  html_notebook: 
+    fig_width: 3
+    fig_height: 2
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+getwd()
+```
+
+The model utilizes the risk ratio for mortality to evaluate the increased risk for death among those with dementia. However, using the risk ratio in conjunction with all-cause mortality inflates overall mortality in the model. We thus estimated the non-dementia-related mortality rate (i.e, mortality among those without the risk factor) by subtracting dementia-related deaths from all-cause deaths at each age. All-cause and dementia-related death rates were obtained from the CDC Wonder database.
+
+```{r load}
+path_allcause <- "allcause_mortality_by_age.txt"
+path_dementia <- "dementia_mortality_by_age.txt"
+
+allcause_raw <- read_tsv(path_allcause, n_max = 101)  # Crude rates of death per 100,000 by age
+dementia_raw <- read_tsv(path_dementia, n_max = 60)   # Crude rates of death per 1,000 by age
+```
+
+```{r clean}
+summary(allcause_raw)
+
+allcause <- allcause_raw %>%
+  janitor::clean_names() %>%
+  select(-notes, -single_year_ages) %>%
+  rename(age = single_year_ages_code,
+         rate = crude_rate) %>%
+  mutate(age = as.numeric(age),
+         population = as.numeric(population),
+         rate = deaths/population) %>%       
+  subset(age >= 50)
+
+summary(allcause)  
+# all converted to numeric, no NAs in age, 16 in rate (those aged 85+), all rates are non-zero
+
+summary(dementia_raw)
+
+dementia <- dementia_raw %>%
+  select(-Notes, -`Single-Year Ages`) %>%
+  rename(age = `Single-Year Ages Code`,
+         deaths = Deaths,
+         population = Population,
+         rate = `Crude Rate`) %>%
+  mutate(age = as.numeric(age),
+         population = as.numeric(population),
+         rate = deaths/population) %>%        
+  subset(age >= 50)
+
+summary(dementia) 
+# all converted to numeric, no NAs in age, 16 in rate (those age 85+), all rates are non-zero
+```
+
+Rates for older ages (85+) were unavailable, so we extrapolated using available data. First, we visually inspected the data to examine the distribution by age, confirming that the rate grew exponentially with age:
+
+```{r plot original, include = TRUE}
+par(mfrow = c(1, 2))
+plot(allcause$age, allcause$rate, xlab = "Age", ylab = "Rate", main = "Crude All-Cause\nMortality Rate by Age")
+plot(dementia$age, dementia$rate, xlab = "Age", ylab = "Rate", main = "Crude Dementia-Related\nMortality Rate by Age") 
+```
+
+We used a log-transformed linear model with age as the predictor variable to extrapolate all-cause mortality rates up to the age of 100 (the maximum age allowed in the microsimulation). Initial models using all data points resulted in predictions that were not smooth, thus we used rates for ages 76 and up for predictions. The `predict()` function in R was used to predict the missing estimates, which were then exponentiated to obtain rates. Data were visually inspected to confirm a smooth and uninterrupted exponential increase in all-cause mortality rate with age.
+
+```{r predict all-cause mortality rates}
+any(allcause$rate==0, na.rm=TRUE) # check to see if any zeros (log(0) is problematic) -- there are none
+any(dementia$rate==0, na.rm=TRUE) # check to see if any zeros (log(0) is problematic) -- there are none
+
+# Extrapolate all-cause mortality 
+summary(allcause_log <- lm(log(rate) ~ age, data = na.omit(allcause[allcause$age>=76, ])))   
+# using all data points gave weird fits, so only using ages 76 and up to predict
+# good fit (R^2 = 0.99), p(age) ~ 0
+
+allcause_predict <- data.frame(age = allcause$age[is.na(allcause$rate)])
+allcause_predict$rate_predicted <- exp(predict(allcause_log, newdata = allcause_predict))
+
+allcause_clean <- allcause %>%
+left_join(allcause_predict, by = "age") %>% 
+mutate(rate = coalesce(rate, rate_predicted)) %>%
+select(-rate_predicted)
+summary(allcause_clean)  # no NAs in rate2 and probability2
+
+saveRDS(allcause_clean, "allcause_mortality_clean.RDS")
+```
+
+```{r all-cause mortality rates, include = TRUE}
+plot(allcause_clean$age, allcause_clean$rate, xlab = "Age", ylab = "Rate", main = "Extrapolated All-Cause Mortality Rate by Age") # smooth exponential curve
+```
+
+Next, we calculated non-dementia-related mortality rates by subtracting dementia-related mortality rates from all-cause mortality rates. We fit another log-transformed linear model to the non-dementia-related mortality rates to obtain missing values for ages 85 and up.
+
+```{r predict non-dementia mortality rates}
+non_dementia2 <- allcause_clean[ ,c("age","rate")] %>%
+right_join(dementia[ ,c("age","rate")], by="age") %>%
+rename(rate_allcause = rate.x,
+rate_dementia = rate.y) %>%
+mutate(rate_non_dementia = pmax(rate_allcause - rate_dementia, 1e-10))
+
+summary(non_dementia2)
+
+summary(non_dementia_log <- lm(log(rate_non_dementia) ~ age, data = na.omit(non_dementia2[non_dementia2$age>=76,])))
+# good fit (R^2 ~= 1), p(age) ~ 0
+
+non_dementia2_predict <- data.frame(age = non_dementia2$age[is.na(non_dementia2$rate_non_dementia)])
+non_dementia2_predict$rate_predicted <- exp(predict(non_dementia_log, newdata = non_dementia2_predict))  
+
+non_dementia2_clean <- non_dementia2 %>%
+left_join(non_dementia2_predict, by = "age") %>% 
+mutate(rate_non_dementia = coalesce(rate_non_dementia, rate_predicted)) %>%
+select(-rate_predicted, -rate_dementia)
+summary(non_dementia2_clean)
+```
+
+```{r non-dementia mortality rates, include = TRUE}
+plot(non_dementia2_clean$age, non_dementia2_clean$rate_non_dementia, xlab = "Age", ylab = "Rate",
+     main = "Non-Dementia-Related Mortality Rate by Age") # smooth exponential curve
+```
+
+Finally, we converted rates to probabilities using the equation $\text{probability} = 1 - e^{-\text{rate}}$.
+
+```{r convert rates to probabilities}
+non_dementia2_clean <- non_dementia2_clean %>%
+mutate(prob_allcause = 1-exp(-rate_allcause),
+prob_non_dementia = 1-exp(-rate_non_dementia))
+```
+
+```{r inspect data}
+non_dementia2_grouped <- non_dementia2_clean %>%
+mutate(age_group = cut(age, breaks = seq(50, 100, by = 5), right = FALSE)) %>%
+group_by(age_group) %>%
+summarise(avg_rate_allcause = mean(rate_allcause),
+avg_rate_non_dementia = mean(rate_non_dementia)) %>%
+mutate(avg_prob_allcause = 1-exp(-avg_rate_allcause),
+avg_prob_non_dementia = 1-exp(-avg_rate_non_dementia))
+```
+
+```{r save data}
+saveRDS(non_dementia2_clean, "non_dementia_mortality_prob_by_age_v2.RDS")
+```
+
+During model calibration, we noticed that the simulated mortality diverged from empirical data on mortality among as the model cohort aged. We believe that this is because the mortality risk ratios for dementia we used in the microsimulation were not dependent on age. It is reasonable that the relative risk of dementia mortality (compared to mortality from other causes) would decrease with age, as dementia-related deaths are likely to make up a greater proportion of all deaths in older ages. Therefore, we added an additional adjustment that lowers the mortality risk ratios for moderate and severe dementia by 40% for those aged between 70 and 79, and by 70% for those aged 80 and older. This aligned simulated mortality by age with empirical data on mortality.

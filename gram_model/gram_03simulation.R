@@ -5,7 +5,7 @@
 ######################################## 3.1. MAIN FUNCTIONS: RUN MODEL ########################################
 
 # run model
-f.run <- function(l.inputs, printLevel) {
+f.run <- function(l.inputs, microdata, printLevel) {
   
   # progress bar
   if (printLevel > 1) {
@@ -25,35 +25,80 @@ f.run <- function(l.inputs, printLevel) {
   # starting values (first cycle)
   a.out[1,"TIME",]      <- 0
   a.out[1,"ALIVE",]     <- 1
-  a.out[1,"AGE",]       <- round(qnorm(p = a.random[1,"AGE",], mean = l.inputs[["AGE_start_mean"]], sd = l.inputs[["AGE_start_sd"]]),0)
-  a.out[1,"AGE",][a.out[1,"AGE",]<50] <- 50
-  a.out[1,"AGE",][a.out[1,"AGE",]>99] <- 99
-  a.out[1,"SEX",]       <- f.qcat(p_rand = a.random[1,"SEX",], p_cat = c(l.inputs[["p.SEX_start_male"]], 
-                                                                         l.inputs[["p.SEX_start_female"]]), values = l.inputs[["v.SEX_val"]])
-  a.out[1,"EDU",]       <- f.qcat(p_rand = a.random[1,"EDU",], p_cat = l.inputs[["p.EDU_start"]], values = l.inputs[["v.EDU_val"]])
-  a.out[1,"RACEETH",]   <- f.qcat(p_rand = a.random[1,"RACEETH",], p_cat = l.inputs[["p.RACEETH_start"]], values = l.inputs[["v.RACEETH_val"]])
-  a.out[1,"INCOME",]    <- f.qcat(p_rand = a.random[1,"INCOME",], p_cat = l.inputs[["p.INCOME_start"]], values = l.inputs[["v.INCOME_val"]])
-  a.out[1,"MEDBUR",]    <- qbeta(p = a.random[1,"MEDBUR",], shape1 = 1.5, shape2 = 6) * max(l.inputs[["v.MEDBUR_val"]])
-  a.out[1,"APOE4",]     <- f.qcat(p_rand = a.random[1,"APOE4",], p_cat = l.inputs[["p.APOE4_start"]], values = l.inputs[[".APOE4_val"]])
   
+  if (!is.null(microdata)) {
+    a.out[1,"AGE",] <- microdata$AGE
+    a.out[1,"SEX",] <- microdata$SEX
+    a.out[1,"RACEETH",] <- microdata$RACEETH
+    a.out[1,"EDU",] <- microdata$EDUC
+    a.out[1,"INCOME",] <- microdata$INCOME_CAT
+    a.out[1,"MEDBUR",] <- microdata$MEDBUR
+    a.out[1,"APOE4",] <- microdata$APOE4
+    a.out[1,"HCARE",] <- microdata$INSURANCE * as.numeric(a.random[1,"HCARE",] < l.inputs[["p.HCARE_start"]][2]) 
+  } else {
+    a.out[1,"AGE",]       <- round(qnorm(p = a.random[1,"AGE",], mean = l.inputs[["AGE_start_mean"]], sd = l.inputs[["AGE_start_sd"]]),0)
+    a.out[1,"AGE",][a.out[1,"AGE",]<50] <- 50
+    a.out[1,"AGE",][a.out[1,"AGE",]>99] <- 99
+    a.out[1,"SEX",]       <- f.qcat(p_rand = a.random[1,"SEX",], p_cat = c(l.inputs[["p.SEX_start_male"]], 
+                                                                           l.inputs[["p.SEX_start_female"]]), values = l.inputs[["v.SEX_val"]])
+    a.out[1,"RACEETH",]   <- f.qcat(p_rand = a.random[1,"RACEETH",], p_cat = l.inputs[["p.RACEETH_start"]], values = l.inputs[["v.RACEETH_val"]])
+    
+    a.out[1,"EDU",]       <- case_match(a.out[1,"RACEETH",],
+                                        0 ~ f.qcat(p_rand = a.random[1,"EDU",], 
+                                                   p_cat = c(0.048, 0.274, 0.149, 0.111, 0.261, 0.117, 0.017, 0.023),
+                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)),
+                                        1 ~ f.qcat(p_rand = a.random[1,"EDU",], 
+                                                   p_cat = c(0.095, 0.335, 0.181, 0.110, 0.173, 0.081, 0.010, 0.015),
+                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)),
+                                        2 ~ f.qcat(p_rand = a.random[1,"EDU",], 
+                                                   p_cat = c(0.248, 0.327, 0.130, 0.086, 0.145, 0.047, 0.009, 0.008),
+                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)))
+    # probs from https://www.equityinhighered.org/indicators/u-s-population-trends-and-educational-attainment/educational-attainment-by-race-and-ethnicity/
+    #  round(qbeta(p = a.random[1,"EDU",], shape1 = 2.24, shape2 = 2.90) * 25, 0)  # assumes max 25 years of education
+    a.out[1,"INCOME",]    <- f.qcat(p_rand = a.random[1,"INCOME",], p_cat = l.inputs[["p.INCOME_start"]], values = l.inputs[["v.INCOME_val"]])
+    
+    tmp_rand <- runif(n = l.inputs[["n.ind"]])
+    tmp_probs_2plus_medbur <- case_when(
+      a.out[1,"EDU",] >= 16 ~ 1,
+      a.out[1,"EDU",] >= 12 ~ 1.32,
+      a.out[1,"EDU",] < 12 ~ 1.58) * 0.531    # See script "calculate_initial_medbur.R"
+    tmp_2plus_medbur <- qbinom(p = tmp_rand, size = 1, prob = tmp_probs_2plus_medbur)
+    
+    prev.no_of_conditions_male <- c(0.155, 0.205, 0.220, 0.175, 0.105, 0.060, 0.045, 0.020, 0.018, 0.005, 0.001)
+    prev.no_of_conditions_female <- c(0.175, 0.205, 0.190, 0.175, 0.140, 0.075, 0.040, 0.018, 0.015, 0.002, 0.002)
+    prev.no_of_conditions <- (prev.no_of_conditions_female + prev.no_of_conditions_male) / 2
+    
+    a.out[1,"MEDBUR",]    <- case_when(
+      tmp_2plus_medbur == 1 ~ f.qcat(p_rand = a.random[1,"MEDBUR",], p_cat = prev.no_of_conditions[3:11]/sum(prev.no_of_conditions[3:11]), values = 2:10),
+      tmp_2plus_medbur == 0 ~ f.qcat(p_rand = a.random[1,"MEDBUR",], p_cat = prev.no_of_conditions[1:2]/sum(prev.no_of_conditions[1:2]), values = 0:1)
+    )
+    
+    # round(qbeta(p = a.random[1,"MEDBUR",], shape1 = 2, shape2 = 18) * max(l.inputs[["v.MEDBUR_val"]]),0)
+    a.out[1,"APOE4",]     <- f.qcat(p_rand = a.random[1,"APOE4",], p_cat = l.inputs[["p.APOE4_start"]], values = l.inputs[["v.APOE4_val"]])
+    a.out[1,"HCARE",]     <- f.qcat(p_rand = a.random[1,"HCARE",], p_cat = l.inputs[["p.HCARE_start"]], values = l.inputs[["v.HCARE_val"]])
+  }
   
   a.out[1,"TX",]         <- 0
-  a.out[1,"SYN",]        <- 0    # Everyone starts healthy
-  a.out[1,"BHA",]        <- 0    # Will be assigned as people are tested
-  a.out[1,"CDR_track",]  <- NA   # Will be determined based on attributes
+  a.out[1,"SYN",]        <- f.qcat(p_rand = a.random[1,"SYN",], p_cat = l.inputs[["p.SYN_start"]], values = l.inputs[["v.SYN_val"]])
+  a.out[1,"CDR_track",]  <- case_match(a.out[1,"SYN",],
+                                       0 ~ 0,
+                                       1 ~ 1)
   a.out[1,"CDRfast_sd1",] <- qnorm(p = a.random[1,"CDRfast_sd1",], mean = 0, sd = l.inputs[["r.CDRfast_sd1"]]) 
-  #%>%
-  # rescale(to = c(-0.9*l.inputs[["r.CDRfast_mean"]], 0.9*l.inputs[["r.CDRfast_mean"]]))
   a.out[1,"CDRslow_sd1",] <- qnorm(p = a.random[1,"CDRslow_sd1",], mean = 0, sd = l.inputs[["r.CDRslow_sd1"]]) 
-  #%>%
-  # rescale(to = c(-0.9*l.inputs[["r.CDRslow_mean"]], 0.9*l.inputs[["r.CDRslow_mean"]]))
-  a.out[1,"CDR",]       <- 0    # CDR-SB true score -- everyone starts cognitively normal
+  a.out[1,"CDR",]       <- case_match(a.out[1,"SYN",],
+                                      0 ~ 0,
+                                      1 ~ qunif(p = a.random[1,"CDR",], min = l.inputs[["cutoff_CDR"]]["mci"], max = l.inputs[["cutoff_CDR"]]["moderate"]))
+  a.out[1,"SEV",]       <- f.update_SEV(v.SYN = a.out[1,"SYN",], v.CDR = a.out[1,"CDR",], 
+                                        cutoff_CDR = l.inputs[["cutoff_CDR"]], n.alive = l.inputs[["n.ind"]])   # Everyone starts healthy
+  a.out[1,"COGCON",]    <- 0    # Assume no concerns at age 50 when healthy !! TODO: make this dynamic!
+  a.out[1,"BHA",]       <- -9   # Will be assigned as people are tested
   a.out[1,"CDR_obs",]   <- -9   # CDR-SB observed score -- will be assigned as people are tested
-  a.out[1,"SEV",]       <- NA   # Will be assigned as people are tested
   a.out[1,"SEV_obs",]   <- -9   # Will be assigned as people are tested
+  
+  a.out[1,"DX",]        <- f.qcat(p_rand = a.random[1,"DX",], p_cat = l.inputs[["p.DX_start"]], values = l.inputs[["v.DX_val"]])
   a.out[1,"FUN",]       <- 0    # FAQ -- everyone starts with no functional impairment
-  a.out[1,"BEH",]       <- NA
-  a.out[1,"INSTIT",]    <- 0
+  a.out[1,"BEH",]       <- NA   # Currently not in use
+  a.out[1,"INSTIT",]    <- 0    # Currently not in use
   a.out[1,"QALY",]      <- NA
   a.out[1,"COST_care",] <- NA
   a.out[1,"COST_tx",]   <- NA
@@ -83,7 +128,10 @@ f.run <- function(l.inputs, printLevel) {
       hr.mort_mil   = l.inputs[["hr.mort_mil"]], 
       hr.mort_mod   = l.inputs[["hr.mort_mod"]], 
       hr.mort_sev   = l.inputs[["hr.mort_sev"]],
-      hr.mort_age   = l.inputs[["hr.mort_age"]]
+      hr.mort_mci_age   = l.inputs[["hr.mort_mci_age"]],
+      hr.mort_mil_age   = l.inputs[["hr.mort_mil_age"]],
+      hr.mort_mod_age   = l.inputs[["hr.mort_mod_age"]],
+      hr.mort_sev_age   = l.inputs[["hr.mort_sev_age"]]
     )
     
     a.out[t,"ALIVE",!(alive.lag)] <- 0
@@ -122,7 +170,13 @@ f.run <- function(l.inputs, printLevel) {
     
     # MEDBUR
     a.out[t,"MEDBUR",alive] <- f.update_MEDBUR(
-      v.MEDBUR.lag = a.out[t-1,"MEDBUR",alive]
+      v.MEDBUR.lag = a.out[t-1,"MEDBUR",alive],
+      v.AGE.lag    = a.out[t-1, "AGE", alive],
+      coef_MEDBUR  = l.inputs[["coef_MEDBUR"]],
+      amplification = l.inputs[["amplification_MEDBUR"]],
+      max_MEDBUR   = max(l.inputs[["v.MEDBUR_val"]]),
+      random_cycle = a.random[t, "MEDBUR", alive],
+      n.alive      = n.alive
     )
     
     # APOE4
@@ -130,10 +184,19 @@ f.run <- function(l.inputs, printLevel) {
       v.APOE4.lag = a.out[t-1,"APOE4",alive]
     )
     
+    # HCARE
+    a.out[t,"HCARE",alive] <- f.update_HCARE(
+      v.HCARE.lag  = a.out[t-1,"HCARE",alive],
+      v.AGE        = a.out[t,"AGE",alive],
+      random_cycle = a.random[t,"HCARE",alive]
+    )    
+    
     # MCI
     a.out[t,"SYN",alive] <- f.update_SYN(
       l.inputs        = l.inputs,
       v.AGE.lag       = a.out[t-1,"AGE",alive],
+      v.SEX.lag       = a.out[t-1,"SEX",alive],
+      v.RACEETH.lag   = a.out[t-1,"RACEETH",alive],
       v.EDU.lag       = a.out[t-1,"EDU",alive],
       v.APOE4.lag     = a.out[t-1,"APOE4",alive],
       v.MEDBUR.lag    = a.out[t-1,"MEDBUR",alive],
@@ -153,14 +216,26 @@ f.run <- function(l.inputs, printLevel) {
     a.out[t,"CDRfast_sd1",alive] <- a.out[t-1,"CDRfast_sd1",alive]
     a.out[t,"CDRslow_sd1",alive] <- a.out[t-1,"CDRslow_sd1",alive]
     
+    if (length(l.inputs[["r.CDRfast_mean"]]) > 1) {
+      r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]][t]
+    } else {
+      r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]]
+    }
+    
+    if (length(l.inputs[["r.CDRslow_mean"]]) > 1) {
+      r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]][t]
+    } else {
+      r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]]
+    }
+    
     # CDR (true)
     a.out[t,"CDR",alive] <- f.update_CDR(
       v.SYN            = a.out[t,"SYN",alive],
       v.SYN.lag        = a.out[t-1,"SYN",alive],
       cutoff_CDR       = l.inputs[["cutoff_CDR"]],
       v.CDR.lag        = a.out[t-1,"CDR",alive], 
-      r.CDRfast_mean   = l.inputs[["r.CDRfast_mean"]],
-      r.CDRslow_mean   = l.inputs[["r.CDRslow_mean"]],
+      r.CDRfast_mean   = r.CDRfast_mean,
+      r.CDRslow_mean   = r.CDRslow_mean,
       v.CDR_track      = a.out[t,"CDR_track",alive],
       v.CDRfast_sd1    = a.out[t,"CDRfast_sd1",alive],
       v.CDRslow_sd1    = a.out[t,"CDRslow_sd1",alive],
@@ -179,10 +254,23 @@ f.run <- function(l.inputs, printLevel) {
       n.alive        = n.alive
     )
     
+    # COGCON
+    a.out[t,"COGCON",alive] <- f.update_COGCON(
+      v.AGE            = a.out[t,"AGE",alive],
+      v.SYN            = a.out[t,"SYN",alive],
+      v.SEV            = a.out[t,"SEV",alive],
+      m.cogcon         = l.inputs[["m.cogcon"]],
+      v.DX.lag         = a.out[t-1,"DX",alive],
+      random_cycle     = a.random[t,"COGCON",alive],
+      n.alive          = n.alive
+    )
+    
     # BHA
     a.out[t,"BHA",alive] <- f.update_BHA(
+      v.HCARE          = a.out[t,"HCARE",alive],
+      v.DX.lag         = a.out[t-1,"DX",alive],
+      v.COGCON         = a.out[t,"COGCON",alive],
       v.SYN            = a.out[t,"SYN",alive],
-      v.BHA.lag        = a.out[t-1,"BHA",alive],
       v.SEV            = a.out[t,"SEV",alive],
       sens_BHA         = l.inputs[["sens_BHA"]],
       spec_BHA         = l.inputs[["spec_BHA"]],
@@ -203,6 +291,17 @@ f.run <- function(l.inputs, printLevel) {
     a.out[t,"SEV_obs",alive] <- f.update_SEV_obs(
       v.CDR_obs     = a.out[t,"CDR_obs",alive],
       cutoff_CDR     = l.inputs[["cutoff_CDR"]],
+      n.alive        = n.alive
+    ) 
+    
+    
+    # DX
+    a.out[t,"DX",alive] <- f.update_DX(
+      v.DX.lag       = a.out[t-1,"DX",alive],
+      v.SYN          = a.out[t,"SYN",alive], 
+      v.SEV          = a.out[t,"SEV",alive], 
+      v.HCARE        = a.out[t,"HCARE",alive],
+      random_cycle   = a.random[t,"DX",alive], 
       n.alive        = n.alive
     ) 
     
@@ -236,7 +335,7 @@ f.run <- function(l.inputs, printLevel) {
   }
   
   # Convert all non-observed values to NA
-  a.out[a.out == -9] <- NA
+  # a.out[a.out == -9] <- NA
   
   # The "round(score*2)/2" ensures that scores are increments of 0.5 
   a.out[,"CDR",] <- round(a.out[,"CDR",] * 2) / 2
@@ -367,7 +466,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   # time in treatment
   l.out[["mean_time_Tx"]] <- sum(a.out[,"TX",]==1, na.rm=TRUE)/n
   
-  # state reside time by age at onset
+  # age at onset
   onset_cycle <- apply(a.out[,"SEV",], 2, function(x) {
     # Identify indices where SEV == 0 (MCI), ignoring NA
     mci_indices <- which(!is.na(x) & x == 0)
@@ -375,26 +474,54 @@ f.out_aggregate <- function(a.out, l.inputs) {
     # Return the first such index, or NA if none exist
     if (length(mci_indices) > 0) mci_indices[1] else NA
   })
-  age_at_mci <- ifelse(!is.na(onset_cycle), a.out[cbind(onset_cycle, match("AGE", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
-  age_bins <- cut(age_at_mci, breaks = seq(50, 100, by = 5), right = FALSE, include.lowest = TRUE)
+  
+  l.out[["age_at_mci"]] <- ifelse(!is.na(onset_cycle), a.out[cbind(onset_cycle, match("AGE", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
+  
+  # state reside time by age at onset
+  
+  last_alive_cycle <- apply(a.out[, "ALIVE", ], 2, function(x) which(x == 0)[1])-1
+  sev_at_death <- ifelse(!is.na(last_alive_cycle), a.out[cbind(last_alive_cycle, match("SEV", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
+  
+  age_bins <- cut(l.out[["age_at_mci"]], breaks = seq(50, 100, by = 5), right = FALSE, include.lowest = TRUE)
   age_groups <- levels(age_bins)
   severity_levels <- c("mci", "mil", "mod", "sev")
-  result_matrix <- matrix(NA, nrow = length(age_groups), ncol = length(severity_levels),
-                          dimnames = list(age_groups, severity_levels))
+  result_matrix1 <- result_matrix2 <- matrix(NA, nrow = length(age_groups)+1, ncol = length(severity_levels),
+                                             dimnames = list(c(age_groups,"Overall"), severity_levels))
+  
   for (sev in 0:3) {
     # Total time in the current state for each individual
     time_in_state <- colSums(a.out[,"SEV",] == sev, na.rm = TRUE)
     
+    if (sev < 3) {
+      time_in_state_censored <- ifelse(sev_at_death == sev, NA, time_in_state)
+    } else {
+      time_in_state_censored <- time_in_state
+    }
+    
     # Average time per age group
-    result_matrix[, sev + 1] <- tapply(time_in_state, age_bins, function(x) round(mean(x, na.rm = TRUE), digits = 2))
+    result_matrix1[1:length(age_groups), sev + 1] <- tapply(time_in_state, age_bins, function(x) round(mean(x, na.rm = TRUE), digits = 2))
+    result_matrix2[1:length(age_groups), sev + 1] <- tapply(time_in_state_censored, age_bins, function(x) round(mean(x, na.rm = TRUE), digits = 2))
+    
+    # Average time overall
+    result_matrix1[nrow(result_matrix1), sev + 1] <- round(mean(time_in_state, na.rm = TRUE), digits = 2)
+    result_matrix2[nrow(result_matrix2), sev + 1] <- round(mean(time_in_state_censored, na.rm = TRUE), digits = 2)
+
   }
-  result_df <- as.data.frame(result_matrix) %>% 
-    mutate(age_group = factor(age_groups,
-                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+"))) %>%
-    select(age_group, mci, mil, mod, sev) 
-  rownames(result_df) <- NULL
-  l.out[["reside_time_by_age_of_onset"]] <- result_df
   
+  
+  result_df1 <- as.data.frame(result_matrix1) %>% 
+    mutate(age_group = factor(c(age_groups, "Overall"),
+                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
+    select(age_group, mci, mil, mod, sev) 
+  rownames(result_df1) <- NULL
+  
+  result_df2 <- as.data.frame(result_matrix2) %>% 
+    mutate(age_group = factor(c(age_groups, "Overall"),
+                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
+    select(age_group, mci, mil, mod, sev) 
+  rownames(result_df2) <- NULL
+  
+  l.out[["reside_time"]] <- list(noncensored = result_df1, censored = result_df2)
   
   # time in full-time care
   # l.out[["mean_time_FTC"]] <- sum(a.out[,"INSTIT",]==1, na.rm=TRUE)/n
@@ -426,14 +553,20 @@ f.out_aggregate <- function(a.out, l.inputs) {
   rowSums(l.out[["state_trace_obs"]])
   
   # correct/incorrect detection
-  l.out[["state_concordance"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 10,
-                                         dimnames = list(NULL, c("h_h","h_mci","h_dem","mci_h","mci_mci","mci_dem","dem_h","dem_mci","dem_dem","dth")))
+  l.out[["state_concordance"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 13,
+                                         dimnames = list(NULL, c("h_NA","h_h","h_mci","h_dem",
+                                                                 "mci_NA","mci_h","mci_mci","mci_dem",
+                                                                 "dem_NA","dem_h","dem_mci","dem_dem",
+                                                                 "dth")))
+  l.out[["state_concordance"]][,"h_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"h_h"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"h_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"h_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"mci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"mci_h"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"mci_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"mci_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"dem_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"dem_h"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"dem_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"dem_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
@@ -468,11 +601,12 @@ f.out_aggregate <- function(a.out, l.inputs) {
   }
   
   # Prevalence by severity by age -- this requires that age and cycle are equal (everyone starts the same age)
-  l.out[["prevalence_grouped"]] <- as.data.frame(l.out[["state_trace"]]) %>%
-    mutate(age = 50:99) %>%
+  l.out[["prevalence_by_age"]] <- as.data.frame(l.out[["state_trace"]]) %>%
+    mutate(age = l.inputs[["AGE_start_mean"]]:(l.inputs[["AGE_start_mean"]]+l.inputs[["n.cycle"]]-1)) %>%
     mutate(alive = 1 - dth,
-           age_group = factor(cut(age, breaks = seq(50, 100, by = 5), right = FALSE),
-                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+"))) %>%
+           age_group = factor(cut(age, breaks = c(50, 65, 75, 85, Inf), right = FALSE),
+                              labels = c("50-64", "65-74","75-84","85+")
+           )) %>%
     mutate(mci = mci / alive,
            mil = mil / alive,
            mod = mod / alive,
@@ -481,7 +615,44 @@ f.out_aggregate <- function(a.out, l.inputs) {
     summarize(avg_mci = mean(mci),
               avg_mil = mean(mil),
               avg_mod = mean(mod),
-              avg_sev = mean(sev))
+              avg_sev = mean(sev)) %>%
+    bind_rows(
+      summarize(., 
+                age_group = "Overall",
+                avg_mci = mean(avg_mci), 
+                avg_mil = mean(avg_mil), 
+                avg_mod = mean(avg_mod), 
+                avg_sev = mean(avg_sev))
+    )
+  
+  # Prevalence by race/ethnicity
+  l.out[["prevalence_by_raceeth"]] <- array(NA, dim = c(l.inputs[["n.cycle"]], length(severity_levels) + 1, length(l.inputs[["v.RACEETH_val"]])),
+                                            dimnames = list(NULL, c("h", severity_levels), c("NHW","NHB","Hisp")))
+  
+  # matrix_nhw <- matrix_nhb <- matrix_hisp <- matrix(0, nrow = l.inputs[["n.cycle"]], ncol = 5,
+  #                     dimnames = list(NULL, c("h", severity_levels)))
+  l.out[["prevalence_by_raceeth"]][,"h","NHW"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mci","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mil","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mod","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"sev","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,,"NHW"] <- round(l.out[["prevalence_by_raceeth"]][,,"NHW"] / rowSums(l.out[["prevalence_by_raceeth"]][,,"NHW"]), 3)
+  
+  
+  l.out[["prevalence_by_raceeth"]][,"h","NHB"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mci","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mil","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mod","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"sev","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,,"NHB"] <- round(l.out[["prevalence_by_raceeth"]][,,"NHB"] / rowSums(l.out[["prevalence_by_raceeth"]][,,"NHB"]), 3)
+  
+  l.out[["prevalence_by_raceeth"]][,"h","Hisp"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mci","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mil","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"mod","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"sev","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,,"Hisp"] <- round(l.out[["prevalence_by_raceeth"]][,,"Hisp"] / rowSums(l.out[["prevalence_by_raceeth"]][,,"Hisp"]), 3)
+  
   
   
   # QALY
@@ -618,23 +789,26 @@ f.out_aggregate <- function(a.out, l.inputs) {
 }
 
 # run strategies and incremental outcomes
-f.out_summary <- function(l.inputs, printLevel = 0) {
+f.out_summary <- function(l.inputs1, l.inputs2, printLevel = 0) {
   
   # strategy 1
-  l.inputs_strat1 <- l.inputs
-  l.inputs_strat1[["strategy"]] <- l.inputs[["strategy_strat1"]]
-  l.inputs_strat1[["Tx"]] <- l.inputs[["Tx_strat1"]]
+  l.inputs_strat1 <- l.inputs1
+  # l.inputs_strat1[["strategy"]] <- l.inputs[["strategy_strat1"]]
+  # l.inputs_strat1[["Tx"]] <- l.inputs[["Tx_strat1"]]
   a.out_strat1 <- f.run(l.inputs = l.inputs_strat1, printLevel = printLevel)
   a.out_qc_strat1 <- f.qaly_cost(a.out = a.out_strat1, l.inputs = l.inputs_strat1)
   out_strat1 <- f.out_aggregate(a.out = a.out_qc_strat1, l.inputs = l.inputs_strat1)
+  fig_strat1 <- f.make_figures(l.out = out_strat1, l.inputs = l.inputs1)
+  
   
   # strategy 2
-  l.inputs_strat2 <- l.inputs
-  l.inputs_strat2[["strategy"]] <- l.inputs[["strategy_strat2"]]
-  l.inputs_strat2[["Tx"]] <- l.inputs[["Tx_strat2"]]
+  l.inputs_strat2 <- l.inputs2
+  # l.inputs_strat2[["strategy"]] <- l.inputs[["strategy_strat2"]]
+  # l.inputs_strat2[["Tx"]] <- l.inputs[["Tx_strat2"]]
   a.out_strat2 <- f.run(l.inputs = l.inputs_strat2, printLevel = printLevel)
   a.out_qc_strat2 <- f.qaly_cost(a.out = a.out_strat2, l.inputs = l.inputs_strat2)
   out_strat2 <- f.out_aggregate(a.out = a.out_qc_strat2, l.inputs = l.inputs_strat2)
+  fig_strat2 <- f.make_figures(l.out = out_strat2, l.inputs = l.inputs2)
   
   # summary outcomes
   m.out <- matrix(
@@ -653,112 +827,29 @@ f.out_summary <- function(l.inputs, printLevel = 0) {
   m.out[4,"ICER.dis"] <- (m.out[2,"COST_tot.dis.sum"] - m.out[1,"COST_tot.dis.sum"]) / (m.out[2,"QALY.dis.sum"] - m.out[1,"QALY.dis.sum"])
   
   return(list(
-    l.inputs = l.inputs,
+    l.inputs1 = l.inputs1,
+    l.inputs2 = l.inputs2,
     a.out_strat1 = a.out_strat1, a.out_strat2 = a.out_strat2,
     a.out_qc_strat1 = a.out_qc_strat1, a.out_qc_strat2 = a.out_qc_strat2,
     out_strat1 = out_strat1, out_strat2 = out_strat2,
+    fig_strat1 = fig_strat1, fig_strat2 = fig_strat2,
     m.out = m.out
   ))
   
 }
 
-# generate figures
-f.figures <- function(l.out, l.inputs) {
-  
-  # Reshape syndrome data to long format for use with ggplot.
-  
-  #### True (unobserved) status ####
-  t.trace_syndrome_true <- as.data.frame(l.out$state_trace[ ,c("healthy", "mci", "mil", "mod", "sev", "dth")],) %>%
-    mutate(year = 1:l.inputs[["n.cycle"]] + 49)
-  t.trace_syndrome_true_long <- t.trace_syndrome_true %>%
-    pivot_longer(cols = -year, names_to = "syndrome", values_to = "proportion") %>%
-    mutate(syndrome = fct_rev(factor(syndrome, levels = c("healthy", "mci", "mil", "mod", "sev", "dth"))))
-  
-  fig.progression_true <- ggplot(t.trace_syndrome_true_long, aes(x = year, y = proportion, fill = syndrome)) +
-    geom_area(alpha = 0.8, position = "stack") + 
-    geom_path(aes(group = syndrome), position = "stack", color = "black", linewidth = 0.5) + 
-    scale_x_continuous(breaks =  seq(min(t.trace_syndrome_true_long$year), max(t.trace_syndrome_true_long$year), by = 5), minor_breaks = NULL) +
-    scale_fill_manual(values = c("white","orange","purple","green","yellow","pink"),
-                      labels = c("Death","Severe dementia","Moderate dementia","Mild dementia","MCI","Cognitively intact"),
-                      guide = guide_legend(override.aes = list(colour = "black", size = 0.5))) +
-    labs(title = "GRAM: Progression of Cognitive Impairment",
-         subtitle = paste0(l.inputs[["scenario"]], "\n(N = ", l.inputs[["n.ind"]], " individuals)"),
-         x = "Age",
-         y = "Proportion of Population",
-         fill = "True Cognitive Status") +
-    theme(axis.text = element_text(size = 14),  # Increase axis tick font size
-          axis.title = element_text(size = 16),
-          panel.grid.major = element_line(color = "gray50", linewidth = 0.8),
-          legend.text = element_text(size = 14),
-          legend.title = element_text(size = 14),
-          title = element_text(size = 16))
-  
-  #### Observed status ####
-  t.trace_syndrome_obs <- as.data.frame(l.out$state_concordance) %>%
-    mutate(year = 1:l.inputs[["n.cycle"]] + 49)
-  t.trace_syndrome_obs_long <- t.trace_syndrome_obs %>%
-    pivot_longer(cols = -year, names_to = "status", values_to = "proportion") %>%
-    mutate(status = fct_rev(factor(status, levels = c("h_h","mci_h","dem_h","h_mci","mci_mci","dem_mci","h_dem","mci_dem","dem_dem","dth"))))
-  
-  t.trace_syndrome_obs_long <- t.trace_syndrome_obs_long %>%
-    mutate(
-      pattern = case_when(
-        status %in% c("h_h","mci_mci","dem_dem","dth") ~ "none",
-        status %in% c("mci_h","dem_h","dem_mci") ~ "stripe",
-        status %in% c("h_mci","mci_dem","h_dem") ~ "circle"
-      ),
-      observed_color = case_when(
-        status %in% c("h_h","mci_h","dem_h") ~ "pink",
-        status %in% c("h_mci","mci_mci","dem_mci") ~ "yellow",
-        status %in% c("h_dem","mci_dem","dem_dem") ~ "darkgreen",
-        status == "dth" ~ "white"
-      )
-    )
-  
-  
-  fig.progression_obs <- ggplot(t.trace_syndrome_obs_long, aes(x = year, y = proportion, fill = observed_color, pattern = pattern)) +
-    #  geom_area(alpha = 0.8, position = "stack") + 
-    #  geom_path(aes(group = status), position = "stack", color = "black", linewidth = 0.5) + 
-    geom_area_pattern(color = "black",
-                      alpha = 0.8,
-                      pattern_fill = "black",
-                      pattern_density = 0.1,
-                      pattern_spacing = 0.01) +
-    scale_x_continuous(breaks =  seq(min(t.trace_syndrome_obs_long$year), max(t.trace_syndrome_obs_long$year), by = 5), minor_breaks = NULL) +
-    scale_fill_identity(name = "Observed Status",
-                        labels = c("dth","dem","mci","h"),
-                        guide = guide_legend(override.aes = list(colour = "black", size = 0.5))) +
-    scale_pattern_manual(values = c("none" = "none", "circle" = "circle", "stripe" = "stripe"),
-                         name = "Concordance") +
-    labs(title = "GRAM: Progression of Cognitive Impairment",
-         subtitle = paste0(l.inputs[["scenario"]], "\n(N = ", l.inputs[["n.ind"]], " individuals)"),
-         x = "Age",
-         y = "Proportion of Population",
-         fill = "True Status",
-         pattern = "Observed Status") +
-    theme(axis.text = element_text(size = 14),  # Increase axis tick font size
-          axis.title = element_text(size = 16),
-          panel.grid.major = element_line(color = "gray50", linewidth = 0.8),
-          legend.text = element_text(size = 14),
-          legend.title = element_text(size = 14),
-          title = element_text(size = 16))
-  
-  
-  return(list(
-    fig.progression_true = fig.progression_true,
-    fig.progression_obs = fig.progression_obs))
-}
+
 
 ######################################## 3.3. MAIN FUNCTIONS: WRAPPER  ########################################
 
-f.wrap_run <- function(l.inputs, printLevel = 0) {
+f.wrap_run <- function(l.inputs, microdata = NULL, printLevel = 0) {
   
   
-  output <- f.run(l.inputs = l.inputs, printLevel = printLevel)
+  output <- f.run(l.inputs = l.inputs, microdata = microdata, printLevel = printLevel)
   
   # Aggregate results for full cohort
   aggregated_results_totpop <- f.out_aggregate(a.out = output, l.inputs = l.inputs)
-  fig.progression <- f.figures(l.out = aggregated_results_totpop, l.inputs = l.inputs)
+  fig.progression <- f.make_figures(l.out = aggregated_results_totpop, l.inputs = l.inputs)
   
   # # Aggregate results for those who develop MCI at any point
   # impaired <- apply(output[,"SYN",], 2, function(x) any(x == 1, na.rm = TRUE))

@@ -21,7 +21,7 @@ names(l.inputs)
 
 # Update variables to define scenario
 l.inputs1[["scenario"]] <- "Natural history, no intervention"  # always start by changing the scenario title
-l.inputs1[["r.CDRslow_mean"]] <- 0.3
+l.inputs1[["r.CDRslow_mean"]] <- 0.6
 # ...
 
 # Run model with updated inputs
@@ -29,8 +29,10 @@ scenario1 <- f.wrap_run(l.inputs1)
 
 # Save and format outputs you need as separate variables for easy access
 fig_scenario1 <- scenario1$fig.progression$fig.progression_true
-reside_time_scenario1 <- format_reside_time_table(scenario1$aggregated_results_totpop$reside_time_by_age_of_onset)
-prevalence_scenario1 <- format_prevalence_table(scenario1$aggregated_results_totpop$prevalence_grouped)
+reside_time_scenario1 <- f.format_reside_time_table(scenario1$aggregated_results_totpop$reside_time$noncensored)
+prevalence_scenario1 <- f.format_prevalence_table(scenario1$aggregated_results_totpop$prevalence_grouped)
+age_onset <- f.make_histogram(scenario1$aggregated_results_totpop$age_at_mci, lab = "Age at MCI Onset")
+mean(scenario1$aggregated_results_totpop$age_at_mci, na.rm = TRUE)
 
 ## SCENARIO 2 NAME ####
 # repeat the section above for as many scenarios as needed

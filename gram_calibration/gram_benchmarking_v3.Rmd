@@ -1,0 +1,157 @@
+---
+title: "GRAM Simulation"
+author: "Sigal Maya"
+date: "Updated 03/111/2025"
+output:
+  html_notebook
+subtitle: Calibration and Benchmarking
+knit_root_dir: /Users/smaya/Documents/GitHub/GRAM
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+library(tableone)
+library(kableExtra)
+library(tibble)
+library(patchwork)
+```
+
+```{r source files, include = FALSE}
+# The following will only run properly when knit. While working on document, run this chunk in the console.
+source("gram_model/gram_01setup.r") 
+source("gram_model/gram_02helpers.r")
+source("gram_model/gram_03simulation.r")
+source("gram_calibration/gram_benchmarking_helpers.r")
+l.inputs[["n.cycle"]] <- 51
+sample1 <- readRDS("gram_data/acs_data/acs_sample_1.rds")
+sample2 <- readRDS("gram_data/acs_data/acs_sample_2.rds")
+lifetable <- read.csv("gram_data/table_prob_die_next_year.csv")
+```
+
+
+
+
+
+#### **sim1: Initial model**
+
+```{r sim1, include = TRUE}
+l.inputs1 <- l.inputs # seed_stochastic is 20240202
+
+sim1 <- run_benchmarking(l.inputs1, "sim1: original model", sample1)
+```
+
+Mortality is not too worrisome. Reside times are ok, a little short in dementia, though that benchmark is pretty uncertain. Age of onset is ok.
+Dementia prevalence is way too high. This may be because people with dementia live for too long. Try removing the age adjustment for dementia-related mortality risk ratio.
+
+#### **sim2: Remove age adjustment for dementia-related mortality risk ratio**
+```{r sim2, include = TRUE}
+l.inputs2 <- l.inputs1 
+
+l.inputs2[["hr.mort_mod_age"]] <- l.inputs2[["hr.mort_sev_age"]] <- c(1, 1, 1)   # original is (1, 0.6, 0.3)
+
+sim2 <- run_benchmarking(l.inputs2, "sim2: relative risk of dementia mortality does NOT depend on age", sample1)
+```
+
+That improved prevalence estimates to a more reasonable range, though still too high. Reside time in dementia also dropped a bit. Overall mortality at older ages is also now higher. Maybe we need to also reduce baseline mortality?
+
+#### **sim3: sim2 + reduce base mortality**
+
+```{r sim3, include = TRUE}
+l.inputs3 <- l.inputs1
+l.inputs3[["hr.mort_mod_age"]] <- l.inputs3[["hr.mort_sev_age"]] <- c(1, 1, 1)
+
+l.inputs3[["m.lifetable"]] <- l.inputs1[["m.lifetable"]] * 0.75
+
+plot(l.inputs3[["m.lifetable"]])
+
+sim3 <- run_benchmarking(l.inputs3, "sim3: sim2 + reduce base mortality", sample1)
+```
+That seems to improve mortality without re-increasing dementia prevalence too much. Though it also increased modeled mean age of onset. MCI incidence at older ages may be too high -- or too low at younger ages.
+
+#### **sim4: sim3 + flatten MCI hazard rate curve**
+This means incidence will increase at younger ages and decrease at older ages
+
+```{r sim4, include = TRUE}
+l.inputs4 <- l.inputs1 # seed_stochastic is 20240202
+
+l.inputs4[["hr.mort_mod_age"]] <- l.inputs4[["hr.mort_sev_age"]] <- c(1, 1, 1)
+l.inputs4[["m.lifetable"]] <- l.inputs1[["m.lifetable"]] * 0.75
+
+mci_incidence_flatten_factor <- seq(from = 1.30, to = 0.75, length.out = 51)
+l.inputs4[["m.hr_mci"]] <- l.inputs1[["m.hr_mci"]] * mci_incidence_flatten_factor
+
+sim4 <- run_benchmarking(l.inputs4, "sim4: sim3 + reduced MCI incidence", sample1)
+```
+Everything looks ok others than dementia prevalence. 
+Options are: 
+1. Fewer people have to get MCI to begin with, so reduce MCI incidence. This would lower dementia prevalence but also MCI prevalence. Do we want that?
+1. Once people get MCI, fewer of them have to progress to dementia. This means either reduce rate of change in CDR-SB, or split the population so that some people just get "stuck" at MCI. This would impact reside time, but hard to predict how as some people would stay for longer and others would stay for shorter time. 
+1. Healthy people have to die less often, so that the denominator will stay sufficiently large to keep dementia prevalence low. This implies that our estimation of base mortality did not fully account for all MCI/dementia deaths.
+1. People with MCI must be more likely to die if they're older. 
+
+Looking back to sim2, that seems to be the best fit across all 4 benchmarks (if we believe Prince et al meta-analysis result of 50% prevalence at age 90). While prevalence of dementia reaches something plausible at age 90, it is still very high for younger ages (i.e., slope is too steep). 
+
+Trying the above options one by one:
+
+##### **Option 1: sim5: sim2 + reduce MCI incidence**
+```{r, include = TRUE}
+l.inputs5 <- l.inputs2
+l.inputs5[["m.hr_mci"]] <- l.inputs2[["m.hr_mci"]] * 0.75
+
+sim5 <- run_benchmarking(l.inputs5, "sim5: sim2 + reduce MCI incidence", sample1)
+```
+Prevalence fits better, but mean age of onset is too high and time in demenita is too low. 
+
+##### **Option 2: sim6: sim2 + rate of change in CDR depends on age**
+People who are younger progress slowly, those who are older progress more quickly.
+```{r sim6, include = TRUE}
+l.inputs6a <- l.inputs6b <- l.inputs6c <- l.inputs2
+
+l.inputs6a[["r.CDRfast_mean"]] <- (seq(0, 1, length.out = 51)^2) * (2 * l.inputs2[["r.CDRfast_mean"]])
+
+sim6a <- run_benchmarking(l.inputs6, "sim6a: sim2 + age-dependent CDR-SB progression rate in dementia", sample1)
+
+l.inputs6b[["r.CDRslow_mean"]] <-  (seq(0.25, 0.75, length.out = 51)^2) * (2 * l.inputs2[["r.CDRslow_mean"]])
+plot(l.inputs6b[["r.CDRslow_mean"]] )
+
+l.inputs6b[["hr.mort_mci"]] <- 2
+
+sim6b <- run_benchmarking(l.inputs6b, "sim6b: sim2 + age-dependent CDR-SB progression rate in MCI", sample1)
+
+l.inputs6c[["r.CDRfast_mean"]] <- l.inputs6a[["r.CDRfast_mean"]]
+l.inputs6c[["r.CDRslow_mean"]] <- l.inputs6b[["r.CDRslow_mean"]]
+
+sim6c <- run_benchmarking(l.inputs6c, "sim6c: sim2 + age-dependent CDR-SB progression rate in MCI and dementia", sample1)
+
+
+```
+
+
+
+
+
+##### **Option 3: sim7: sim2 + reduce base mortality**
+!! For this option, my goal is to widen the difference between mortality risk with and without impairment without changing the mortality with impairment. To achieve this, I will increase the RRs for mortality with impairment proportionate to the decrease in base mortality.
+```{r, include = TRUE}
+l.inputs7 <- l.inputs2
+l.inputs7[["m.lifetable"]] <- l.inputs2[["m.lifetable"]] * 0.75
+
+l.inputs7[["hr.mort_mci"]] <- l.inputs2[["hr.mort_mci"]] / 0.75
+l.inputs7[["hr.mort_mil"]] <- l.inputs2[["hr.mort_mil"]] / 0.75
+l.inputs7[["hr.mort_mod"]] <- l.inputs2[["hr.mort_mod"]] / 0.75
+l.inputs7[["hr.mort_sev"]] <- l.inputs2[["hr.mort_sev"]] / 0.75
+
+sim7 <- run_benchmarking(l.inputs7, "sim7: sim2 + reduce base mortality", sample1)
+```
+That did increase MCI prevalence a bit, but so did dementia prevalence. Age of onset decreased, and dementia reside time is still too low, so did not help.
+
+##### **Option 4: sim8: sim2 + MCI more likely to die when older**
+!! For this option, my goal is to widen the difference between mortality risk with and without impairment without changing the mortality with impairment. To achieve this, I will increase the RRs for mortality with impairment proportionate to the decrease in base mortality.
+```{r, include = TRUE}
+l.inputs8 <- l.inputs2
+l.inputs8[["hr.mort_mci_age"]] <- c(1, 1.2, 1.5) 
+
+sim8 <- run_benchmarking(l.inputs8, "sim8: sim2 + MCI more likely to die when older", sample1)
+```
