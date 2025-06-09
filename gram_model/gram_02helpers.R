@@ -122,7 +122,7 @@ f.update_ALIVE <- function(
   lifetable_lookup_coordinates <- matrix(data = round(v.AGE.lag,0), ncol = 1) - 50 + 1
   
   # determine relative mortality risk related to syndrome and severity
-  healthy <- v.SYN.lag==0
+  healthy <- v.SYN.lag<1
   mci <- v.SYN.lag==1 & v.SEV.lag==0
   mil <- v.SYN.lag==1 & v.SEV.lag==1
   mod <- v.SYN.lag==1 & v.SEV.lag==2
@@ -229,16 +229,17 @@ f.update_HCARE <- function(v.HCARE.lag, v.AGE, random_cycle) {
   return(hcare)
 }
 
-######################################## MCI
+######################################## TCI
 
-f.update_SYN <- function(l.inputs, v.AGE.lag, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, v.SYN.lag, 
+f.update_SYN <- function(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, 
+                         v.SYN.lag, v.SYN.lag2, v.MEMLOSS.lag,
                          random_cycle, n.alive) {
   
   # start with empty vector
   symptoms <- rep(NA, n.alive)
   
   # look up hazard rate given age
-  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE.lag,0), ncol = 1) - 50 + 1]
+  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE.tplus2,0), ncol = 1) - 50 + 1]
   
   # calculate hazard at current cycle given coefficients, convert to probability
   hazard <- hazards.age * exp(
@@ -254,11 +255,35 @@ f.update_SYN <- function(l.inputs, v.AGE.lag, v.EDU.lag, v.SEX.lag, v.RACEETH.la
   prob_none_to_mci <- (1 - exp(-hazard)) * l.inputs[["rr.Px_mci"]]
   
   # apply dependent on previous state
-  symptoms[v.SYN.lag == 0] <- as.numeric(prob_none_to_mci[v.SYN.lag==0] > random_cycle[v.SYN.lag==0])
-  symptoms[v.SYN.lag == 1] <- 1
+
+  symptoms[v.SYN.lag == 0] <- as.numeric(prob_none_to_mci[v.SYN.lag == 0] > random_cycle[v.SYN.lag == 0]) * 0.5
+  symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0] <- 0.5
+  symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0.5] <- 1
+  symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 1] <- as.numeric(0.07 < random_cycle[v.SYN.lag == 1 & v.MEMLOSS.lag ==1])
+  symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 0] <- 1
+  
   
   return(symptoms)
 }
+
+
+######################################## MEMLOSS - memory loss flag
+
+f.update_MEMLOSS <- function(v.MEMLOSS.lag, v.SYN, v.SYN.lag, p.MEMLOSS_new, random_cycle, n.alive) {
+  memloss <- rep(NA, n.alive)
+  
+  # if prior memloss determined, keep it
+  memloss[v.MEMLOSS.lag == 1] <- 1
+  memloss[v.MEMLOSS.lag == 0] <- 0
+  
+
+  # new MCI has some chance of being memloss
+  new_mci <- v.SYN == 1 & v.SYN.lag < 1
+  memloss[new_mci] <- as.numeric(p.MEMLOSS_new > random_cycle[new_mci])
+  
+  return(memloss)
+}
+
 
 ######################################## CDR-SB fast/slow track
 
@@ -277,7 +302,7 @@ f.update_CDR_track <- function(v.SEV.lag, n.alive) {
 
 ######################################## CDR-SB - true disease status
 
-f.update_CDR <- function(v.SYN, v.SYN.lag, cutoff_CDR, v.CDR.lag, 
+f.update_CDR <- function(v.SYN, v.SYN.lag, v.MEMLOSS.lag, cutoff_CDR, v.CDR.lag, 
                          r.CDRfast_mean, r.CDRslow_mean, v.CDR_track,
                          v.CDRfast_sd1, v.CDRslow_sd1, r.CDR_sd2, 
                          v.TX.lag, rr.Tx_mci, random_cycle, n.alive) {
@@ -290,12 +315,16 @@ f.update_CDR <- function(v.SYN, v.SYN.lag, cutoff_CDR, v.CDR.lag,
   healthy <- v.SYN == 0
   cdr[healthy] <- qunif(p = random_cycle[healthy], min = cutoff_CDR["healthy"], max = cutoff_CDR["mci"])
   
-  # Assign initial CDR-SB score for new cases. Assume all enter in mild cognitive impairment, skewed right
-  mci_new <- v.SYN == 1 & v.SYN.lag == 0
+  # Assign initial CDR-SB score for new cases (including MEMLOSS). Assume all enter in mild cognitive impairment
+  mci_new <- v.SYN == 1 & v.SYN.lag < 1
   cdr[mci_new] <- qunif(p = random_cycle[mci_new], min = cutoff_CDR["mci"], max = cutoff_CDR["mild"])  # TODO: Skew right.
   
+  # Keep CDR-SB score of those with prior memory loss
+  mem_loss <- v.MEMLOSS.lag == 1 & !is.na(v.MEMLOSS.lag)
+  cdr[mem_loss] <- v.CDR.lag[mem_loss]
+  
   # Progress CDR-SB score for those already with impairment
-  mci_still <- v.SYN == 1 & v.SYN.lag == 1 
+  mci_still <- v.SYN == 1 & v.SYN.lag == 1 & !mem_loss
   
   delta <- 
     r.CDRfast_mean * v.CDR_track + r.CDRslow_mean * (1-v.CDR_track) +         # Add mean increase in CDR-SB score
@@ -332,7 +361,7 @@ f.update_COGCON <- function(v.AGE, v.SYN, v.SEV, m.cogcon, v.DX.lag, random_cycl
   cogcon <- rep(-9, n.alive)
   
   select_col <- case_when(
-    v.SYN == 0 ~ 2,
+    v.SYN < 1 ~ 2,
     v.SEV == 0 ~ 3,
     v.SEV >= 1 ~ 4
   )
@@ -349,7 +378,7 @@ f.update_COGCON <- function(v.AGE, v.SYN, v.SEV, m.cogcon, v.DX.lag, random_cycl
 
 ######################################## BHA
 
-f.update_BHA <- function(v.HCARE, v.DX.lag, v.COGCON, v.SYN, v.SEV, sens_BHA, spec_BHA, random_cycle, n.alive) {
+f.update_BHA <- function(v.HCARE, v.DX.lag, v.COGCON, v.SYN, v.SEV, v.MEMLOSS, sens_BHA, spec_BHA, random_cycle, n.alive) {
   
   bha <- rep(-9, n.alive)
 
@@ -357,9 +386,11 @@ f.update_BHA <- function(v.HCARE, v.DX.lag, v.COGCON, v.SYN, v.SEV, sens_BHA, sp
     v.HCARE == 0            ~ -9,       # no BHA if no healthcare provider
     v.DX.lag == 1           ~ -9,       # no BHA if there is a prior diagnosis
     v.COGCON != 1           ~ -9,       # no BHA if there are no cognitive concerns
-    v.SYN == 0              ~ as.numeric((1 - spec_BHA) > random_cycle),
-    v.SYN == 1 & v.SEV == 0 ~ as.numeric(sens_BHA[1] > random_cycle),
-    v.SYN == 1 & v.SEV >= 1 ~ as.numeric(sens_BHA[2] > random_cycle)
+    v.SYN == 0          ~ as.numeric((1 - spec_BHA) > random_cycle),
+    v.SYN == 0.5        ~ as.numeric(sens_BHA[1] > random_cycle),
+    v.MEMLOSS == 1      ~ as.numeric(sens_BHA[2] > random_cycle),
+    v.SEV == 0          ~ as.numeric(sens_BHA[3] > random_cycle),
+    v.SEV >= 1          ~ as.numeric(sens_BHA[4] > random_cycle)
   )
   
   return(bha)
@@ -473,19 +504,21 @@ f.make_figures <- function(l.out, l.inputs) {
   
   # Reshape syndrome data to long format for use with ggplot.
   
-  #### True (unobserved) status ####
+  #### True (unobserved) status
   t.trace_syndrome_true <- as.data.frame(l.out$state_trace[ ,c("healthy", "mci", "mil", "mod", "sev", "dth")],) %>%
-    mutate(year = (1:l.inputs[["n.cycle"]]) + l.inputs[["AGE_start_mean"]]-1)
+    mutate(year = (1:l.inputs[["n.cycle"]]) + l.inputs[["AGE_start_mean"]]-1,
+           mod_sev = mod + sev) %>%
+    select(-mod, -sev) 
   t.trace_syndrome_true_long <- t.trace_syndrome_true %>%
     pivot_longer(cols = -year, names_to = "syndrome", values_to = "proportion") %>%
-    mutate(syndrome = fct_rev(factor(syndrome, levels = c("healthy", "mci", "mil", "mod", "sev", "dth"))))
+    mutate(syndrome = fct_rev(factor(syndrome, levels = c("healthy", "mci", "mil", "mod_sev", "dth"))))
   
   fig.progression_true <- ggplot(t.trace_syndrome_true_long, aes(x = year, y = proportion, fill = syndrome)) +
     geom_area(alpha = 0.8, position = "stack") + 
     geom_path(aes(group = syndrome), position = "stack", color = "black", linewidth = 0.5) + 
     scale_x_continuous(breaks =  seq(min(t.trace_syndrome_true_long$year), max(t.trace_syndrome_true_long$year), by = 5), minor_breaks = NULL) +
-    scale_fill_manual(values = c("white","orange","purple","green","yellow","pink"),
-                      labels = c("Death","Severe dementia","Moderate dementia","Mild dementia","MCI","Cognitively intact"),
+    scale_fill_manual(values = c("white","purple","green","yellow","pink"),
+                      labels = c("Death","Moderate to severe dementia","Mild dementia","MCI","Cognitively intact"),
                       guide = guide_legend(override.aes = list(colour = "black", size = 0.5))) +
     labs(title = "GRAM: Progression of Cognitive Impairment",
          subtitle = paste0(l.inputs[["scenario"]], "\n(N = ", l.inputs[["n.ind"]], " individuals)"),
@@ -499,60 +532,8 @@ f.make_figures <- function(l.out, l.inputs) {
           legend.title = element_text(size = 14),
           title = element_text(size = 16))
   
-  #### Observed status ####
-  t.trace_syndrome_obs <- as.data.frame(l.out$state_concordance) %>%
-    mutate(year = 1:l.inputs[["n.cycle"]])
-  t.trace_syndrome_obs_long <- t.trace_syndrome_obs %>%
-    pivot_longer(cols = -year, names_to = "status", values_to = "proportion") %>%
-    mutate(status = fct_rev(factor(status, levels = c("h_h","mci_h","dem_h","h_mci","mci_mci","dem_mci","h_dem","mci_dem","dem_dem","dth"))))
-  
-  t.trace_syndrome_obs_long <- t.trace_syndrome_obs_long %>%
-    mutate(
-      pattern = case_when(
-        status %in% c("h_h","mci_mci","dem_dem","dth") ~ "none",
-        status %in% c("mci_h","dem_h","dem_mci") ~ "stripe",
-        status %in% c("h_mci","mci_dem","h_dem") ~ "circle"
-      ),
-      observed_color = case_when(
-        status %in% c("h_h","mci_h","dem_h") ~ "pink",
-        status %in% c("h_mci","mci_mci","dem_mci") ~ "yellow",
-        status %in% c("h_dem","mci_dem","dem_dem") ~ "darkgreen",
-        status == "dth" ~ "white"
-      )
-    )
-  
-  
-  fig.progression_obs <- ggplot(t.trace_syndrome_obs_long, aes(x = year, y = proportion, fill = observed_color, pattern = pattern)) +
-    #  geom_area(alpha = 0.8, position = "stack") + 
-    #  geom_path(aes(group = status), position = "stack", color = "black", linewidth = 0.5) + 
-    geom_area_pattern(color = "black",
-                      alpha = 0.8,
-                      pattern_fill = "black",
-                      pattern_density = 0.1,
-                      pattern_spacing = 0.01) +
-    scale_x_continuous(breaks =  seq(min(t.trace_syndrome_obs_long$year), max(t.trace_syndrome_obs_long$year), by = 5), minor_breaks = NULL) +
-    scale_fill_identity(name = "Observed Status",
-                        labels = c("dth","dem","mci","h"),
-                        guide = guide_legend(override.aes = list(colour = "black", size = 0.5))) +
-    scale_pattern_manual(values = c("none" = "none", "circle" = "circle", "stripe" = "stripe"),
-                         name = "Concordance") +
-    labs(title = "GRAM: Progression of Cognitive Impairment",
-         subtitle = paste0(l.inputs[["scenario"]], "\n(N = ", l.inputs[["n.ind"]], " individuals)"),
-         x = "Age",
-         y = "Proportion of Population",
-         fill = "True Status",
-         pattern = "Observed Status") +
-    theme(axis.text = element_text(size = 14),  # Increase axis tick font size
-          axis.title = element_text(size = 16),
-          panel.grid.major = element_line(color = "gray50", linewidth = 0.8),
-          legend.text = element_text(size = 14),
-          legend.title = element_text(size = 14),
-          title = element_text(size = 16))
-  
-  
-  return(list(
-    fig.progression_true = fig.progression_true,
-    fig.progression_obs = fig.progression_obs))
+ 
+  return(fig.progression_true)
 }
 
 f.format_reside_time_table <- function(reside_time_data, scenario_title = NULL) {
@@ -624,9 +605,10 @@ f.analyze_test_performance <- function(scenario, cycle) {
   concordance_vector <- scenario$aggregated_results_totpop$state_concordance[cycle, 1:12] * ncol(scenario$output[cycle,,])
   n_alive <- sum(concordance_vector)
   
-  states <- c("h", "mci", "dem")
-  concordance_table <- as.data.frame(matrix(0, nrow = 3, ncol = 4, 
-                                            dimnames = list(states, c(states, "NA"))))
+  states <- c("h", "tci", "mci", "dem")
+  test_results <- c("neg","pos")
+  concordance_table <- as.data.frame(matrix(0, nrow = 4, ncol = 3, 
+                                            dimnames = list(states, c(test_results, "NA"))))
   
   for (i in (seq_along(concordance_vector))) {
     split_name <- strsplit(names(concordance_vector)[i], "_")[[1]]
@@ -636,10 +618,9 @@ f.analyze_test_performance <- function(scenario, cycle) {
   }
   
   concordance_table <- concordance_table %>%
-    mutate(BHApos = mci + dem,
-           BHAneg = h,
-           NoTest = `NA`,
-           .keep = "none") %>%
+    rename(BHApos = pos,
+           BHAneg = neg,
+           NoTest = `NA`) %>%
     mutate(RowTot =  rowSums(.))
   
   concordance_table_pct <- concordance_table %>%
@@ -650,14 +631,16 @@ f.analyze_test_performance <- function(scenario, cycle) {
   
   total_tests <- sum(concordance_table$RowTot) - sum(concordance_table$NoTest) 
   
-  specificity <- concordance_table["h","BHAneg"] / sum(concordance_table["h",c("BHAneg","BHApos")])
+  specificity <- sum(concordance_table[c("h","tci"),"BHAneg"]) / sum(concordance_table[c("h","tci"),c("BHAneg","BHApos")])
   sensitivity <- c(mci = concordance_table["mci","BHApos"] / sum(concordance_table["mci",c("BHAneg","BHApos")]),
                    dem = concordance_table["dem","BHApos"] / sum(concordance_table["dem",c("BHAneg","BHApos")]))
   ppv <- sum(concordance_table[c("mci","dem"), "BHApos"]) / sum(concordance_table[,"BHApos"])
-  npv <- concordance_table["h","BHAneg"] / sum(concordance_table[,"BHAneg"])
+  npv <- sum(concordance_table[c("h","tci"),"BHAneg"]) / sum(concordance_table[,"BHAneg"])
   
   missed_pct <- c(mci_missed = round(sum(concordance_table_pct["mci",c("BHAneg","NoTest")]) * 100, 2),
                   dem_missed = round(sum(concordance_table_pct["dem",c("BHAneg","NoTest")]) * 100, 2))
+  
+  tci_fu <- round(concordance_table_pct["tci","BHApos"] * 100, 2)
   
   
   return(list(
@@ -666,6 +649,8 @@ f.analyze_test_performance <- function(scenario, cycle) {
     concordance_table_pct = concordance_table_pct,
     sens = sensitivity, spec = specificity,
     ppv = ppv, npv = npv,
-    missed_pct = missed_pct
+    missed_pct = missed_pct,
+    tci_fu = tci_fu
   ))
 }
+

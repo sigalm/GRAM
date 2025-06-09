@@ -21,8 +21,9 @@ l.inputs1[["n.cycle"]] <- 51
 l.inputs1[["hr.mort_mod_age"]] <- l.inputs1[["hr.mort_sev_age"]] <- c(1, 1, 1) 
 l.inputs1[["r.CDRslow_mean"]] <-  (seq(0.25, 0.75, length.out = 51)^2) * (2 * l.inputs[["r.CDRslow_mean"]])
 l.inputs1[["p.HCARE_start"]] <- c(0.25,0.75)
+l.inputs1[["n.ind"]] <- 50000
 
-sim_calib <- run_benchmarking(l.inputs1, "calibration run", sample1)
+sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 
 # STARTING COHORT ####
 tableone_vars <- c("AGE","SEX","RACEETH","EDU","INCOME","MEDBUR","APOE4","SYN")
@@ -50,8 +51,8 @@ table1 <- CreateTableOne(vars = tableone_vars, data = cycle1, factorVars = names
 l.inputs1a <- l.inputs1
 l.inputs1a[["scenario"]] <- "Scenario 1a: Universal BHA" 
 # l.inputs1a[["m.cogcon"]]  # All probs are 1, so everyone gets BHA regardless of cognitive concerns status
-l.inputs1a[["sens_BHA"]] 
-l.inputs1a[["spec_BHA"]] 
+# l.inputs1a[["sens_BHA"]] 
+# l.inputs1a[["spec_BHA"]]
 
 scenario1a <- f.wrap_run(l.inputs1a, microdata = sample1)
 
@@ -59,8 +60,12 @@ scenario1a <- f.wrap_run(l.inputs1a, microdata = sample1)
 l.inputs1b <- l.inputs1
 l.inputs1b[["scenario"]] <- "Scenario 1b: Systematic query in AWV or equivalent"
 l.inputs1b[["m.cogcon"]] <- l.inputs[["m.cogcon_elic"]]
-l.inputs1b[["sens_BHA"]] <- c(0.80, 1.00)
-l.inputs1b[["spec_BHA"]] <- 0.72
+l.inputs1b[["m.cogcon"]][ ,"h"] <- 0.1
+
+
+
+#l.inputs1b[["sens_BHA"]] <- c(0.54, 0.65, 0.85, 1.00)
+#l.inputs1b[["spec_BHA"]] <- 0.87
 
 scenario1b <- f.wrap_run(l.inputs1b, microdata = sample1)
 
@@ -68,8 +73,8 @@ scenario1b <- f.wrap_run(l.inputs1b, microdata = sample1)
 l.inputs1c <- l.inputs1
 l.inputs1c[["scenario"]] <- "Scenario 1c: Spontaneous endorsement of cognitive concerns"
 l.inputs1c[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]]
-l.inputs1c[["sens_BHA"]] <- c(0.87, 1.00)
-l.inputs1c[["spec_BHA"]] <- 0.60
+#l.inputs1c[["sens_BHA"]] <- c(0.57, 0.76, 0.97, 1.00)
+#l.inputs1c[["spec_BHA"]] <- 0.90
 
 scenario1c <- f.wrap_run(l.inputs1c, microdata = sample1)
 
@@ -85,10 +90,10 @@ compute_results <- function(inputs, scenario) {
       Scenario = inputs[["scenario"]],
       Age = age,
       N_Tests = testperf$total_tests,
-      TP = sum(testperf$concordance_table[c("mci", "dem"), "BHApos"]),
-      FN = sum(testperf$concordance_table[c("mci", "dem"), "BHAneg"]),
-      TN = testperf$concordance_table["h", "BHAneg"],
-      FP = testperf$concordance_table["h", "BHApos"],
+      TP = sum(testperf$concordance_table[c("mci","dem"), "BHApos"]),
+      FN = sum(testperf$concordance_table[c("mci","dem"), "BHAneg"]),
+      TN = sum(testperf$concordance_table[c("h","tci"), "BHAneg"]),
+      FP = sum(testperf$concordance_table[c("h","tci"), "BHApos"]),
       PPV = round(testperf$ppv, 3),
       NPV = round(testperf$npv, 3)
     )
@@ -101,15 +106,15 @@ scenario_list <- list(scenario1a, scenario1b, scenario1c)
 all_results <- map2_dfr(inputs_list, scenario_list, compute_results)
 # flextable(all_results)
 
-# results_70 <- all_results %>%
-#   filter(Age == 70)
+ sim <- all_results %>%
+   filter(Age == 70)
 
 # Get prevalence of impairment in those without prior diagnosis at age 70 ####
 
 get_prev_no_dx <- function(l.inputs, output) {
   n_cycles <- l.inputs[["n.cycle"]]
-  prev_no_dx <- matrix(NA, nrow = n_cycles, ncol = 5, 
-                       dimnames = list(NULL, c("healthy", "mci", "mil", "mod", "sev")))
+  prev_no_dx <- matrix(NA, nrow = n_cycles, ncol = 7, 
+                       dimnames = list(NULL, c("healthy","tci", "memloss", "mci", "mil", "mod", "sev")))
   
   # Identify individuals undiagnosed in the previous cycle (cycle 2 onward)
   prior_no_dx <- rbind(NA, output[-n_cycles, "DX", ] == 0)  # Shift DX to align with previous cycle
@@ -120,14 +125,22 @@ get_prev_no_dx <- function(l.inputs, output) {
   
   # Compute prevalence for each category
   prev_no_dx[, "healthy"] <- rowSums(output[, "SYN", ] == 0 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
+  prev_no_dx[,"tci"] <- rowSums(output[,"SYN", ] == 0.5 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
+  prev_no_dx[,"memloss"] <- rowSums(output[,"MEMLOSS", ] == 1 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
   prev_no_dx[, "mci"] <- rowSums(output[, "SEV", ] == 0 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
   prev_no_dx[, "mil"] <- rowSums(output[, "SEV", ] == 1 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
   prev_no_dx[, "mod"] <- rowSums(output[, "SEV", ] == 2 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
   prev_no_dx[, "sev"] <- rowSums(output[, "SEV", ] == 3 & prior_no_dx & alive_now, na.rm = TRUE) / n_no_dx
   
+  prev_no_dx  <-  as.data.frame(prev_no_dx) %>%
+    mutate(mci = mci - memloss)
+  
   return(as.data.frame(prev_no_dx))
 }
 prev_no_dx_1a <- get_prev_no_dx(l.inputs1a, scenario1a$output)
+rowSums(prev_no_dx_1a)
+prev_no_dx_1a[21,"tci"]
+prev_no_dx_1a[21,"memloss"]
 prev_no_dx_1a[21,"mci"]
 sum(prev_no_dx_1a[21,c("mil","mod","sev")])
 
@@ -136,13 +149,17 @@ sum(prev_no_dx_1a[21,c("mil","mod","sev")])
 # FIGURES ####
 pv_results <- all_results %>%
   pivot_longer(cols = c(PPV, NPV), names_to = "Metric", values_to = "Value") %>%
-  select(Scenario, Age, Metric, Value) %>%
-  filter(Age <= 90)   # Older ages have small sample problems, so remove
+  select(Scenario, Age, Metric, Value) 
 
 fig_results <- ggplot(data = pv_results, aes(x = Age, y = Value, color = Scenario)) +
-  geom_line() + 
+  geom_smooth(aes(linetype = Scenario)) + 
+  scale_color_manual(values = c("darkgray","orange","darkred")) +
+  scale_linetype_manual(values = c("dotted", "dashed", "solid")) +
   facet_wrap(~ Metric) + 
-  theme_minimal()
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "bottom",
+        legend.direction = "vertical")
+  
   
 fig_results
 

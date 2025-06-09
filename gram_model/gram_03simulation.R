@@ -79,7 +79,9 @@ f.run <- function(l.inputs, microdata, printLevel) {
   }
   
   a.out[1,"TX",]         <- 0
-  a.out[1,"SYN",]        <- f.qcat(p_rand = a.random[1,"SYN",], p_cat = l.inputs[["p.SYN_start"]], values = l.inputs[["v.SYN_val"]])
+  
+  a.out[1,"SYN",]        <- 0   # everyone starts healthy
+  
   a.out[1,"CDR_track",]  <- case_match(a.out[1,"SYN",],
                                        0 ~ 0,
                                        1 ~ 1)
@@ -88,6 +90,9 @@ f.run <- function(l.inputs, microdata, printLevel) {
   a.out[1,"CDR",]       <- case_match(a.out[1,"SYN",],
                                       0 ~ 0,
                                       1 ~ qunif(p = a.random[1,"CDR",], min = l.inputs[["cutoff_CDR"]]["mci"], max = l.inputs[["cutoff_CDR"]]["moderate"]))
+  a.out[1,"MEMLOSS",]   <- case_match(a.out[1,"SYN",],
+                                      0 ~ 0,
+                                      1 ~ f.qcat(p_rand = a.random[1,"MEMLOSS",], p_cat = l.inputs[["p.MEMLOSS_start"]], values = l.inputs[["v.MEMLOSS_val"]]))   # !! when starting with prevalent pop, this will cause a problem as people with dem might get MEMLOSS of 1
   a.out[1,"SEV",]       <- f.update_SEV(v.SYN = a.out[1,"SYN",], v.CDR = a.out[1,"CDR",], 
                                         cutoff_CDR = l.inputs[["cutoff_CDR"]], n.alive = l.inputs[["n.ind"]])   # Everyone starts healthy
   a.out[1,"COGCON",]    <- 0    # Assume no concerns at age 50 when healthy !! TODO: make this dynamic!
@@ -191,19 +196,35 @@ f.run <- function(l.inputs, microdata, printLevel) {
       random_cycle = a.random[t,"HCARE",alive]
     )    
     
-    # MCI
-    a.out[t,"SYN",alive] <- f.update_SYN(
-      l.inputs        = l.inputs,
-      v.AGE.lag       = a.out[t-1,"AGE",alive],
-      v.SEX.lag       = a.out[t-1,"SEX",alive],
-      v.RACEETH.lag   = a.out[t-1,"RACEETH",alive],
-      v.EDU.lag       = a.out[t-1,"EDU",alive],
-      v.APOE4.lag     = a.out[t-1,"APOE4",alive],
-      v.MEDBUR.lag    = a.out[t-1,"MEDBUR",alive],
-      v.INCOME.lag    = a.out[t-1,"INCOME",alive],
-      v.SYN.lag       = a.out[t-1,"SYN",alive], 
-      random_cycle    = a.random[t,"SYN",alive], 
-      n.alive         = n.alive
+    # SYN
+    if (t <= l.inputs[["n.cycle"]] - 2) {
+      a.out[t,"SYN",alive] <- f.update_SYN(
+        l.inputs        = l.inputs,
+        v.AGE.tplus2    = a.out[t,"AGE",alive] + 2,
+        v.SEX.lag       = a.out[t-1,"SEX",alive],
+        v.RACEETH.lag   = a.out[t-1,"RACEETH",alive],
+        v.EDU.lag       = a.out[t-1,"EDU",alive],
+        v.APOE4.lag     = a.out[t-1,"APOE4",alive],
+        v.MEDBUR.lag    = a.out[t-1,"MEDBUR",alive],  
+        v.INCOME.lag    = a.out[t-1,"INCOME",alive],
+        v.SYN.lag       = a.out[t-1,"SYN",alive],
+        v.SYN.lag2      = a.out[t-2,"SYN",alive],
+        v.MEMLOSS.lag   = a.out[t-1,"MEMLOSS",alive],
+        random_cycle    = a.random[t+2,"SYN",alive], 
+        n.alive         = n.alive
+      )} else {
+        a.out[t,"SYN",alive] <- a.out[t-1,"SYN",alive]    # last two cycles no change in syndrome            
+      }
+    
+
+    # MEMLOSS 
+    a.out[t,"MEMLOSS",alive] <- f.update_MEMLOSS(
+      v.MEMLOSS.lag = a.out[t-1,"MEMLOSS",alive],
+      v.SYN         = a.out[t,"SYN",alive],
+      v.SYN.lag     = a.out[t-1,"SYN",alive],
+      p.MEMLOSS_new = l.inputs[["p.MEMLOSS_new"]],
+      random_cycle  = a.random[t,"MEMLOSS",alive],
+      n.alive       = n.alive 
     )
     
     # CDR_track
@@ -232,6 +253,7 @@ f.run <- function(l.inputs, microdata, printLevel) {
     a.out[t,"CDR",alive] <- f.update_CDR(
       v.SYN            = a.out[t,"SYN",alive],
       v.SYN.lag        = a.out[t-1,"SYN",alive],
+      v.MEMLOSS.lag    = a.out[t-1,"MEMLOSS",alive],
       cutoff_CDR       = l.inputs[["cutoff_CDR"]],
       v.CDR.lag        = a.out[t-1,"CDR",alive], 
       r.CDRfast_mean   = r.CDRfast_mean,
@@ -272,6 +294,7 @@ f.run <- function(l.inputs, microdata, printLevel) {
       v.COGCON         = a.out[t,"COGCON",alive],
       v.SYN            = a.out[t,"SYN",alive],
       v.SEV            = a.out[t,"SEV",alive],
+      v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
       sens_BHA         = l.inputs[["sens_BHA"]],
       spec_BHA         = l.inputs[["spec_BHA"]],
       random_cycle     = a.random[t,"BHA",alive],
@@ -412,7 +435,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["alive.sum.dis"]] <- sum(l.out[["alive.trc.dis"]])
   
   # mean time healthy
-  l.out[["healthy.trc"]] <- as.matrix(apply(X = a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["healthy.trc"]] <- as.matrix(apply(X = a.out[,"SYN",]<1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["healthy.sum"]] <- sum(l.out[["healthy.trc"]])
   l.out[["healthy.trc.dis"]] <- as.matrix(f.discount(x = l.out[["healthy.trc"]], discount_rate = l.inputs[["r.discount_QALY"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["healthy.sum.dis"]] <- sum(l.out[["healthy.trc.dis"]])
@@ -499,26 +522,32 @@ f.out_aggregate <- function(a.out, l.inputs) {
     }
     
     # Average time per age group
-    result_matrix1[1:length(age_groups), sev + 1] <- tapply(time_in_state, age_bins, function(x) round(mean(x, na.rm = TRUE), digits = 2))
-    result_matrix2[1:length(age_groups), sev + 1] <- tapply(time_in_state_censored, age_bins, function(x) round(mean(x, na.rm = TRUE), digits = 2))
+    result_matrix1[1:length(age_groups), sev + 1] <- tapply(time_in_state, age_bins, function(x) round(mean(x[x > 0], na.rm = TRUE), digits = 2))
+    result_matrix2[1:length(age_groups), sev + 1] <- tapply(time_in_state_censored, age_bins, function(x) round(mean(x[x > 0], na.rm = TRUE), digits = 2))
     
     # Average time overall
-    result_matrix1[nrow(result_matrix1), sev + 1] <- round(mean(time_in_state, na.rm = TRUE), digits = 2)
-    result_matrix2[nrow(result_matrix2), sev + 1] <- round(mean(time_in_state_censored, na.rm = TRUE), digits = 2)
+    result_matrix1[nrow(result_matrix1), sev + 1] <- round(mean(time_in_state[time_in_state > 0], na.rm = TRUE), digits = 2)
+    result_matrix2[nrow(result_matrix2), sev + 1] <- round(mean(time_in_state_censored[time_in_state_censored > 0], na.rm = TRUE), digits = 2)
 
   }
+  
+  time_in_dem <- colSums(a.out[,"SEV",] > 0, na.rm = TRUE)
+  time_in_dem_grouped <- tapply(time_in_dem, age_bins, function(x) round(mean(x[x > 0], na.rm = TRUE), digits = 2))
+  time_in_dem_overall <- round(mean(time_in_dem[time_in_dem > 0], na.rm = TRUE), digits = 2)
   
   
   result_df1 <- as.data.frame(result_matrix1) %>% 
     mutate(age_group = factor(c(age_groups, "Overall"),
                               labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
-    select(age_group, mci, mil, mod, sev) 
+    select(age_group, mci, mil, mod, sev) %>%
+    mutate(any_dem = c(time_in_dem_grouped, time_in_dem_overall))
   rownames(result_df1) <- NULL
   
   result_df2 <- as.data.frame(result_matrix2) %>% 
     mutate(age_group = factor(c(age_groups, "Overall"),
                               labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
-    select(age_group, mci, mil, mod, sev) 
+    select(age_group, mci, mil, mod, sev) %>%
+    mutate(any_dem = c(time_in_dem_grouped, time_in_dem_overall))
   rownames(result_df2) <- NULL
   
   l.out[["reside_time"]] <- list(noncensored = result_df1, censored = result_df2)
@@ -554,22 +583,23 @@ f.out_aggregate <- function(a.out, l.inputs) {
   
   # correct/incorrect detection
   l.out[["state_concordance"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 13,
-                                         dimnames = list(NULL, c("h_NA","h_h","h_mci","h_dem",
-                                                                 "mci_NA","mci_h","mci_mci","mci_dem",
-                                                                 "dem_NA","dem_h","dem_mci","dem_dem",
+                                         dimnames = list(NULL, c("h_NA","h_neg","h_pos",
+                                                                 "tci_NA", "tci_neg","tci_pos",
+                                                                 "mci_NA","mci_neg","mci_pos",
+                                                                 "dem_NA","dem_neg","dem_pos",
                                                                  "dth")))
   l.out[["state_concordance"]][,"h_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"h_h"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"h_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"h_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"h_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"h_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"tci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"tci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"tci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"mci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_h"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"mci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"mci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"dem_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_h"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_mci"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_dem"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1 & a.out[,"SEV_obs",]>=1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"dem_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["state_concordance"]][,"dem_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["state_concordance"]][,"dth"] <- as.matrix(apply(X = a.out[,"ALIVE",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   rowSums(l.out[["state_concordance"]])
   
@@ -587,7 +617,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
     
     for (t in 2:dim(a.out)[1]) {  # Start from 2 to access previous cycle
       # Select individuals in the age group who were healthy at the start of the cycle
-      at_risk <- which(a.out[t - 1, "AGE", ] >= age_min & a.out[t - 1, "AGE", ] <= age_max & a.out[t - 1, "SYN", ] == 0)
+      at_risk <- which(a.out[t - 1, "AGE", ] >= age_min & a.out[t - 1, "AGE", ] <= age_max & a.out[t - 1, "SYN", ] != 1)
       
       # Calculate person-years at risk for this time point
       person_years <- person_years + length(at_risk)
@@ -631,7 +661,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   
   # matrix_nhw <- matrix_nhb <- matrix_hisp <- matrix(0, nrow = l.inputs[["n.cycle"]], ncol = 5,
   #                     dimnames = list(NULL, c("h", severity_levels)))
-  l.out[["prevalence_by_raceeth"]][,"h","NHW"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"h","NHW"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SYN",]<1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mci","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mil","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mod","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
@@ -639,14 +669,14 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["prevalence_by_raceeth"]][,,"NHW"] <- round(l.out[["prevalence_by_raceeth"]][,,"NHW"] / rowSums(l.out[["prevalence_by_raceeth"]][,,"NHW"]), 3)
   
   
-  l.out[["prevalence_by_raceeth"]][,"h","NHB"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"h","NHB"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SYN",]<1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mci","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mil","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mod","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"sev","NHB"] <- as.matrix(apply(X = a.out[,"RACEETH",]==1 & a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,,"NHB"] <- round(l.out[["prevalence_by_raceeth"]][,,"NHB"] / rowSums(l.out[["prevalence_by_raceeth"]][,,"NHB"]), 3)
   
-  l.out[["prevalence_by_raceeth"]][,"h","Hisp"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SYN",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["prevalence_by_raceeth"]][,"h","Hisp"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SYN",]<1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mci","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mil","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mod","Hisp"] <- as.matrix(apply(X = a.out[,"RACEETH",]==2 & a.out[,"SEV",]==2, MARGIN = 1, FUN = sum, na.rm = TRUE))
