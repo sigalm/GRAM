@@ -4,8 +4,8 @@
 
 # Use mid-points of age groups
 df <- data.frame(
-  age = c(67,72,77,82,87),
-  mci = c(14,NA,22.5,40.9,60.1)
+  age = c(67, 72,   77,   82,   87),
+  mci = c(14, NA, 22.5, 40.9, 60.1)  
 )
 
 # Relationship is exponential. Will do a log-transformed linear model
@@ -26,4 +26,4 @@ df_predict <- df_predict %>%
 
 plot(df_predict$mci)
 
-saveRDS(df_predict, "mci_incidence_rate_by_age.RDS")
+saveRDS(df_predict, "gram_data/mci_incidence/mci_incidence_rate_by_age.RDS")

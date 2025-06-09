@@ -24,21 +24,25 @@ lifetable <- read.csv("gram_data/mortality/table_prob_die_next_year.csv")
 lifetable <<- lifetable %>%
   mutate(rate = - log(1 - qx))
 
-benchmark_prev_by_age <- tribble(
-  ~ age,      ~ raceeth,      ~ condition,       ~ prev,
-  62,         "Overall",      "dem_manly",       0.03,
-  67,         "Overall",      "dem_manly",       0.04,
-  72,         "Overall",      "dem_manly",       0.09,
-  77,         "Overall",      "dem_manly",       0.18,
-  82,         "Overall",      "dem_manly",       0.26,
-  87,         "Overall",      "dem_manly",       0.35,
+benchmark_prev_by_age <<- tribble(
+  ~ age,      ~ raceeth,      ~ condition,     ~ prev,    ~ ci_lo,    ~ ci_hi,
+  67,         "Overall",      "dem_manly",       0.03,       0.01,       0.04,
+  72,         "Overall",      "dem_manly",       0.04,       0.02,       0.06,
+  77,         "Overall",      "dem_manly",       0.09,       0.06,       0.11,
+  82,         "Overall",      "dem_manly",       0.18,       0.14,       0.22,
+  87,         "Overall",      "dem_manly",       0.26,       0.20,       0.31,
+  95,         "Overall",      "dem_manly",       0.35,       0.28,       0.43,
   
-  62,         "Overall",      "mci_manly",       0.22,
-  67,         "Overall",      "mci_manly",       0.20,
-  72,         "Overall",      "mci_manly",       0.21,
-  77,         "Overall",      "mci_manly",       0.25,
-  82,         "Overall",      "mci_manly",       0.22,
-  87,         "Overall",      "mci_manly",       0.27
+  # 67,         "Overall",      "mci_manly",       0.22,       0.18,       0.25,
+  # 72,         "Overall",      "mci_manly",       0.20,       0.17,       0.24,
+  # 77,         "Overall",      "mci_manly",       0.21,       0.18,       0.24,
+  # 82,         "Overall",      "mci_manly",       0.25,       0.21,       0.29,
+  # 87,         "Overall",      "mci_manly",       0.22,       0.17,       0.27,
+  # 95,         "Overall",      "mci_manly",       0.27,       0.20,       0.35,
+  
+  65,         "Overall",      "mci_bai",       0.115,       0.076,       0.161,
+  75,         "Overall",      "mci_bai",       0.158,       0.118,       0.202,
+  88,         "Overall",      "mci_bai",       0.213,       0.163,       0.268
 )
 
 
@@ -78,7 +82,7 @@ benchmark_age_of_onset <<- 71.5
 
 
 
-compare_mortality <- function(sim, description) {
+compare_mortality <- function(sim, description, n) {
   mortality <- as.data.frame(sim$aggregated_results_totpop$state_trace) %>%
     mutate(new_dth = dth - lag(dth),  # new deaths per cycle
            denom = 1 - lag(dth),       # those alive at the start of cycle
@@ -134,9 +138,8 @@ compare_mortality <- function(sim, description) {
     theme_minimal()
   
   result_plot <- (fig_mort_compare + fig_mort_compare_residuals) / (fig_cum_mort_compare + fig_cum_mort_compare_residuals) +
-    plot_annotation(title = "Modeled vs. Empirical Mortality Rate", subtitle = paste0(description, "\nN = ", l.inputs[["n.ind"]]))
+    plot_annotation(title = "Modeled vs. Empirical Mortality Rate", subtitle = paste0(description, "\nN = ", n))
   
-  print(result_plot)
   return(invisible(list(result_plot = result_plot,
                         dat = mort_compare,
                         annual_mort = list(fig_mort_compare, fig_mort_compare_residuals),
@@ -145,7 +148,7 @@ compare_mortality <- function(sim, description) {
 }
 
 
-compare_prevalence <- function(sim, description) {
+compare_prevalence <- function(sim, description, n) {
   df <- data.frame(
     id = rep(1:dim(sim$output)[3], times = dim(sim$output)[1]),
     age = as.vector(sim$output[,"AGE",]),
@@ -189,7 +192,8 @@ compare_prevalence <- function(sim, description) {
   fig_prev_by_raceage <- ggplot() +
     geom_line(data = prev_df, aes(x = age, y = prev, color = condition)) +
     geom_point(data = benchmark_prev_by_age, aes(x = age, y = prev, color = condition)) + 
-    geom_point(data = benchmark_prev_by_age_instit["condition" == "dem_manly", ], aes(x = age, y = prev_adj, shape = condition)) +
+    geom_errorbar(data = benchmark_prev_by_age, aes(x = age, ymin = ci_lo, ymax = ci_hi, color = condition), width = 0.5) + 
+    # geom_point(data = benchmark_prev_by_age_instit["condition" == "dem_manly", ], aes(x = age, y = prev_adj, shape = condition)) +
     geom_point(data = benchmark_prev_by_race, aes(x = age, y = prev, color = condition)) +
     facet_wrap(~ raceeth, labeller = as_labeller(c(
       "NHW" = "Non-Hispanic White",
@@ -198,7 +202,7 @@ compare_prevalence <- function(sim, description) {
       "Overall" = "Overall"
     ))) +
     labs(title = "Modeled Prevalence of MCI and Dementia by Age and Race/Ethnicity",
-         subtitle = paste0(description, "\nN = ", l.inputs[["n.ind"]]),
+         subtitle = paste0(description, "\nN = ", n),
          x = "Age",
          y = "Prevalence",
          color = "Condition") +
@@ -212,31 +216,34 @@ compare_prevalence <- function(sim, description) {
   fig_prev_by_age <- ggplot() +
     geom_line(data = prev_df[prev_df$raceeth == "Overall", ], aes(x = age, y = prev, color = condition)) +
     geom_point(data = benchmark_prev_by_age, aes(x = age, y = prev, color = condition)) + 
-    geom_point(data = benchmark_prev_by_age_instit[benchmark_prev_by_age_instit$condition == "dem_manly", ], aes(x = age, y = prev_adj), shape = 1, color = "darkgreen") +
+    geom_errorbar(data = benchmark_prev_by_age, aes(x = age, ymin = ci_lo, ymax = ci_hi, color = condition), width = 0.5) + 
+    # geom_point(data = benchmark_prev_by_age_instit[benchmark_prev_by_age_instit$condition == "dem_manly", ], aes(x = age, y = prev_adj), shape = 1, color = "darkgreen") +
     labs(title = "Modeled Prevalence of MCI and Dementia by Age",
-         subtitle = paste0(description, "\nN = ", l.inputs[["n.ind"]]),
+         subtitle = paste0(description, "\nN = ", n),
          x = "Age",
          y = "Prevalence",
          color = "Condition") +
     ylim(0, 1) +
     scale_color_manual(
       labels = c("dem" = "Model: Dementia", "mci" = "Model: MCI", 
-                 "dem_manly" = "Dementia: HRS (Manly)", "mci_manly" = "MCI: HRS (Manly)"),
-      values = c("dem" = "darkgreen", "mci" = "violet", "dem_manly" = "darkgreen", "mci_manly" = "violet")) +
+                 "dem_manly" = "HRS (Manly): Dementia", "mci_manly" = "HRS (Manly): MCI",
+                 "mci_bai" = "Bai: MCI"),
+      values = c("dem" = "darkgreen", "mci" = "violet", "dem_manly" = "darkgreen", "mci_manly" = "violet",
+                 "mci_bai" = "lightpink")) +
     theme_minimal()
   
-  print(fig_prev_by_age)
+
   return(invisible(list(fig_prev_by_age = fig_prev_by_age,
                         fig_prev_by_raceage = fig_prev_by_raceage,
                         dat = prev_df)))
 }
 
 
-compare_reside_time <- function(sim, description) {
-  reside_time <- as.data.frame(sim$aggregated_results_totpop$reside_time$censored) %>%
-    mutate(dem = mil + mod + sev) %>%
+compare_reside_time <- function(sim, description, n) {
+  reside_time <- as.data.frame(sim$aggregated_results_totpop$reside_time$noncensored) %>%
+    # mutate(dem = mil + mod + sev) %>%
     select(-mil, -mod, - sev) %>%
-    pivot_longer(cols = c(mci, dem), names_to = "condition", values_to = "duration")
+    pivot_longer(cols = c(mci, any_dem), names_to = "condition", values_to = "duration")
   
   age_bins <- cut(sim$aggregated_results_totpop$age_at_mci, 
                   breaks = seq(50, 100, by = 5), 
@@ -265,25 +272,25 @@ compare_reside_time <- function(sim, description) {
     geom_col(data = reside_time[grepl("^Overall", reside_time$age_group), ], aes(x = age_group, y = duration, fill = condition), width = 0.6) +
     geom_col(data = benchmark_reside_time, aes(x = age_group, y = duration, fill = condition), width = 0.6) +
     labs(title = "Reside Time in MCI and Dementia by Age of Onset",
-         subtitle = paste0(description, "\nN = ", l.inputs[["n.ind"]]),
+         subtitle = paste0(description, "\nN = ", n),
          x = "Age of Onset",
          y = "Duration",
          fill = "Condition") + 
     scale_fill_manual(
-      labels = c("dem" = "Model: Dementia", "mci" = "Model: MCI", 
+      labels = c("any_dem" = "Model: Dementia", "mci" = "Model: MCI", 
                  "benchmark_dem" = "Benchmark: Dementia", "benchmark_mci" = "Benchmark: MCI"),
-      values = c("dem" = "darkgreen", "mci" = "violet", "benchmark_dem" = "lightgreen", "benchmark_mci" = "pink")) +
+      values = c("any_dem" = "darkgreen", "mci" = "violet", "benchmark_dem" = "lightgreen", "benchmark_mci" = "pink")) +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 30, hjust = 0.5))
 
   
-  print(fig_reside_time)
+
   return(invisible(list(fig_reside_time = fig_reside_time,
                         dat = reside_time)))
 }
 
 
-compare_age_onset <- function(sim, description) {
+compare_age_onset <- function(sim, description, n) {
   
   avg_age_onset <- mean(sim$aggregated_results_totpop$age_at_mci, na.rm = TRUE)
   
@@ -296,7 +303,7 @@ compare_age_onset <- function(sim, description) {
     geom_col(aes(fill = type), width = 0.6) + 
     geom_text(aes(label = round(value, 1)), vjust = -0.5) + 
     labs(title = "Modeled vs. Benchmark Mean Age of MCI Onset",
-         subtitle = paste0(description, "\nN = ", l.inputs[["n.ind"]]),
+         subtitle = paste0(description, "\nN = ", n),
          x = NULL,
          y = "Age") + 
     scale_fill_manual(values = c("Benchmark" = "grey", "Model" = "darkgreen")) +
@@ -304,19 +311,20 @@ compare_age_onset <- function(sim, description) {
     guides(fill = "none") +
     theme_minimal()
   
-  print(fig_age_onset)
+
   return(invisible(list(fig_age_onset = fig_age_onset,
                         dat = age_onset_compare)))
 }
 
-run_benchmarking <- function(l.inputs, description, sample = NULL) {
-sim <- f.wrap_run(l.inputs, microdata = sample)
-sim_desc <- description
-
-mort <- compare_mortality(sim, sim_desc)
-prev <- compare_prevalence(sim, sim_desc)
-reside_time <- compare_reside_time(sim, sim_desc)
-age_onset <- compare_age_onset(sim, sim_desc)
-
-return(invisible(list(sim = sim, mort = mort, prev = prev, reside_time = reside_time, age_onset = age_onset)))
+run_benchmarking <- function(l.inputs, description = NULL, sample = NULL) {
+  sim <- f.wrap_run(l.inputs = l.inputs, microdata = sample)
+  sim_desc <- description
+  n <- l.inputs[["n.ind"]]
+  
+  mort <- compare_mortality(sim, sim_desc, n)
+  prev <- compare_prevalence(sim, sim_desc, n)
+  reside_time <- compare_reside_time(sim, sim_desc, n)
+  age_onset <- compare_age_onset(sim, sim_desc, n)
+  
+  return(invisible(list(sim = sim, mort = mort, prev = prev, reside_time = reside_time, age_onset = age_onset)))
 }

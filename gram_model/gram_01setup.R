@@ -22,9 +22,8 @@ l.inputs <- vector(mode = "list", length = 0)
 
 # vector of attribute names (see supplemental 'Attribute names')
 l.inputs[["v.attr_names"]] <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCOME","MEDBUR","APOE4","HCARE",
-                                "DX","TX","SYN","COGCON","BHA","CDR_track","CDR",
-                                "CDRfast_sd1","CDRslow_sd1","CDR_obs",
-                                "SEV","SEV_obs","FUN","AGE_MCI",
+                                "DX","TX","TCI","SYN","COGCON","BHA","CDR_track","CDR", "MEMLOSS", "SEV",
+                                "CDRfast_sd1","CDRslow_sd1","CDR_obs", "SEV_obs","FUN",
                                 "BEH","INSTIT","QALY","COST_care", "COST_tx")
 l.inputs[["n.attr"]] <- length(l.inputs[["v.attr_names"]])    # number of attributes
 
@@ -40,6 +39,7 @@ l.inputs[["v.HCARE_val"]]   <- c(0,1)      # 0 = no regular healthcare provider,
 l.inputs[["v.DX_val"]]      <- c(0,1)      # 0 = no diagnosis, 1 = diagnosed with cognitive impairment (given true impairment)
 l.inputs[["v.SYN_val"]]     <- c(0,1)      # 0 = healthy, 1 = cognitively impaired
 l.inputs[["v.SEV_val"]]     <- c(0,1,2,3)  # 0 = MCI, 1 = mild dementia, 2 = moderate dementia, 3 = severe dementia
+l.inputs[["v.MEMLOSS_val"]] <- c(0,1)      # 0 = no memory loss, 1 = memory loss
 l.inputs[["v.COGCON_val"]]  <- c(0,1)      # 0 = no subjective cognitive concerns, 1 = has subjective cognitive concerns
 l.inputs[["v.AB_val"]]      <- c(0,1)      # 0 = no amyloid beta (normal), 1 = has amyloid beta (AD pathology)
 l.inputs[["v.TX_val"]]      <- c(0,1)      # 0 = Tx off / not provided / stopped, 1 = Tx on / provided / active
@@ -82,12 +82,15 @@ l.inputs[["p.HCARE_start"]] <- c(0.25, 0.75)        # p for no regular provider 
 l.inputs[["p.DX_start"]]    <- c(1,0)               # Everyone undiagnosed at start (assumed)
 
 l.inputs[["p.SYN_start"]] <- c(1, 0)                # p for SYN == 0 (normal) and SYN == 1 (impaired), respectively
+l.inputs[["p.MEMLOSS_start"]] <- c(1, 0)            # p for MEMLOSS == 0 (no memloss) and MEMLOSS == 1 (memloss), respectively
 l.inputs[["p.SEV_start"]] <- c(1, 0, 0, 0)          # p for MCI, mild dem, moderate dem, severe dem, respectively
 
 l.inputs[["m.cogcon_spon"]] <- readRDS("gram_data/cogcon/m.cogcon_spon.RDS")
 l.inputs[["m.cogcon_elic"]] <- readRDS("gram_data/cogcon/m.cogcon_elic.RDS")
 l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]] %>%
   mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
+
+l.inputs[["p.MEMLOSS_new"]] <- 0.09   # prob of being non-progressive memory loss for new cognitive impairment
 
 l.inputs[["MEDBUR_start"]] <- readRDS("gram_data/medbur/initial_medbur.RDS")
 
@@ -143,13 +146,8 @@ l.inputs[["r.CDR_sd3"]] <- 0                           # rater error (inter-rate
 
 ## Cognitive test performance
 # Source: Possin 2018, MCI due to AD vs. control
-l.inputs[["m.BHA_performance"]] <- tribble(
-  ~sens,        ~spec,
-  c(0.72, 0.99), 0.85,      # strict criterion, sens[1] for MCI, sens[2] for dem
-  c(0.81, 1),    0.75       # lax criterion, sens[1] for MCI, sens[2] for dem
-)
-l.inputs[["sens_BHA"]] <- l.inputs[["m.BHA_performance"]]$sens[[1]]  # defaults to strict
-l.inputs[["spec_BHA"]] <- l.inputs[["m.BHA_performance"]]$spec[1]    # defaults to strict
+l.inputs[["sens_BHA"]] <- c(0.50, 0.54, 0.72, 1.00)  # sens[1] for prodromal CI, sens[2] for memory loss (assumed), sens[3] for MCI, sens[4] for dem
+l.inputs[["spec_BHA"]] <- 0.85
 
 
 ## Health state utilities

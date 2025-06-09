@@ -1,14 +1,21 @@
-## Probaility of subjective cognitive concerns by age and cognitive status
+## Probability of subjective cognitive concerns by age and cognitive status
+
+# From KP prelim data:
+# 2% of population gets referred to geriatrics / BHA (assume equivalent to spontaneous)
+# 15% without prior dx gets flagged for BHA in annual welness visit
+# We do not have breakdown by actual diagnosis, but assume more likely referral with increased severity
+
+
 
 m.cogcon_spon <- data.frame(age = 50:100,
-                       h = c(0, rep(0.01, 10), rep(0.03, 10), rep(0.05, 10), rep(0.07, 10), rep(0.10, 10)),
-                       mci = rep(0.6, 51),
-                       dem = rep(0.9, 51))
+                            h = rep(0.01, 51),
+                            mci = rep(0.10, 51),
+                            dem = rep(0.30, 51))
 
-m.cogcon_elic <- m.cogcon_spon %>%
-  mutate(h = h + 0.1,
-         mci = mci + 0.1,
-         dem = dem + 0.1)
+m.cogcon_elic <- data.frame(age = 50:100,
+                            h = rep(0.05, 51),
+                            mci = rep(0.40, 51),
+                            dem = rep(0.80, 51))
 
 
 saveRDS(m.cogcon_spon, "gram_data/cogcon/m.cogcon_spon.RDS")
