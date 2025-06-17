@@ -46,7 +46,7 @@ sim_calib$prev$fig_prev_by_raceage
 sim_calib$mort$result_plot
 sim_calib$reside_time$fig_reside_time
 sim_calib$age_onset$fig_age_onset
-summary(sim_calib$sim$aggregated_results_totpop$age_at_mci)
+summary(sim_calib$sim$aggregated_results_totpop$age_at_onset)
 
 # STARTING COHORT ####
 tableone_vars <- c("AGE","SEX","RACEETH","EDU","INCOME","MEDBUR","HCARE","APOE4","SYN")
@@ -109,68 +109,39 @@ avg_pct_difference_cum_mortality <- mean(abs(deviation_mortality$cum_residual_pc
 max_abs_difference_cum_mortality <- deviation_mortality %>%
   filter(cum_residual == max(cum_residual))
 
-# Create prevalence among age bands -- DECIDED AGAINST USING
-# prev_slices <- as.data.frame(sim_calib$sim$aggregated_results_totpop$state_trace) %>%
-#   mutate(dem = mil + mod + sev,
-#          age = as.integer(row.names(.)) + 50 - 1,
-#          tot_person_years_alive = (healthy + mci + dem) * l.inputs1[["n.ind"]]) %>%
-#   select(-mil, -mod, -sev) %>%
-#   mutate(n_healthy = healthy * l.inputs1[["n.ind"]],
-#          n_mci = mci * l.inputs1[["n.ind"]],
-#          n_dem = dem * l.inputs1[["n.ind"]])
-# 
-# prev_slices <- prev_slices[, c("age","tot_person_years_alive","healthy","mci","dem","dth")]   # reorder so dth is last
-# 
-# age_cutoffs <- c(50, 60, 70, 80)
-# 
-# prev_by_age_cutoff <- map_dfr(age_cutoffs, function(min_age) {
-#   prev_slices %>%
-#     filter(age >= min_age) %>%
-#     colSums()
-# }) %>%
-#   mutate(age = paste0(age_cutoffs,"+"),
-#          healthy = n_healthy / tot_person_years_alive,
-#          mci = n_mci / tot_person_years_alive,
-#          dem = n_dem / tot_person_years_alive,
-#          .keep = "none") %>%
-#   pivot_longer(cols = c("healthy","mci","dem"), names_to = "condition") %>%
-#   mutate(condition = factor(condition, levels = c("healthy", "mci", "dem")))
-# 
-# counts_by_age_cutoff <- map_dfr(age_cutoffs, function(min_age) {
-#   prev_slices %>%
-#     filter(age >= min_age) %>%
-#     colSums()
-# }) %>%
-#   mutate(age = paste0(age_cutoffs,"+")) %>%
-#   select(age, tot_person_years_alive, n_healthy, n_mci, n_dem) %>%
-#   pivot_longer(cols = c("n_healthy","n_mci","n_dem"), names_to = "condition") %>%
-#   mutate(condition = factor(condition, levels = c("n_healthy", "n_mci", "n_dem")))
-# 
-# 
-# plot_prev_by_age_cutoff <- ggplot(prev_by_age_cutoff, aes(x = age, y = value, fill = fct_rev(condition))) +
-#   geom_col() + 
-#   scale_y_continuous(n.breaks = 9) + 
-#   labs(title = "Prevalence by age band",
-#        x = "Age Band",
-#        y = "Prevalence",
-#        fill = "Cognitive Status") + 
-#   scale_fill_discrete(labels = c("dem" = "Dementia", "mci" = "MCI", "healthy" = "Healthy")) + 
-#   theme_minimal() +
-#   theme(axis.text = element_text(size = 14),  # Increase axis tick font size
-#         axis.title = element_text(size = 16),
-#         legend.text = element_text(size = 14),
-#         legend.title = element_text(size = 14),
-#         title = element_text(size = 16))
-# 
-# plot_prev_by_age_cutoff
-# 
-# 
-# 
-# plot_counts_by_age_cutoff <- ggplot(counts_by_age_cutoff, aes(x = age, y = value, fill = fct_rev(condition))) +
-#   geom_col()
-# 
-# plot_counts_by_age_cutoff
-# 
 
+# Get dimensions of your simulation output
+num_cycles <- dim(sim_calib$sim$output)[1]     # Number of cycles (time steps)
+num_individuals <- dim(sim_calib$sim$output)[3] # Number of individuals
+
+# Initialize an empty vector to store the indices of individuals who revert
+reverting_individual_indices <- c()
+
+# Loop through each individual
+for (i in 1:num_individuals) {
+  # Get the SYN status for the current individual across all cycles
+  syn_history <- sim_calib$sim$output[, "SYN", i]
+  syn_history[is.na(syn_history)] <- 9
+  
+  # Check for the transition from SYN == 1 in previous cycle to SYN == 0 in current cycle
+  # We start from the second cycle (index 2) because we need a 'previous' cycle
+  # `syn_history[1:(num_cycles - 1)]` gives previous cycle's SYN
+  # `syn_history[2:num_cycles]` gives current cycle's SYN
+  has_reverted_in_any_cycle <- any(syn_history[2:num_cycles] == 0 & syn_history[1:(num_cycles - 1)] == 1)
+  
+  # If this individual has reverted in at least one cycle, add their index to our list
+  if (has_reverted_in_any_cycle) {
+    reverting_individual_indices <- c(reverting_individual_indices, i)
+  }
+}
+
+# Print the individual indices
+print("Individual indices of those who reverted from SYN 1 to SYN 0:")
+if (length(reverting_individual_indices) > 0) {
+  print(reverting_individual_indices)
+  print(paste("Total number of unique individuals who reverted:", length(reverting_individual_indices)))
+} else {
+  print("No individuals reverted from SYN 1 to SYN 0 in the simulation.")
+}
 
 

@@ -1,0 +1,138 @@
+# GRAM Model Documentation
+
+## Overview
+
+The GRAM (Generic Risk and Aging Model) project is a simulation framework for modeling disease progression, interventions, and test performance in aging populations. The codebase consists of modular R scripts for setup, helper utilities, simulation execution, and results analysis.
+
+---
+
+## Table of Contents
+
+1. [Project Structure](#project-structure)
+2. [Setup and Inputs](#setup-and-inputs)
+3. [Helper Functions](#helper-functions)
+4. [Simulation Engine](#simulation-engine)
+5. [Results and Output](#results-and-output)
+6. [Test Performance Analysis](#test-performance-analysis)
+7. [Statistical Utilities](#statistical-utilities)
+8. [Attribute Distributions](#attribute-distributions)
+9. [Templates and Example Usage](#templates-and-example-usage)
+
+---
+
+## Project Structure
+
+- `gram_01setup.R`: Model initialization, input definitions, and parameter settings.
+- `gram_02helpers.R`: Helper functions for probability, attribute updates, discounting, and formatting.
+- `gram_03simulation.R`: Core simulation engine, main model functions, results aggregation, and wrappers.
+- `gram00_template.R`: Scenario run template for defining and running model scenarios.
+- `test_performance.R`: Functions and scripts for evaluating test performance (sensitivity, specificity, etc.).
+- `sd_from_95ci.R`: Utility for calculating standard deviation from 95% confidence intervals.
+- `starting_distributions_of_attributes.R`: Scripts for generating starting distributions for attributes like medical burden and education.
+
+---
+
+## 1. Setup and Inputs (`gram_01setup.R`)
+
+- **Purpose**: Initializes the model environment, loads required packages, and defines all model inputs and parameters.
+- **Key Features**:
+  - Clears workspace and loads libraries (`tidyverse`, `scales`, `flextable`, etc.).
+  - Defines all model attributes (e.g., age, sex, education, race/ethnicity, income, medical burden, APOE4 status).
+  - Sets up scenario parameters, number of individuals, cycles, random seeds, and strategy definitions.
+  - Loads or defines all probability distributions and transition matrices for simulation.
+
+---
+
+## 2. Helper Functions (`gram_02helpers.R`)
+
+- **Purpose**: Provides reusable utilities for sampling, probability adjustment, attribute updating, and results formatting.
+- **Key Functions**:
+  - `f.adjustprobability`: Adjusts probabilities for different time intervals and risk ratios.
+  - `f.qcat`: Samples from a categorical variable using probabilities and random values.
+  - `f.discount`: Applies discounting to costs or QALYs across cycles.
+  - Attribute update functions: `f.update_ALIVE`, `f.update_AGE`, `f.update_SEX`, etc., to update the state of each attribute per cycle.
+  - Formatting functions: `f.format_reside_time_table`, `f.format_prevalence_table`, `f.make_histogram` for output tables and figures.
+
+---
+
+## 3. Simulation Engine (`gram_03simulation.R`)
+
+- **Purpose**: Contains the main functions to run the simulation, aggregate results, and manage multiple scenarios.
+- **Key Functions**:
+  - `f.run`: Runs the model for a given set of inputs and (optionally) microdata, simulating individual trajectories over time.
+  - `f.qaly_cost`: Calculates QALYs and costs for simulated individuals.
+  - `f.out_aggregate`: Aggregates simulation outputs (e.g., time in health states, costs, QALYs) across individuals.
+  - `f.out_summary`: Runs multiple strategies and computes incremental outcomes and cost-effectiveness.
+  - `f.wrap_run`: Wrapper function to run a scenario, aggregate results, and generate summary figures.
+
+---
+
+## 4. Results and Output
+
+- **Scenario Template (`gram00_template.R`)**:
+  - Provides a template for defining scenarios, running the model, and exporting results.
+  - Example workflow:
+    1. Copy and modify input parameters for a new scenario.
+    2. Run the model with `f.wrap_run`.
+    3. Extract and format outputs (figures, tables).
+    4. Export results using `ggsave` and `save_as_docx`.
+
+---
+
+## 5. Test Performance Analysis (`test_performance.R`)
+
+- **Purpose**: Evaluates the performance of diagnostic tests within the simulation.
+- **Key Functions**:
+  - `test_performance`: Computes sensitivity, specificity, PPV, and NPV from true/false positive/negative counts.
+  - Scripts for extracting and comparing observed vs. true health states to calculate test metrics for:
+    - Any impairment vs. healthy
+    - MCI vs. healthy
+    - Dementia vs. MCI
+
+---
+
+## 6. Statistical Utilities
+
+- **Standard Deviation from 95% CI (`sd_from_95ci.R`)**:
+  - Calculates SD from confidence intervals and sample size, useful for parameterizing distributions in the model.
+
+---
+
+## 7. Attribute Distributions (`starting_distributions_of_attributes.R`)
+
+- **Purpose**: Generates starting distributions for medical burden and education using binomial and beta distributions.
+- **Features**:
+  - Simulates multimorbidity counts by age.
+  - Generates education distributions with specified mean and variance.
+
+---
+
+## 8. Templates and Example Usage
+
+- **Scenario Template**: Use `gram00_template.R` as a starting point for new analyses.
+- **Workflow**:
+  1. Define scenario-specific input changes.
+  2. Run the simulation using the wrapper function.
+  3. Format and export results for reporting.
+
+---
+
+## 9. Extending the Model
+
+- Add new attributes or health states by updating the input definitions and attribute update functions.
+- Implement new interventions or strategies by modifying scenario parameters and running comparative analyses.
+- Integrate additional test performance metrics or calibration routines as needed.
+
+---
+
+## References
+
+- See in-code comments and references for detailed data sources and methodological notes (e.g., Jamalian et al., Possin 2018).
+
+---
+
+## Contact
+
+For questions or contributions, please contact the project maintainers.
+
+---

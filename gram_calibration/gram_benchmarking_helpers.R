@@ -190,16 +190,16 @@ compare_prevalence <- function(sim, description, n) {
     select(-tot_alive)
   
   fig_prev_by_raceage <- ggplot() +
-    geom_line(data = prev_df, aes(x = age, y = prev, color = condition)) +
-    geom_point(data = benchmark_prev_by_age, aes(x = age, y = prev, color = condition)) + 
-    geom_errorbar(data = benchmark_prev_by_age, aes(x = age, ymin = ci_lo, ymax = ci_hi, color = condition), width = 0.5) + 
+    geom_line(data = prev_race, aes(x = age, y = prev, color = condition)) +
+    # geom_point(data = benchmark_prev_by_age, aes(x = age, y = prev, color = condition)) + 
+    # geom_errorbar(data = benchmark_prev_by_age, aes(x = age, ymin = ci_lo, ymax = ci_hi, color = condition), width = 0.5) + 
     # geom_point(data = benchmark_prev_by_age_instit["condition" == "dem_manly", ], aes(x = age, y = prev_adj, shape = condition)) +
-    geom_point(data = benchmark_prev_by_race, aes(x = age, y = prev, color = condition)) +
+    # geom_point(data = benchmark_prev_by_race, aes(x = age, y = prev, color = condition)) +
     facet_wrap(~ raceeth, labeller = as_labeller(c(
       "NHW" = "Non-Hispanic White",
       "NHB" = "Non-Hispanic Black",
-      "Hisp" = "Hispanic",
-      "Overall" = "Overall"
+      "Hisp" = "Hispanic"
+      # "Overall" = "Overall"
     ))) +
     labs(title = "Modeled Prevalence of MCI and Dementia by Age and Race/Ethnicity",
          subtitle = paste0(description, "\nN = ", n),
@@ -207,9 +207,11 @@ compare_prevalence <- function(sim, description, n) {
          y = "Prevalence",
          color = "Condition") +
     scale_color_manual(
-      labels = c("dem" = "Model: Dementia", "mci" = "Model: MCI", 
-                 "dem_manly" = "HRS (Manly): Dementia", "mci_manly" = "HRS (Manly): MCI"),
-      values = c("dem" = "darkgreen", "mci" = "violet", "dem_manly" = "darkgreen", "mci_manly" = "violet")) +
+      labels = c("dem" = "Dementia", "mci" = "MCI"),
+      values = c("dem" = "darkgreen", "mci" = "violet")) +
+      # labels = c("dem" = "Model: Dementia", "mci" = "Model: MCI", 
+      #            "dem_manly" = "HRS (Manly): Dementia", "mci_manly" = "HRS (Manly): MCI"),
+      # values = c("dem" = "darkgreen", "mci" = "violet", "dem_manly" = "darkgreen", "mci_manly" = "violet")) +
     theme_minimal()
   
   
@@ -229,7 +231,7 @@ compare_prevalence <- function(sim, description, n) {
                  "dem_manly" = "HRS (Manly): Dementia", "mci_manly" = "HRS (Manly): MCI",
                  "mci_bai" = "Bai: MCI"),
       values = c("dem" = "darkgreen", "mci" = "violet", "dem_manly" = "darkgreen", "mci_manly" = "violet",
-                 "mci_bai" = "lightpink")) +
+                 "mci_bai" = "violet")) +
     theme_minimal()
   
 
@@ -245,7 +247,7 @@ compare_reside_time <- function(sim, description, n) {
     select(-mil, -mod, - sev) %>%
     pivot_longer(cols = c(mci, any_dem), names_to = "condition", values_to = "duration")
   
-  age_bins <- cut(sim$aggregated_results_totpop$age_at_mci, 
+  age_bins <- cut(sim$aggregated_results_totpop$age_at_onset, 
                   breaks = seq(50, 100, by = 5), 
                   right = FALSE, 
                   include.lowest = TRUE)
@@ -292,7 +294,11 @@ compare_reside_time <- function(sim, description, n) {
 
 compare_age_onset <- function(sim, description, n) {
   
-  avg_age_onset <- mean(sim$aggregated_results_totpop$age_at_mci, na.rm = TRUE)
+  age_onset <- sim$aggregated_results_totpop$age_at_onset
+  avg_age_onset <- mean(age_onset, na.rm = TRUE)
+  df_age_onset <- data.frame(age_onset = age_onset, apoe4 = sim$output[1,"APOE4",],
+                             raceeth = sim$output[1,"RACEETH",])
+  
   
   age_onset_compare <- data.frame(
     type = c("Model", "Benchmark"),
@@ -311,6 +317,15 @@ compare_age_onset <- function(sim, description, n) {
     guides(fill = "none") +
     theme_minimal()
   
+  avg_onset_by_apoe4 <- df_age_onset %>%
+    filter(!is.na(age_onset)) %>%
+    group_by(apoe4) %>%
+    summarize(mean = mean(age_onset))
+  avg_onset_by_raceeth <- df_age_onset %>%
+    filter(!is.na(age_onset)) %>%
+    group_by(raceeth) %>%
+    summarize(mean = mean(age_onset))
+
 
   return(invisible(list(fig_age_onset = fig_age_onset,
                         dat = age_onset_compare)))
