@@ -229,58 +229,72 @@ f.update_HCARE <- function(v.HCARE.lag, v.AGE, random_cycle) {
   return(hcare)
 }
 
-######################################## TCI
+######################################## MCI PROBABILITY
 
+f.calc_MCIprob <- function(l.inputs, v.AGE, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag) {
+  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE,0), ncol = 1) - 50 + 1]
+  hazard <- hazards.age * exp(
+    l.inputs[["log_EDU"]] * v.EDU.lag +
+      l.inputs[["log_SEX"]] * v.SEX.lag +
+      l.inputs[["log_RACEETHblack"]] * (v.RACEETH.lag == 1) +
+      l.inputs[["log_RACEETHhisp"]] * (v.RACEETH.lag == 2) +
+      l.inputs[["log_APOE4"]] * v.APOE4.lag +
+      l.inputs[["log_MEDBUR"]] * v.MEDBUR.lag +
+      l.inputs[["log_INCOMEmed"]] * (v.INCOME.lag == 1) +
+      l.inputs[["log_INCOMEhi"]] * (v.INCOME.lag == 2))
+
+    prob_mci <- (1 - exp(-hazard)) * l.inputs[["rr.Px_mci"]]
+
+  return(prob_mci)
+}
+
+######################################## SYN
 f.update_SYN <- function(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, 
                          v.SYN.lag, v.SYN.lag2, v.MEMLOSS.lag,
-                         random_cycle, n.alive) {
+                         random_tplus2, n.alive) {
   
   # start with empty vector
   symptoms <- rep(NA, n.alive)
   
-  # look up hazard rate given age
-  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE.tplus2,0), ncol = 1) - 50 + 1]
-  
-  # calculate hazard at current cycle given coefficients, convert to probability
-  hazard <- hazards.age * exp(
-    l.inputs[["log_EDU"]] * v.EDU.lag + 
-      l.inputs[["log_SEX"]] * v.SEX.lag +
-      l.inputs[["log_RACEETHblack"]] * (v.RACEETH.lag == 1) +
-      l.inputs[["log_RACEETHhisp"]] * (v.RACEETH.lag == 2) +
-      l.inputs[["log_APOE4"]] * v.APOE4.lag + 
-      l.inputs[["log_MEDBUR"]] * v.MEDBUR.lag + 
-      l.inputs[["log_INCOMEmed"]] * (v.INCOME.lag == 1) + 
-      l.inputs[["log_INCOMEhi"]] * (v.INCOME.lag == 2))
-  
-  prob_none_to_mci <- (1 - exp(-hazard)) * l.inputs[["rr.Px_mci"]]
+  prob_mci <- f.calc_MCIprob(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag)
   
   # apply dependent on previous state
-
-  symptoms[v.SYN.lag == 0] <- as.numeric(prob_none_to_mci[v.SYN.lag == 0] > random_cycle[v.SYN.lag == 0]) * 0.5
+  symptoms[v.SYN.lag == 0] <- as.numeric(prob_mci[v.SYN.lag == 0] > random_tplus2[v.SYN.lag == 0]) * 0.5
   symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0] <- 0.5
   symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0.5] <- 1
-  symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 1] <- as.numeric(0.07 < random_cycle[v.SYN.lag == 1 & v.MEMLOSS.lag ==1])
+  symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 1] <- as.numeric(0.07 < random_tplus2[v.SYN.lag == 1 & v.MEMLOSS.lag ==1])
   symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 0] <- 1
-  
   
   return(symptoms)
 }
 
+######################################## MEMLOSS - memory loss flag (reflects non-progressive impairment)
 
-######################################## MEMLOSS - memory loss flag
-
-f.update_MEMLOSS <- function(v.MEMLOSS.lag, v.SYN, v.SYN.lag, p.MEMLOSS_new, random_cycle, n.alive) {
+f.update_MEMLOSS <- function(v.MEMLOSS.lag, v.SYN, v.SYN.lag, v.AGE, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, l.inputs, p.MEMLOSS_new, random_cycle, n.alive) {
   memloss <- rep(NA, n.alive)
-  
-  # if prior memloss determined, keep it
-  memloss[v.MEMLOSS.lag == 1] <- 1
-  memloss[v.MEMLOSS.lag == 0] <- 0
-  
 
-  # new MCI has some chance of being memloss
+  # New MCI cases: assign MEMLOSS with probability p.MEMLOSS_new
   new_mci <- v.SYN == 1 & v.SYN.lag < 1
   memloss[new_mci] <- as.numeric(p.MEMLOSS_new > random_cycle[new_mci])
-  
+
+  # For those with MEMLOSS==1, compute hazard for clearing (same as healthy-to-MCI hazard)
+  idx_memloss <- which(v.MEMLOSS.lag == 1)
+  if (length(idx_memloss) > 0) {
+    prob_mci <- f.calc_MCIprob(l.inputs,
+                              v.AGE[idx_memloss], v.EDU.lag[idx_memloss], v.SEX.lag[idx_memloss],
+                              v.RACEETH.lag[idx_memloss], v.APOE4.lag[idx_memloss],
+                              v.MEDBUR.lag[idx_memloss], v.INCOME.lag[idx_memloss])
+    memloss_clear <- prob_mci > random_cycle[idx_memloss]
+    memloss[idx_memloss[memloss_clear]] <- 0
+    memloss[idx_memloss[!memloss_clear]] <- 1
+  }
+
+  # For those with MEMLOSS==0, keep at 0
+  memloss[v.MEMLOSS.lag == 0 & !new_mci] <- 0
+
+  # Ensure MEMLOSS is cleared if SYN == 0
+  memloss[v.SYN == 0] <- 0
+
   return(memloss)
 }
 
@@ -319,23 +333,23 @@ f.update_CDR <- function(v.SYN, v.SYN.lag, v.MEMLOSS.lag, cutoff_CDR, v.CDR.lag,
   mci_new <- v.SYN == 1 & v.SYN.lag < 1
   cdr[mci_new] <- qunif(p = random_cycle[mci_new], min = cutoff_CDR["mci"], max = cutoff_CDR["mild"])  # TODO: Skew right.
   
-  # Keep CDR-SB score of those with prior memory loss
+  # Keep CDR-SB score of those with prior memory loss (non-progressive impairment)
   mem_loss <- v.MEMLOSS.lag == 1 & !is.na(v.MEMLOSS.lag)
   cdr[mem_loss] <- v.CDR.lag[mem_loss]
-  
-  # Progress CDR-SB score for those already with impairment
+
+  # Progress CDR-SB score for those already with impairment and no MEMLOSS
   mci_still <- v.SYN == 1 & v.SYN.lag == 1 & !mem_loss
-  
+
   delta <- 
     r.CDRfast_mean * v.CDR_track + r.CDRslow_mean * (1-v.CDR_track) +         # Add mean increase in CDR-SB score
     v.CDRfast_sd1 * v.CDR_track + v.CDRslow_sd1 * (1-v.CDR_track) +           # Add individual-level deviation from mean
     qnorm(p = random_cycle, mean = 0, sd = r.CDR_sd2)                         # Add within-individual deviation
-  
+
   delta_tx <- delta * v.TX.lag * rr.Tx_mci + delta * !v.TX.lag * 1
-  
+
   cdr[mci_still] <- pmin(v.CDR.lag[mci_still] + delta_tx[mci_still],
                          cutoff_CDR["max"])
-  
+
   return(cdr)
 }
 

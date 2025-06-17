@@ -210,7 +210,7 @@ f.run <- function(l.inputs, microdata, printLevel) {
         v.SYN.lag       = a.out[t-1,"SYN",alive],
         v.SYN.lag2      = a.out[t-2,"SYN",alive],
         v.MEMLOSS.lag   = a.out[t-1,"MEMLOSS",alive],
-        random_cycle    = a.random[t+2,"SYN",alive], 
+        random_tplus2   = a.random[t+2,"SYN",alive], 
         n.alive         = n.alive
       )} else {
         a.out[t,"SYN",alive] <- a.out[t-1,"SYN",alive]    # last two cycles no change in syndrome            
@@ -222,6 +222,14 @@ f.run <- function(l.inputs, microdata, printLevel) {
       v.MEMLOSS.lag = a.out[t-1,"MEMLOSS",alive],
       v.SYN         = a.out[t,"SYN",alive],
       v.SYN.lag     = a.out[t-1,"SYN",alive],
+      v.AGE         = a.out[t,"AGE",alive],
+      v.EDU.lag     = a.out[t-1,"EDU",alive],
+      v.SEX.lag     = a.out[t-1,"SEX",alive],
+      v.RACEETH.lag = a.out[t-1,"RACEETH",alive],
+      v.APOE4.lag   = a.out[t-1,"APOE4",alive],
+      v.MEDBUR.lag  = a.out[t-1,"MEDBUR",alive],
+      v.INCOME.lag  = a.out[t-1,"INCOME",alive],
+      l.inputs      = l.inputs,
       p.MEMLOSS_new = l.inputs[["p.MEMLOSS_new"]],
       random_cycle  = a.random[t,"MEMLOSS",alive],
       n.alive       = n.alive 
@@ -490,22 +498,22 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["mean_time_Tx"]] <- sum(a.out[,"TX",]==1, na.rm=TRUE)/n
   
   # age at onset
-  onset_cycle <- apply(a.out[,"SEV",], 2, function(x) {
-    # Identify indices where SEV == 0 (MCI), ignoring NA
-    mci_indices <- which(!is.na(x) & x == 0)
+  onset_cycle <- apply(a.out[,"SYN",], 2, function(x) {
+    # Identify indices where SYN == 1
+    mci_indices <- which(!is.na(x) & x == 1)
     
     # Return the first such index, or NA if none exist
     if (length(mci_indices) > 0) mci_indices[1] else NA
   })
   
-  l.out[["age_at_mci"]] <- ifelse(!is.na(onset_cycle), a.out[cbind(onset_cycle, match("AGE", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
+  l.out[["age_at_onset"]] <- ifelse(!is.na(onset_cycle), a.out[cbind(onset_cycle, match("AGE", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
   
   # state reside time by age at onset
   
   last_alive_cycle <- apply(a.out[, "ALIVE", ], 2, function(x) which(x == 0)[1])-1
   sev_at_death <- ifelse(!is.na(last_alive_cycle), a.out[cbind(last_alive_cycle, match("SEV", dimnames(a.out)[[2]]), seq_len(dim(a.out)[3]))], NA)
   
-  age_bins <- cut(l.out[["age_at_mci"]], breaks = seq(50, 100, by = 5), right = FALSE, include.lowest = TRUE)
+  age_bins <- cut(l.out[["age_at_onset"]], breaks = seq(50, 100, by = 5), right = FALSE, include.lowest = TRUE)
   age_groups <- levels(age_bins)
   severity_levels <- c("mci", "mil", "mod", "sev")
   result_matrix1 <- result_matrix2 <- matrix(NA, nrow = length(age_groups)+1, ncol = length(severity_levels),
