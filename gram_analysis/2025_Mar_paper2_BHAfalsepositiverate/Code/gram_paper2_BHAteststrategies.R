@@ -18,10 +18,12 @@ sample1 <- readRDS("gram_data/acs_data/acs_sample_1.rds")
 # CALIBRATION ####
 l.inputs1 <- l.inputs
 l.inputs1[["n.cycle"]] <- 51
-l.inputs1[["hr.mort_mod_age"]] <- l.inputs1[["hr.mort_sev_age"]] <- c(1, 1, 1) 
-l.inputs1[["r.CDRslow_mean"]] <-  (seq(0.25, 0.75, length.out = 51)^2) * (2 * l.inputs[["r.CDRslow_mean"]])
+l.inputs1[["r.CDRslow_mean"]] <-  (seq(0, 1, length.out = 51)^1.5) * (1.5 *l.inputs[["r.CDRslow_mean"]])
 l.inputs1[["p.HCARE_start"]] <- c(0.25,0.75)
 l.inputs1[["n.ind"]] <- 50000
+l.inputs1[["hr.mort_mci_age"]] <- c(1, 1, 1)
+l.inputs1[["hr.mort_mod_age"]] <- l.inputs1[["hr.mort_sev_age"]] <- c(1, 1, 1) 
+l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 2.2 /4
 
 sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 

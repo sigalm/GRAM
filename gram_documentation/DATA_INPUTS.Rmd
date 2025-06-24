@@ -1,0 +1,127 @@
+---
+title: "GRAM Model: Required External Data Inputs"
+output: word_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+This document lists data inputs for the GRAM model that require external
+sourcing. Internal model definitions are excluded; model parameters are
+defined in `gram_01setup.R`.
+
+The model is currently set up to use data from the United States. If you
+are using the model in a different setting, you will need to adjust the
+data inputs accordingly, including defining a cohort that represents the
+population of interest. There are two ways to do this:
+
+1.  **Define distributions for each individual attribute** (e.g., age,
+    sex, education, etc.) for your population of interest. GRAM will
+    create a synthetic population by randomly assigning attributes to
+    individuals based on the distributions. This information might be
+    easier to source in some settings. However, the dependencies between
+    attributes (e.g., age and sex) will need to be accounted for, which
+    will require revisions to the model and may not always be possible
+    if data on associations between attributes are not available.
+
+2.  **Read in an individual-level dataset** that represents your
+    population of interest (e.g., census microdata). Ensure that the
+    dataset includes all attributes defined in the model. GRAM will use
+    the dataset to simulate the population of interest. This is the
+    preferred option if such individual-level data are available.
+
+```{r, echo=FALSE, results='asis'}
+library(knitr)
+kable(
+  data.frame(
+    `Input Name` = c(
+      "AGE_start_mean, AGE_start_sd",
+      "p.SEX_start_male, p.SEX_start_female",
+      "p.EDU_start",
+      "p.RACEETH_start",
+      "p.INCOME_start",
+      "p.APOE4_start",
+      "p.SEV_start",
+      "MEDBUR_start",
+      "m.cogcon_spon, m.cogcon_elic",
+      "m.lifetable",
+      "m.hr_mci",
+      "Health state utilities",
+      "Costs",
+      "Cognitive test cutoffs",
+      "Sensitivity/specificity",
+      "Treatment parameters"
+    ),
+    Description = c(
+      "Mean and SD of starting age for simulated individuals",
+      "Proportion of males and females in the starting population",
+      "Proportion with each education level (college+, high school, < high school)",
+      "Proportion with each race/ethnicity (White, Black, Hispanic)",
+      "Proportion with each income level (low, medium, high)",
+      "Proportion of APOE4 carriers vs. non-carriers",
+      "Proportion with each severity at baseline (MCI, mild, mod, severe)",
+      "Distribution of comorbidities at baseline",
+      "Matrices for spontaneous/elicited cognitive concerns representing the probability of receiving a cognitive test based on age and true cognitive status",
+      "Age-specific non-dementia mortality probabilities",
+      "Age-specific annual MCI incidence rates",
+      "Health state utilities for cognitive impairment states (e.g., QALY values)",
+      "Annual costs by health state and treatment",
+      "CDR and other test thresholds",
+      "Sensitivity/specificity of cognitive tests",
+      "Efficacy, eligibility, duration, risk ratios"
+    ),
+    `Suggested Data Sources` = c(
+      "NHANES, HRS, ADNI, census",
+      "NHANES, HRS, census",
+      "NHANES, HRS, census",
+      "NHANES, HRS, census",
+      "NHANES, HRS, census, government economic reports",
+      "ADNI, NACC, published genetic studies",
+      "Clinical cohorts, ADNI, NACC",
+      "NHANES, HRS, health system data",
+      "Peer-reviewed literature, original cohort data",
+      "CDC/NCHS life tables, WHO, published tables",
+      "Peer-reviewed epidemiological studies, ADNI, NACC",
+      "Literature reviews, meta-analyses, clinical studies",
+      "Peer-reviewed cost studies, CMS, health system data",
+      "Peer-reviewed literature, clinical guidelines",
+      "Peer-reviewed literature, validation studies",
+      "Clinical trials, meta-analyses, regulatory reports"
+    ),
+    Notes = c(
+      "",
+      "",
+      "",
+      "",
+      "Model cutoffs: low = <$9,000/year; medium = $9,000–$36,000/year; high = >$36,000/year. Define equivalent cutoffs for your setting.",
+      "",
+      "Only required if starting with a prevalent cohort. Otherwise, defaults to NA (i.e., no one has impairment)",
+      "",
+      "Only required if simulating a cognitive testing intervention. Otherwise, defaults to 1 (i.e., everyone receives a cognitive test).",
+      "",
+      "",
+      "",
+      "",
+      "GRAM tracks severity of cognitive impairment based on the CDR-SB measure. The cutoffs are necessary to determine categorical severity of impairment. Default values are based on O'Bryant et al. (2008).",
+      "Only required if simulating a cognitive testing intervention.",
+      "Only required if simulating a treatment intervention."
+    ),
+    check.names = FALSE
+  ),
+  align = 'llll',
+  caption = "**Required External Data Inputs for GRAM**"
+)
+```
+
+**Abbreviations:** - NHANES: National Health and Nutrition Examination
+Survey - HRS: Health and Retirement Study - ADNI: Alzheimer's Disease
+Neuroimaging Initiative - NACC: National Alzheimer's Coordinating
+Center - CMS: Centers for Medicare & Medicaid Services - CDC/NCHS:
+Centers for Disease Control/National Center for Health Statistics
+
+**Notes:** - User-defined simulation settings (e.g., scenario name,
+number of individuals, seeds) are not listed here. - For .RDS files
+referenced in the code, see the project `gram_data` directory or consult
+the data manager for file provenance and documentation. - For
+variable-specific details, consult the code comments or supplemental
+documentation.
