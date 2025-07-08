@@ -5,6 +5,13 @@
 ######################################## 2.1. HELPER FUNCTIONS: GENERIC ########################################
 # This section defines all generic functions being used through the model.
 
+######################################## generate synthetic sample from microdata
+
+generate_synthetic_sample <- function(pop_data, target_size, seed) {
+  set.seed(seed)  # Ensure reproducibility for each dataset
+  pop_data %>%
+    slice_sample(n = target_size, weight_by = PERWT, replace = TRUE)
+}
 
 ######################################## convert probability to different time
 

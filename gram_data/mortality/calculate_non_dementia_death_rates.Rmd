@@ -142,5 +142,3 @@ avg_prob_non_dementia = 1-exp(-avg_rate_non_dementia))
 ```{r save data}
 saveRDS(non_dementia2_clean, "non_dementia_mortality_prob_by_age_v2.RDS")
 ```
-
-During model calibration, we noticed that the simulated mortality diverged from empirical data on mortality among as the model cohort aged. We believe that this is because the mortality risk ratios for dementia we used in the microsimulation were not dependent on age. It is reasonable that the relative risk of dementia mortality (compared to mortality from other causes) would decrease with age, as dementia-related deaths are likely to make up a greater proportion of all deaths in older ages. Therefore, we added an additional adjustment that lowers the mortality risk ratios for moderate and severe dementia by 40% for those aged between 70 and 79, and by 70% for those aged 80 and older. This aligned simulated mortality by age with empirical data on mortality.

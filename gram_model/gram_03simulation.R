@@ -27,14 +27,17 @@ f.run <- function(l.inputs, microdata, printLevel) {
   a.out[1,"ALIVE",]     <- 1
   
   if (!is.null(microdata)) {
-    a.out[1,"AGE",] <- microdata$AGE
-    a.out[1,"SEX",] <- microdata$SEX
-    a.out[1,"RACEETH",] <- microdata$RACEETH
-    a.out[1,"EDU",] <- microdata$EDUC
-    a.out[1,"INCOME",] <- microdata$INCOME_CAT
-    a.out[1,"MEDBUR",] <- microdata$MEDBUR
-    a.out[1,"APOE4",] <- microdata$APOE4
-    a.out[1,"HCARE",] <- microdata$INSURANCE * as.numeric(a.random[1,"HCARE",] < l.inputs[["p.HCARE_start"]][2]) 
+
+    synthetic_pop <- generate_synthetic_sample(microdata, target_size = l.inputs[["n.ind"]], seed = l.inputs[["seed_stochastic"]])
+
+    a.out[1,"AGE",] <- synthetic_pop$AGE
+    a.out[1,"SEX",] <- synthetic_pop$SEX
+    a.out[1,"RACEETH",] <- synthetic_pop$RACEETH
+    a.out[1,"EDU",] <- synthetic_pop$EDUC
+    a.out[1,"INCOME",] <- synthetic_pop$INCOME_CAT
+    a.out[1,"MEDBUR",] <- synthetic_pop$MEDBUR
+    a.out[1,"APOE4",] <- synthetic_pop$APOE4
+    a.out[1,"HCARE",] <- synthetic_pop$INSURANCE * as.numeric(a.random[1,"HCARE",] < l.inputs[["p.HCARE_start"]][2]) 
   } else {
     a.out[1,"AGE",]       <- round(qnorm(p = a.random[1,"AGE",], mean = l.inputs[["AGE_start_mean"]], sd = l.inputs[["AGE_start_sd"]]),0)
     a.out[1,"AGE",][a.out[1,"AGE",]<50] <- 50

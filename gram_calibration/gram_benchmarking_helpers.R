@@ -73,10 +73,9 @@ benchmark_prev_by_race <<- data.frame(
 benchmark_reside_time <<- data.frame(
   age_group = "Benchmark",
   condition = c("benchmark_mci", "benchmark_dem"),
-  duration = c(3.85, 7)
+  duration = c(4, 7)
 )
 
-# Note that the benchmark dementia duration is a guess based on conversations with Kelly and Kate.
 
 benchmark_age_of_onset <<- 71.5
 
@@ -151,10 +150,21 @@ compare_mortality <- function(sim, description, n) {
 
  
 # Stratify prevalence by age and any variable
-stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cutoffs = NULL) {
+stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cutoffs = NULL, stratify_by_baseline = FALSE) {
   
   # Extract stratification variable
-  strat_vec <- as.vector(sim$output[, strat_var,])
+  n_cycles <- dim(sim$output)[1]
+  n_ind <- dim(sim$output)[3]
+
+  if (stratify_by_baseline) {
+    # Use baseline (t=1) value for each individual, repeat for each cycle
+    baseline_strat <- as.vector(sim$output[1, strat_var, ])
+    strat_vec <- rep(baseline_strat, each = n_cycles)
+  } else {
+    # Use time-varying value
+    strat_vec <- as.vector(sim$output[, strat_var,])
+  }
+
   # Bin if cutoffs provided
   if (!is.null(strat_cutoffs)) {
     strat_binned <- cut(strat_vec, breaks = strat_cutoffs, include.lowest = TRUE, right = FALSE)
@@ -165,10 +175,10 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
 
   # Extract variables
   df <- data.frame(
-    id = rep(1:dim(sim$output)[3], times = dim(sim$output)[1]),
-    age = as.vector(sim$output[,"AGE",]),
-    alive = as.vector(sim$output[,"ALIVE",]),
-    sev = as.vector(sim$output[,"SEV",]),
+    id = rep(1:n_ind, each = n_cycles),
+    age = as.vector(sim$output[, "AGE", ]),
+    alive = as.vector(sim$output[, "ALIVE", ]),
+    sev = as.vector(sim$output[, "SEV", ]),
     strat = strat
   ) %>%
     filter(alive == 1) %>%
@@ -207,7 +217,8 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
     theme_minimal(base_size = 14)
 
   return(invisible(list(plot_prev = plot_prev,
-                        dat = prev_strat)))
+                        dat = prev_strat,
+                        raw = df)))
 }
 
 compare_prevalence <- function(sim, description, n) {
@@ -317,6 +328,10 @@ compare_reside_time <- function(sim, description, n) {
   # Rename 'Overall_adj' to 'Overall'
   reside_time$age_group[reside_time$age_group == "Overall_adj"] <- "Overall"
   
+  desired_order <- c("any_dem", "mci", "benchmark_dem", "benchmark_mci")
+  reside_time$condition <- factor(reside_time$condition, levels = desired_order)
+  benchmark_reside_time$condition <- factor(benchmark_reside_time$condition, levels = desired_order)
+
   fig_reside_time <- ggplot() +
     geom_col(data = reside_time[reside_time$age_group != "Overall", ],
              aes(x = age_group, y = duration, fill = condition), width = 0.6) +
