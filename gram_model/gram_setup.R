@@ -22,9 +22,10 @@ l.inputs <- vector(mode = "list", length = 0)
 
 # vector of attribute names (see supplemental 'Attribute names')
 l.inputs[["v.attr_names"]] <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCOME","MEDBUR","APOE4","HCARE",
-                                "DX","TX","TCI","SYN","COGCON","BHA","CDR_track","CDR", "MEMLOSS", "SEV",
-                                "CDRfast_sd1","CDRslow_sd1","CDR_obs", "SEV_obs","FUN",
-                                "BEH","INSTIT","QALY","COST_care", "COST_tx")
+                                "DX","TX","TCI","SYN","COGCON","BHA","any_BHA_pos","last_BHA_age",
+                                "CDR_track","CDR", "MEMLOSS","SEV",
+                                "CDRfast_sd1","CDRslow_sd1","CDR_obs","SEV_obs","PET",
+                                "NP","TX2","LTC","QALY","COST_test","COST_fu","COST_tx2","COST_care","COST_tx")
 l.inputs[["n.attr"]] <- length(l.inputs[["v.attr_names"]])    # number of attributes
 
 # define or describe possible attribute values
@@ -41,14 +42,17 @@ l.inputs[["v.SYN_val"]]     <- c(0,1)      # 0 = healthy, 1 = cognitively impair
 l.inputs[["v.SEV_val"]]     <- c(0,1,2,3)  # 0 = MCI, 1 = mild dementia, 2 = moderate dementia, 3 = severe dementia
 l.inputs[["v.MEMLOSS_val"]] <- c(0,1)      # 0 = no memory loss, 1 = memory loss
 l.inputs[["v.COGCON_val"]]  <- c(0,1)      # 0 = no subjective cognitive concerns, 1 = has subjective cognitive concerns
-l.inputs[["v.AB_val"]]      <- c(0,1)      # 0 = no amyloid beta (normal), 1 = has amyloid beta (AD pathology)
-l.inputs[["v.TX_val"]]      <- c(0,1)      # 0 = Tx off / not provided / stopped, 1 = Tx on / provided / active
+l.inputs[["v.TX_val"]]      <- c(0,1)      # 0 = Tx off / not provided / stopped, 1 = Tx on / provided / active (DISEASE-MODIFYING)
+l.inputs[["v.PET_val"]]     <- c(0,1)      # 0 = negative PET scan, 1 = positive PET scan
+l.inputs[["v.NP_val"]]      <- c(0,1)      # 0 = negative neuropsych assessment, 1 = positive neuropsych assessment
+l.inputs[["v.TX2_val"]]     <- c(0,1)      # 0 = no treatment (non-DMT), 1 = given treatment (non-DMT)
+l.inputs[["v.LTC_val"]]  <- c(0,1)      # 0 = not institutionalized / not in long-term care), 1 = institutionalized / in long-term care
+
 
 
 ######################################## 1.1. USER-DEFINED MODEL SETTINGS ########################################
 
 # model settings
-l.inputs[["scenario"]] <- "GRAM natural course of disease" # name of the scenario
 l.inputs[["n.ind"]] <- 10000                               # number of individuals to simulate
 l.inputs[["n.cycle"]] <- 50                                # number of cycles to simulate
 l.inputs[["seed_stochastic"]] <- 20240202                  # seed for generating random values that drive stochastic parameters
@@ -84,11 +88,6 @@ l.inputs[["p.DX_start"]]    <- c(1,0)               # Everyone undiagnosed at st
 l.inputs[["p.SYN_start"]] <- c(1, 0)                # p for SYN == 0 (normal) and SYN == 1 (impaired), respectively
 l.inputs[["p.MEMLOSS_start"]] <- c(1, 0)            # p for MEMLOSS == 0 (no memloss) and MEMLOSS == 1 (memloss), respectively
 l.inputs[["p.SEV_start"]] <- c(1, 0, 0, 0)          # p for MCI, mild dem, moderate dem, severe dem, respectively
-
-l.inputs[["m.cogcon_spon"]] <- readRDS("gram_data/cogcon/m.cogcon_spon.RDS")
-l.inputs[["m.cogcon_elic"]] <- readRDS("gram_data/cogcon/m.cogcon_elic.RDS")
-l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]] %>%
-  mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
 
 l.inputs[["p.MEMLOSS_new"]] <- 0.09   # prob of being non-progressive memory loss for new cognitive impairment
 
@@ -151,19 +150,26 @@ l.inputs[["spec_BHA"]] <- 0.85
 
 
 ## Health state utilities
-l.inputs[["u.healthy"]] <- 0.85 # PLACEHOLDER - do we want to apply age-related decreases to this?
-l.inputs[["u.mci"]] <- 0.73
-l.inputs[["u.mil"]] <- 0.69
-l.inputs[["u.mod"]] <- 0.53
-l.inputs[["u.sev"]] <- 0.38
+# from Table 2 (community-dwelling columns) of https://journals.sagepub.com/doi/full/10.1177/13872877251350381
+l.inputs[["u.healthy"]] <- 0.85 
+l.inputs[["u.mci"]] <- 0.77
+l.inputs[["u.mil"]] <- 0.68
+l.inputs[["u.mod"]] <- 0.49
+l.inputs[["u.sev"]] <- 0.22
 
 ## Costs
-l.inputs[["c.healthy"]] <- 0 # PLACEHOLDER - do we want to apply age-related decreases to this?
-l.inputs[["c.mci"]] <- 13364
-l.inputs[["c.mil"]] <- 26727
-l.inputs[["c.mod"]] <- 31644
-l.inputs[["c.sev"]] <- 40645
-l.inputs[["c.Tx"]] <- 5000
+l.inputs[["c.healthy"]] <- 0 # direct cost of healthy (annual)
+l.inputs[["c.mci"]] <- 13364 # direct cost of MCI (annual; medical + care)
+l.inputs[["c.mil"]] <- 26727 # direct cost of mild dementia (annual; medical + care)
+l.inputs[["c.mod"]] <- 31644 # direct cost moderate dementia (annual; medical + care)
+l.inputs[["c.sev"]] <- 40645 # direct cost of severe dementia (annual; medical + care)
+l.inputs[["c.bha"]] <- 200   # cost of administering the BHA
+l.inputs[["c.bhapos"]] <- 2000   # cost of follow up with patient with positive BHA
+l.inputs[["c.Tx"]] <- 5000   # cost of DMT
+l.inputs[["c.pet"]] <- 500   # cost of administering a PET scan
+l.inputs[["c.np"]] <- 1000  # cost of neuropsych assessment
+l.inputs[["c.Tx2"]] <- 500   # cost of non-DMT treatment
+
 
 ## Treatments
 l.inputs[["rr.Tx_mci"]] <- 0.70
@@ -171,3 +177,33 @@ l.inputs[["Tx_t_max"]] <- 3
 l.inputs[["p.Tx"]] <- c(0,1) # Probability of DMT ineligible, vs. eligible
 l.inputs[["rr.Px_mci"]] <- 1 # Hypothetical -- risk ratio for developing MCI given a prevention intervention (effectiveness of intervention)
 
+## Scenarios
+
+l.inputs[["m.cogcon_spon"]] <- readRDS("gram_data/cogcon/m.cogcon_spon.RDS")
+l.inputs[["m.cogcon_elic"]] <- readRDS("gram_data/cogcon/m.cogcon_elic.RDS")
+l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]] %>%
+  mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
+
+l.inputs[["scenario"]] <- list(
+  scenario = NULL,
+  
+  # Universal BHA eligibility criteria
+  HCARE = 1,    # 1 = requires healthcare provider, 0 = ignore
+  DX = 0,       # 0 = requires no prior diagnosis, 1 = ignore
+  
+  # Core scenario parameters
+  age_first_test = 60,   # age at which first BHA is administered
+  repeat_interval = 1,   # years between BHA administrations
+  stop_rule = function(...) {
+    args <- list(...)
+    FALSE == TRUE   # stop BHA if any prior positive BHA
+  }, 
+  
+  # Optional parameters
+  COGCON = 1,           # TRUE if scenario involves cognitive concerns, else NULL,
+  probs_cogcon = l.inputs[["m.cogcon"]], # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternative scenarios.
+  NP = NULL,               # TRUE if scenario involves NP assessment, else NULL,
+  PET = NULL,              # TRUE if scenario involves PET scan, else NULL,
+  repeat_after_FP = NULL  # Number of years to wait after a detected false positive BHA (i.e., NP is negative)
+  
+)

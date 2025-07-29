@@ -1,8 +1,4 @@
-# ****************************************************************
-# ======= 3. GRAM MAIN FUNCTIONS ======= 
-# ****************************************************************
-
-######################################## 3.1. MAIN FUNCTIONS: RUN MODEL ########################################
+######################################## GRAM MAIN FUNCTIONS: RUN MODEL ########################################
 
 # run model
 f.run <- function(l.inputs, microdata, printLevel) {
@@ -14,102 +10,10 @@ f.run <- function(l.inputs, microdata, printLevel) {
     pb = txtProgressBar(min = 0, max = l.inputs[["n.cycle"]], initial = 0)
   }
   
-  # generate enpty arrays for 1) random values and 2) outputs
-  # with rows (1st dimension) = cycles, columns (2nd dimension) = attributes, 3rd dimension = individuals
-  a.random <- a.out <- array(data = NA, dim = c(l.inputs[["n.cycle"]], l.inputs[["n.attr"]], l.inputs[["n.ind"]]), 
-                             dimnames = list(NULL, l.inputs[["v.attr_names"]], NULL))  
+  init <- f.initialize(l.inputs = l.inputs, microdata = microdata)
+  a.random <- init$a.random
+  a.out <- init$a.out
   
-  set.seed(l.inputs[["seed_stochastic"]])     # set the seed using the earlier defined seed
-  a.random[,,] <- runif(n = length(a.random)) # put random value from uniform distribution in each element of the array
-  
-  # starting values (first cycle)
-  a.out[1,"TIME",]      <- 0
-  a.out[1,"ALIVE",]     <- 1
-  
-  if (!is.null(microdata)) {
-
-    synthetic_pop <- generate_synthetic_sample(microdata, target_size = l.inputs[["n.ind"]], seed = l.inputs[["seed_stochastic"]])
-
-    a.out[1,"AGE",] <- synthetic_pop$AGE
-    a.out[1,"SEX",] <- synthetic_pop$SEX
-    a.out[1,"RACEETH",] <- synthetic_pop$RACEETH
-    a.out[1,"EDU",] <- synthetic_pop$EDUC
-    a.out[1,"INCOME",] <- synthetic_pop$INCOME_CAT
-    a.out[1,"MEDBUR",] <- synthetic_pop$MEDBUR
-    a.out[1,"APOE4",] <- synthetic_pop$APOE4
-    a.out[1,"HCARE",] <- synthetic_pop$INSURANCE * as.numeric(a.random[1,"HCARE",] < l.inputs[["p.HCARE_start"]][2]) 
-  } else {
-    a.out[1,"AGE",]       <- round(qnorm(p = a.random[1,"AGE",], mean = l.inputs[["AGE_start_mean"]], sd = l.inputs[["AGE_start_sd"]]),0)
-    a.out[1,"AGE",][a.out[1,"AGE",]<50] <- 50
-    a.out[1,"AGE",][a.out[1,"AGE",]>99] <- 99
-    a.out[1,"SEX",]       <- f.qcat(p_rand = a.random[1,"SEX",], p_cat = c(l.inputs[["p.SEX_start_male"]], 
-                                                                           l.inputs[["p.SEX_start_female"]]), values = l.inputs[["v.SEX_val"]])
-    a.out[1,"RACEETH",]   <- f.qcat(p_rand = a.random[1,"RACEETH",], p_cat = l.inputs[["p.RACEETH_start"]], values = l.inputs[["v.RACEETH_val"]])
-    
-    a.out[1,"EDU",]       <- case_match(a.out[1,"RACEETH",],
-                                        0 ~ f.qcat(p_rand = a.random[1,"EDU",], 
-                                                   p_cat = c(0.048, 0.274, 0.149, 0.111, 0.261, 0.117, 0.017, 0.023),
-                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)),
-                                        1 ~ f.qcat(p_rand = a.random[1,"EDU",], 
-                                                   p_cat = c(0.095, 0.335, 0.181, 0.110, 0.173, 0.081, 0.010, 0.015),
-                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)),
-                                        2 ~ f.qcat(p_rand = a.random[1,"EDU",], 
-                                                   p_cat = c(0.248, 0.327, 0.130, 0.086, 0.145, 0.047, 0.009, 0.008),
-                                                   values = c(8, 12, 14, 14, 16, 18, 19, 25)))
-    # probs from https://www.equityinhighered.org/indicators/u-s-population-trends-and-educational-attainment/educational-attainment-by-race-and-ethnicity/
-    #  round(qbeta(p = a.random[1,"EDU",], shape1 = 2.24, shape2 = 2.90) * 25, 0)  # assumes max 25 years of education
-    a.out[1,"INCOME",]    <- f.qcat(p_rand = a.random[1,"INCOME",], p_cat = l.inputs[["p.INCOME_start"]], values = l.inputs[["v.INCOME_val"]])
-    
-    tmp_rand <- runif(n = l.inputs[["n.ind"]])
-    tmp_probs_2plus_medbur <- case_when(
-      a.out[1,"EDU",] >= 16 ~ 1,
-      a.out[1,"EDU",] >= 12 ~ 1.32,
-      a.out[1,"EDU",] < 12 ~ 1.58) * 0.531    # See script "calculate_initial_medbur.R"
-    tmp_2plus_medbur <- qbinom(p = tmp_rand, size = 1, prob = tmp_probs_2plus_medbur)
-    
-    prev.no_of_conditions_male <- c(0.155, 0.205, 0.220, 0.175, 0.105, 0.060, 0.045, 0.020, 0.018, 0.005, 0.001)
-    prev.no_of_conditions_female <- c(0.175, 0.205, 0.190, 0.175, 0.140, 0.075, 0.040, 0.018, 0.015, 0.002, 0.002)
-    prev.no_of_conditions <- (prev.no_of_conditions_female + prev.no_of_conditions_male) / 2
-    
-    a.out[1,"MEDBUR",]    <- case_when(
-      tmp_2plus_medbur == 1 ~ f.qcat(p_rand = a.random[1,"MEDBUR",], p_cat = prev.no_of_conditions[3:11]/sum(prev.no_of_conditions[3:11]), values = 2:10),
-      tmp_2plus_medbur == 0 ~ f.qcat(p_rand = a.random[1,"MEDBUR",], p_cat = prev.no_of_conditions[1:2]/sum(prev.no_of_conditions[1:2]), values = 0:1)
-    )
-    
-    # round(qbeta(p = a.random[1,"MEDBUR",], shape1 = 2, shape2 = 18) * max(l.inputs[["v.MEDBUR_val"]]),0)
-    a.out[1,"APOE4",]     <- f.qcat(p_rand = a.random[1,"APOE4",], p_cat = l.inputs[["p.APOE4_start"]], values = l.inputs[["v.APOE4_val"]])
-    a.out[1,"HCARE",]     <- f.qcat(p_rand = a.random[1,"HCARE",], p_cat = l.inputs[["p.HCARE_start"]], values = l.inputs[["v.HCARE_val"]])
-  }
-  
-  a.out[1,"TX",]         <- 0
-  
-  a.out[1,"SYN",]        <- 0   # everyone starts healthy
-  
-  a.out[1,"CDR_track",]  <- case_match(a.out[1,"SYN",],
-                                       0 ~ 0,
-                                       1 ~ 1)
-  a.out[1,"CDRfast_sd1",] <- qnorm(p = a.random[1,"CDRfast_sd1",], mean = 0, sd = l.inputs[["r.CDRfast_sd1"]]) 
-  a.out[1,"CDRslow_sd1",] <- qnorm(p = a.random[1,"CDRslow_sd1",], mean = 0, sd = l.inputs[["r.CDRslow_sd1"]]) 
-  a.out[1,"CDR",]       <- case_match(a.out[1,"SYN",],
-                                      0 ~ 0,
-                                      1 ~ qunif(p = a.random[1,"CDR",], min = l.inputs[["cutoff_CDR"]]["mci"], max = l.inputs[["cutoff_CDR"]]["moderate"]))
-  a.out[1,"MEMLOSS",]   <- case_match(a.out[1,"SYN",],
-                                      0 ~ 0,
-                                      1 ~ f.qcat(p_rand = a.random[1,"MEMLOSS",], p_cat = l.inputs[["p.MEMLOSS_start"]], values = l.inputs[["v.MEMLOSS_val"]]))   # !! when starting with prevalent pop, this will cause a problem as people with dem might get MEMLOSS of 1
-  a.out[1,"SEV",]       <- f.update_SEV(v.SYN = a.out[1,"SYN",], v.CDR = a.out[1,"CDR",], 
-                                        cutoff_CDR = l.inputs[["cutoff_CDR"]], n.alive = l.inputs[["n.ind"]])   # Everyone starts healthy
-  a.out[1,"COGCON",]    <- 0    # Assume no concerns at age 50 when healthy !! TODO: make this dynamic!
-  a.out[1,"BHA",]       <- -9   # Will be assigned as people are tested
-  a.out[1,"CDR_obs",]   <- -9   # CDR-SB observed score -- will be assigned as people are tested
-  a.out[1,"SEV_obs",]   <- -9   # Will be assigned as people are tested
-  
-  a.out[1,"DX",]        <- f.qcat(p_rand = a.random[1,"DX",], p_cat = l.inputs[["p.DX_start"]], values = l.inputs[["v.DX_val"]])
-  a.out[1,"FUN",]       <- 0    # FAQ -- everyone starts with no functional impairment
-  a.out[1,"BEH",]       <- NA   # Currently not in use
-  a.out[1,"INSTIT",]    <- 0    # Currently not in use
-  a.out[1,"QALY",]      <- NA
-  a.out[1,"COST_care",] <- NA
-  a.out[1,"COST_tx",]   <- NA
   
   # update progress bar
   if (printLevel > 1) setTxtProgressBar(pb, 1)
@@ -118,264 +22,38 @@ f.run <- function(l.inputs, microdata, printLevel) {
   for(t in 2:l.inputs[["n.cycle"]]) {
     
     # TIME
-    a.out[t,"TIME",] <- f.update_TIME(
-      v.TIME.lag   = a.out[t-1,"TIME",]
-    )
+    a.out[t,"TIME",] <- a.out[t-1,"TIME",] + 1
+
+    ########## !!!!!!!!!!!!!!! The model is run by updating each attribute in a loop over the cycles (over time). 
+    # At each cycle attributes are updated using the attribute status at the previous cycle or the status at the current cycle. 
+    # Except the first cycle, which is manually put in (i.e., starting values). 
+    # For transparency, no information from other than the previous or current is used. Information from more than 1 cycle ago 
+    #     could be used by tracking the history of an attribute in a separate attribute. For each attribute a function is written to update it. 
+    #     Then, in a loop all functions are called to update their status cycle by cycle. 
     
-    alive.lag <- a.out[t-1,"ALIVE",]==1
-    
-    # ALIVE
-    a.out[t,"ALIVE",alive.lag] <- f.update_ALIVE(
-      alive.lag     = alive.lag,
-      v.AGE.lag     = a.out[t-1,"AGE",alive.lag], 
-      v.SYN.lag     = a.out[t-1,"SYN",alive.lag],
-      v.SEV.lag     = a.out[t-1,"SEV",alive.lag], 
-      random_cycle  = a.random[t,"ALIVE",alive.lag], 
-      m.lifetable   = l.inputs[["m.lifetable"]], 
-      hr.mort_mci   = l.inputs[["hr.mort_mci"]], 
-      hr.mort_mil   = l.inputs[["hr.mort_mil"]], 
-      hr.mort_mod   = l.inputs[["hr.mort_mod"]], 
-      hr.mort_sev   = l.inputs[["hr.mort_sev"]],
-      hr.mort_mci_age   = l.inputs[["hr.mort_mci_age"]],
-      hr.mort_mil_age   = l.inputs[["hr.mort_mil_age"]],
-      hr.mort_mod_age   = l.inputs[["hr.mort_mod_age"]],
-      hr.mort_sev_age   = l.inputs[["hr.mort_sev_age"]]
-    )
-    
-    a.out[t,"ALIVE",!(alive.lag)] <- 0
+    a.out <- f.module_mortality(a.out, t, a.random)
     
     # identify those alive at current observation (to be used for subsetting the other functions 
     #       so they don't have to process the data of the individuals no longer alive)
     alive <- a.out[t,"ALIVE",]==1
+    n.alive <- sum(alive)   # number of individuals alive
     
-    # number of individuals alive
-    n.alive <- sum(alive)
-    
-    # AGE
-    a.out[t,"AGE",alive] <- f.update_AGE(
-      v.AGE.lag    = a.out[t-1,"AGE",alive]
-    )
-    
-    # SEX
-    a.out[t,"SEX",alive] <- f.update_SEX(
-      v.SEX.lag = a.out[t-1,"SEX",alive]
-    )
-    
-    # EDU
-    a.out[t,"EDU",alive] <- f.update_EDU(
-      v.EDU.lag = a.out[t-1,"EDU",alive]
-    )
-    
-    # RACEETH
-    a.out[t,"RACEETH",alive] <- f.update_RACEETH(
-      v.RACEETH.lag = a.out[t-1,"RACEETH",alive]
-    )
-    
-    # INCOME
-    a.out[t,"INCOME",alive] <- f.update_INCOME(
-      v.INCOME.lag = a.out[t-1,"INCOME",alive]
-    )
-    
-    # MEDBUR
-    a.out[t,"MEDBUR",alive] <- f.update_MEDBUR(
-      v.MEDBUR.lag = a.out[t-1,"MEDBUR",alive],
-      v.AGE.lag    = a.out[t-1, "AGE", alive],
-      coef_MEDBUR  = l.inputs[["coef_MEDBUR"]],
-      amplification = l.inputs[["amplification_MEDBUR"]],
-      max_MEDBUR   = max(l.inputs[["v.MEDBUR_val"]]),
-      random_cycle = a.random[t, "MEDBUR", alive],
-      n.alive      = n.alive
-    )
-    
-    # APOE4
-    a.out[t,"APOE4",alive] <- f.update_APOE4(
-      v.APOE4.lag = a.out[t-1,"APOE4",alive]
-    )
-    
-    # HCARE
-    a.out[t,"HCARE",alive] <- f.update_HCARE(
-      v.HCARE.lag  = a.out[t-1,"HCARE",alive],
-      v.AGE        = a.out[t,"AGE",alive],
-      random_cycle = a.random[t,"HCARE",alive]
-    )    
-    
-    # SYN
-    if (t <= l.inputs[["n.cycle"]] - 2) {
-      a.out[t,"SYN",alive] <- f.update_SYN(
-        l.inputs        = l.inputs,
-        v.AGE.tplus2    = a.out[t,"AGE",alive] + 2,
-        v.SEX.lag       = a.out[t-1,"SEX",alive],
-        v.RACEETH.lag   = a.out[t-1,"RACEETH",alive],
-        v.EDU.lag       = a.out[t-1,"EDU",alive],
-        v.APOE4.lag     = a.out[t-1,"APOE4",alive],
-        v.MEDBUR.lag    = a.out[t-1,"MEDBUR",alive],  
-        v.INCOME.lag    = a.out[t-1,"INCOME",alive],
-        v.SYN.lag       = a.out[t-1,"SYN",alive],
-        v.SYN.lag2      = a.out[t-2,"SYN",alive],
-        v.MEMLOSS.lag   = a.out[t-1,"MEMLOSS",alive],
-        random_tplus2   = a.random[t+2,"SYN",alive], 
-        n.alive         = n.alive
-      )} else {
-        a.out[t,"SYN",alive] <- a.out[t-1,"SYN",alive]    # last two cycles no change in syndrome            
-      }
-    
+    a.out <- f.module_socdem(a.out, t, a.random, alive)
 
-    # MEMLOSS 
-    a.out[t,"MEMLOSS",alive] <- f.update_MEMLOSS(
-      v.MEMLOSS.lag = a.out[t-1,"MEMLOSS",alive],
-      v.SYN         = a.out[t,"SYN",alive],
-      v.SYN.lag     = a.out[t-1,"SYN",alive],
-      v.AGE         = a.out[t,"AGE",alive],
-      v.EDU.lag     = a.out[t-1,"EDU",alive],
-      v.SEX.lag     = a.out[t-1,"SEX",alive],
-      v.RACEETH.lag = a.out[t-1,"RACEETH",alive],
-      v.APOE4.lag   = a.out[t-1,"APOE4",alive],
-      v.MEDBUR.lag  = a.out[t-1,"MEDBUR",alive],
-      v.INCOME.lag  = a.out[t-1,"INCOME",alive],
-      l.inputs      = l.inputs,
-      p.MEMLOSS_new = l.inputs[["p.MEMLOSS_new"]],
-      random_cycle  = a.random[t,"MEMLOSS",alive],
-      n.alive       = n.alive 
-    )
+    a.out <- f.module_true_health(a.out, t, a.random, alive, n.alive)
     
-    # CDR_track
-    a.out[t,"CDR_track",alive] <- f.update_CDR_track(
-      v.SEV.lag        = a.out[t-1,"SEV",alive],
-      n.alive          = n.alive
-    )
-    
-    # CDRfast_sd1, CDRslow_sd1
-    a.out[t,"CDRfast_sd1",alive] <- a.out[t-1,"CDRfast_sd1",alive]
-    a.out[t,"CDRslow_sd1",alive] <- a.out[t-1,"CDRslow_sd1",alive]
-    
-    if (length(l.inputs[["r.CDRfast_mean"]]) > 1) {
-      r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]][t]
-    } else {
-      r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]]
-    }
-    
-    if (length(l.inputs[["r.CDRslow_mean"]]) > 1) {
-      r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]][t]
-    } else {
-      r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]]
-    }
-    
-    # CDR (true)
-    a.out[t,"CDR",alive] <- f.update_CDR(
-      v.SYN            = a.out[t,"SYN",alive],
-      v.SYN.lag        = a.out[t-1,"SYN",alive],
-      v.MEMLOSS.lag    = a.out[t-1,"MEMLOSS",alive],
-      cutoff_CDR       = l.inputs[["cutoff_CDR"]],
-      v.CDR.lag        = a.out[t-1,"CDR",alive], 
-      r.CDRfast_mean   = r.CDRfast_mean,
-      r.CDRslow_mean   = r.CDRslow_mean,
-      v.CDR_track      = a.out[t,"CDR_track",alive],
-      v.CDRfast_sd1    = a.out[t,"CDRfast_sd1",alive],
-      v.CDRslow_sd1    = a.out[t,"CDRslow_sd1",alive],
-      r.CDR_sd2        = l.inputs[["r.CDR_sd2"]],
-      v.TX.lag         = a.out[t-1,"TX",alive],
-      rr.Tx_mci        = l.inputs[["rr.Tx_mci"]],
-      random_cycle     = a.random[t,"CDR",alive],
-      n.alive          = n.alive
-    )
-    
-    # SEV (true)
-    a.out[t,"SEV",alive] <- f.update_SEV(
-      v.SYN          = a.out[t,"SYN",alive],
-      v.CDR          = a.out[t,"CDR",alive],
-      cutoff_CDR     = l.inputs[["cutoff_CDR"]],
-      n.alive        = n.alive
-    )
-    
-    # COGCON
-    a.out[t,"COGCON",alive] <- f.update_COGCON(
-      v.AGE            = a.out[t,"AGE",alive],
-      v.SYN            = a.out[t,"SYN",alive],
-      v.SEV            = a.out[t,"SEV",alive],
-      m.cogcon         = l.inputs[["m.cogcon"]],
-      v.DX.lag         = a.out[t-1,"DX",alive],
-      random_cycle     = a.random[t,"COGCON",alive],
-      n.alive          = n.alive
-    )
-    
-    # BHA
-    a.out[t,"BHA",alive] <- f.update_BHA(
-      v.HCARE          = a.out[t,"HCARE",alive],
-      v.DX.lag         = a.out[t-1,"DX",alive],
-      v.COGCON         = a.out[t,"COGCON",alive],
-      v.SYN            = a.out[t,"SYN",alive],
-      v.SEV            = a.out[t,"SEV",alive],
-      v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
-      sens_BHA         = l.inputs[["sens_BHA"]],
-      spec_BHA         = l.inputs[["spec_BHA"]],
-      random_cycle     = a.random[t,"BHA",alive],
-      n.alive          = n.alive
-    )
-    
-    # CDR_obs
-    a.out[t,"CDR_obs",alive] <- f.update_CDR_obs(
-      v.BHA            = a.out[t,"BHA",alive],
-      v.CDR       = a.out[t,"CDR",alive],
-      r.CDR_sd3        = l.inputs[["r.CDR_sd3"]],
-      random_cycle     = a.random[t,"CDR_obs",alive],
-      n.alive          = n.alive
-    )
-    
-    # SEV_obs
-    a.out[t,"SEV_obs",alive] <- f.update_SEV_obs(
-      v.CDR_obs     = a.out[t,"CDR_obs",alive],
-      cutoff_CDR     = l.inputs[["cutoff_CDR"]],
-      n.alive        = n.alive
-    ) 
-    
-    
-    # DX
-    a.out[t,"DX",alive] <- f.update_DX(
-      v.DX.lag       = a.out[t-1,"DX",alive],
-      v.SYN          = a.out[t,"SYN",alive], 
-      v.SEV          = a.out[t,"SEV",alive], 
-      v.HCARE        = a.out[t,"HCARE",alive],
-      random_cycle   = a.random[t,"DX",alive], 
-      n.alive        = n.alive
-    ) 
-    
-    
-    # FAQ 
-    
-    
-    
-    # TX
-    
-    Tx_counter <- a.out[t-1,"TX",]
-    
-    a.out[t,"TX",alive] <- f.update_TX(
-      v.SEV_obs            = a.out[t,"SEV_obs",alive], 
-      v.SEV_obs.lag        = a.out[t-1,"SEV_obs",alive],
-      Tx_counter           = Tx_counter[alive],
-      v.TX.lag             = a.out[t-1,"TX",alive], 
-      n.alive              = n.alive, 
-      random_cycle         = a.random[t,"TX",alive], 
-      Tx_t_max             = l.inputs[["Tx_t_max"]], 
-      p.Tx                 = l.inputs[["p.Tx"]], 
-      Tx                   = l.inputs[["Tx"]]
-    )
-    
-    Tx_counter[alive] <- Tx_counter[alive] + a.out[t,"TX",alive]
-    
-    
+    a.out <- f.module_medical_record(a.out, t, a.random, alive, n.alive)
+
+    a.out <- f.module_treatment(a.out, t, a.random, alive, n.alive)
+      
     # update progress bar
     if (printLevel > 1) setTxtProgressBar(pb, t)
     
   }
   
-  # Convert all non-observed values to NA
-  # a.out[a.out == -9] <- NA
-  
   # The "round(score*2)/2" ensures that scores are increments of 0.5 
-  a.out[,"CDR",] <- round(a.out[,"CDR",] * 2) / 2
-  a.out[,"CDR_obs",] <- round(a.out[,"CDR_obs",] * 2) / 2
-  
-  
+  a.out[,"CDR",] <- ifelse(a.out[,"CDR",] >= 0.5, (round(a.out[,"CDR",] * 2) / 2), 0)
+  a.out[,"CDR_obs",] <- ifelse(a.out[,"CDR",] >= 0.5, (round(a.out[,"CDR_obs",] * 2) / 2), 0)
   
   # run time
   if (printLevel >1 ) {
@@ -387,9 +65,6 @@ f.run <- function(l.inputs, microdata, printLevel) {
   return(a.out)
   
 }
-
-######################################## 3.2. MAIN FUNCTIONS: GENERATE RESULTS ########################################
-
 
 # apply QALYs and costs
 f.qaly_cost <- function(a.out, l.inputs) {
@@ -406,9 +81,25 @@ f.qaly_cost <- function(a.out, l.inputs) {
   QALY2[is.na(QALY2)] <- 0
   QALY3[is.na(QALY3)] <- 0
   
-  # COST: treatment
+  # COST: BHA
+  COST_test <- as.numeric(a.out[,"BHA",]!=-9) * l.inputs[["c.bha"]] + as.numeric(a.out[,"BHA",] == 1) * l.inputs[["c.bhapos"]]
+  COST_test[is.na(COST_test)] <- 0
+  
+  # COST: PET
+  COST_pet <- as.numeric(a.out[,"PET",]) * l.inputs[["c.pet"]]
+  COST_pet[is.na(COST_pet)] <- 0
+  
+  # COST: NP Assessment
+  COST_np <- as.numeric(a.out[,"NP",]) * l.inputs[["c.np"]]
+  COST_np[is.na(COST_np)] <- 0
+  
+  # COST: treatment (DMT)
   COST_tx <- as.numeric(a.out[,"TX",]) * l.inputs[["c.Tx"]]
   COST_tx[is.na(COST_tx)] <- 0
+  
+  # COST: treatment (non-DMT)
+  COST_tx2 <- as.numeric(a.out[,"TX2",]) * l.inputs[["c.Tx2"]]
+  COST_tx2[is.na(COST_tx2)] <- 0
   
   # COST: care
   COST_care0 <- as.numeric(a.out[,"ALIVE",] & a.out[,"SYN",]==0) * l.inputs[["c.healthy"]]
@@ -422,9 +113,10 @@ f.qaly_cost <- function(a.out, l.inputs) {
   
   # store
   a.out[,"QALY",] <- QALY0 + QALY1 + QALY2 + QALY3
-  # a.out[,"COST_test",] <- NA
+  a.out[,"COST_test",] <- COST_test
+  a.out[,"COST_fu",] <- COST_pet + COST_np
   a.out[,"COST_tx",] <- COST_tx
-  # a.out[,"COST_fu",] <- NA
+  a.out[,"COST_tx2"] <- COST_tx2
   a.out[,"COST_care",] <- COST_care0 + COST_care1 + COST_care2
   
   # return
@@ -539,7 +231,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
     # Average time overall
     result_matrix1[nrow(result_matrix1), sev + 1] <- round(mean(time_in_state[time_in_state > 0], na.rm = TRUE), digits = 2)
     result_matrix2[nrow(result_matrix2), sev + 1] <- round(mean(time_in_state_censored[time_in_state_censored > 0], na.rm = TRUE), digits = 2)
-
+    
   }
   
   time_in_dem <- colSums(a.out[,"SEV",] > 0, na.rm = TRUE)
@@ -703,10 +395,10 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["QALY.dis.sum"]] <- sum(l.out[["QALY.dis"]])
   
   # COST_test
-  # l.out[["COST_test"]] <- as.matrix(apply(X = a.out[,"COST_test",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  # l.out[["COST_test.sum"]] <- sum(l.out[["COST_test"]])
-  # l.out[["COST_test.dis"]] <- as.matrix(f.discount(x = l.out[["COST_test"]], discount_rate = l.inputs[["r.discount_COST"]], n.cycle = l.inputs[["n.cycle"]]))
-  # l.out[["COST_test.dis.sum"]] <- sum(l.out[["COST_test.dis"]])
+  l.out[["COST_test"]] <- as.matrix(apply(X = a.out[,"COST_test",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["COST_test.sum"]] <- sum(l.out[["COST_test"]])
+  l.out[["COST_test.dis"]] <- as.matrix(f.discount(x = l.out[["COST_test"]], discount_rate = l.inputs[["r.discount_COST"]], n.cycle = l.inputs[["n.cycle"]]))
+  l.out[["COST_test.dis.sum"]] <- sum(l.out[["COST_test.dis"]])
   
   # COST_tx
   l.out[["COST_tx"]] <- as.matrix(apply(X = a.out[,"COST_tx",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
@@ -715,11 +407,11 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["COST_tx.dis.sum"]] <- sum(l.out[["COST_tx.dis"]])
   
   # COST_fu
-  # l.out[["COST_fu"]] <- as.matrix(apply(X = a.out[,"COST_fu",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  # l.out[["COST_fu.sum"]] <- sum(l.out[["COST_fu"]])
-  # l.out[["COST_fu.dis"]] <- as.matrix(f.discount(x = l.out[["COST_fu"]], discount_rate = l.inputs[["r.discount_COST"]], n.cycle = l.inputs[["n.cycle"]]))
-  # l.out[["COST_fu.dis.sum"]] <- sum(l.out[["COST_fu.dis"]])
-  # 
+  l.out[["COST_fu"]] <- as.matrix(apply(X = a.out[,"COST_fu",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+  l.out[["COST_fu.sum"]] <- sum(l.out[["COST_fu"]])
+  l.out[["COST_fu.dis"]] <- as.matrix(f.discount(x = l.out[["COST_fu"]], discount_rate = l.inputs[["r.discount_COST"]], n.cycle = l.inputs[["n.cycle"]]))
+  l.out[["COST_fu.dis.sum"]] <- sum(l.out[["COST_fu.dis"]])
+  
   # COST_care
   l.out[["COST_care"]] <- as.matrix(apply(X = a.out[,"COST_care",], MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["COST_care.sum"]] <- sum(l.out[["COST_care"]])
@@ -827,93 +519,5 @@ f.out_aggregate <- function(a.out, l.inputs) {
   # return
   return(l.out)
   
-}
-
-# run strategies and incremental outcomes
-f.out_summary <- function(l.inputs1, l.inputs2, printLevel = 0) {
-  
-  # strategy 1
-  l.inputs_strat1 <- l.inputs1
-  # l.inputs_strat1[["strategy"]] <- l.inputs[["strategy_strat1"]]
-  # l.inputs_strat1[["Tx"]] <- l.inputs[["Tx_strat1"]]
-  a.out_strat1 <- f.run(l.inputs = l.inputs_strat1, printLevel = printLevel)
-  a.out_qc_strat1 <- f.qaly_cost(a.out = a.out_strat1, l.inputs = l.inputs_strat1)
-  out_strat1 <- f.out_aggregate(a.out = a.out_qc_strat1, l.inputs = l.inputs_strat1)
-  fig_strat1 <- f.make_figures(l.out = out_strat1, l.inputs = l.inputs1)
-  
-  
-  # strategy 2
-  l.inputs_strat2 <- l.inputs2
-  # l.inputs_strat2[["strategy"]] <- l.inputs[["strategy_strat2"]]
-  # l.inputs_strat2[["Tx"]] <- l.inputs[["Tx_strat2"]]
-  a.out_strat2 <- f.run(l.inputs = l.inputs_strat2, printLevel = printLevel)
-  a.out_qc_strat2 <- f.qaly_cost(a.out = a.out_strat2, l.inputs = l.inputs_strat2)
-  out_strat2 <- f.out_aggregate(a.out = a.out_qc_strat2, l.inputs = l.inputs_strat2)
-  fig_strat2 <- f.make_figures(l.out = out_strat2, l.inputs = l.inputs2)
-  
-  # summary outcomes
-  m.out <- matrix(
-    data = NA,
-    nrow = 5,
-    ncol = ncol(out_strat1[["table_sum"]]),
-    dimnames = list( c("strategy 1 (cau)","strategy 2 (dmt)","strategy 3 (symptomatic)","incr. strategy 2-1","incr. strategy 3-1"), colnames(out_strat1[["table_sum"]]) )
-  )
-  m.out[1,] <- out_strat1[["table_sum"]]
-  m.out[2,] <- out_strat2[["table_sum"]]
-  
-  m.out[4,] <- m.out[2,] - m.out[1,]
-  m.out[5,] <- m.out[3,] - m.out[1,]
-  m.out <- cbind(m.out, ICER = NA, ICER.dis = NA)
-  m.out[4,"ICER"] <- (m.out[2,"COST_tot.sum"    ] - m.out[1,"COST_tot.sum"    ]) / (m.out[2,"QALY.sum"    ] - m.out[1,"QALY.sum"    ])
-  m.out[4,"ICER.dis"] <- (m.out[2,"COST_tot.dis.sum"] - m.out[1,"COST_tot.dis.sum"]) / (m.out[2,"QALY.dis.sum"] - m.out[1,"QALY.dis.sum"])
-  
-  return(list(
-    l.inputs1 = l.inputs1,
-    l.inputs2 = l.inputs2,
-    a.out_strat1 = a.out_strat1, a.out_strat2 = a.out_strat2,
-    a.out_qc_strat1 = a.out_qc_strat1, a.out_qc_strat2 = a.out_qc_strat2,
-    out_strat1 = out_strat1, out_strat2 = out_strat2,
-    fig_strat1 = fig_strat1, fig_strat2 = fig_strat2,
-    m.out = m.out
-  ))
-  
-}
-
-
-
-######################################## 3.3. MAIN FUNCTIONS: WRAPPER  ########################################
-
-f.wrap_run <- function(l.inputs, microdata = NULL, printLevel = 0) {
-  
-  
-  output <- f.run(l.inputs = l.inputs, microdata = microdata, printLevel = printLevel)
-  
-  # Aggregate results for full cohort
-  aggregated_results_totpop <- f.out_aggregate(a.out = output, l.inputs = l.inputs)
-  fig.progression <- f.make_figures(l.out = aggregated_results_totpop, l.inputs = l.inputs)
-  
-  # # Aggregate results for those who develop MCI at any point
-  # impaired <- apply(output[,"SYN",], 2, function(x) any(x == 1, na.rm = TRUE))
-  # output_impaired <- output[,,impaired]
-  # aggregated_results_impaired <- f.out_aggregate(a.out = output_impaired, l.inputs = l.inputs)
-  # figures_impaired <- f.figures(l.out = aggregated_results_impaired, l.inputs = l.inputs)
-  # 
-  # # Aggregate results for only DMT eligibles
-  # treated <- apply(output[,"TX",], 2, function(x) any(x == 1, na.rm = TRUE))
-  # output_treated <- output[,,treated]
-  # aggregated_results_treated <- f.out_aggregate(a.out = output_treated, l.inputs = l.inputs)
-  # figures_treated <- f.figures(l.out = aggregated_results_treated, l.inputs = l.inputs)
-  # 
-  return(list(
-    output = output,
-    aggregated_results_totpop = aggregated_results_totpop,
-    fig.progression = fig.progression
-    # ,
-    # aggregated_results_impaired = aggregated_results_impaired,
-    # figures_impaired = figures_impaired,
-    # aggregated_results_treated = aggregated_results_treated,
-    # figures_treated = figures_treated
-  )
-  )
 }
 

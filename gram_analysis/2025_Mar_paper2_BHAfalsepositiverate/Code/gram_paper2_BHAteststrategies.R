@@ -87,7 +87,6 @@ scenario1c <- f.wrap_run(l.inputs1c, microdata = sample1)
 compute_results <- function(inputs, scenario) {
   map_dfr(50:100, function(age) {
     testperf <- f.analyze_test_performance(scenario, age - 50 + 1)
-    
     tibble(
       Scenario = inputs[["scenario"]],
       Age = age,
