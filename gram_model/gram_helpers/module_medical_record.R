@@ -2,7 +2,7 @@
 # This section defines the functions for updating known/observed health status variables (cognitive tests, neuropsychiatric assessments etc)
 
 #### Module Wrapper ####
-f.module_medical_record <- function(a.out, t, a.random, alive, n.alive) {
+f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   
   # COGCON
   a.out[t,"COGCON",alive] <- f.update_COGCON(

@@ -1,7 +1,7 @@
 ######################################## GRAM MODULE: MORTALITY ########################################
 # This section defines the functions for updating mortality and alive status variables.
 
-f.module_mortality <- function(a.out, t, a.random) {
+f.module_mortality <- function(l.inputs, a.out, t, a.random) {
   
   alive.lag <- a.out[t-1,"ALIVE",]==1
   

@@ -2,7 +2,7 @@
 # This section defines the functions for updating treatment and dementia care variables.
 
 #### Module Wrapper ####
-f.module_treatment <- function(a.out, t, a.random, alive, n.alive) {
+f.module_treatment <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   
   # TX2
   a.out[t,"TX2",alive] <- f.update_TX2(

@@ -2,7 +2,7 @@
 # This section defines the functions for updating health status variables.
 
 #### Module Wrapper ####
-f.module_true_health <- function(a.out, t, a.random, alive, n.alive) {
+f.module_true_health <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   
   # MEDBUR
   a.out[t,"MEDBUR",alive] <- f.update_MEDBUR(
@@ -98,6 +98,7 @@ f.module_true_health <- function(a.out, t, a.random, alive, n.alive) {
     random_cycle     = a.random[t,"CDR",alive],
     n.alive          = n.alive
   )
+
   
   # SEV (true)
   a.out[t,"SEV",alive] <- f.update_SEV(
@@ -259,7 +260,7 @@ f.update_SEV <- function(v.SYN, v.CDR, cutoff_CDR, n.alive) {
   sev[v.SYN == 1 & between(v.CDR, cutoff_CDR["mild"], cutoff_CDR["moderate"])] <- 1
   sev[v.SYN == 1 & between(v.CDR, cutoff_CDR["moderate"], cutoff_CDR["severe"])]<- 2
   sev[v.SYN == 1 & v.CDR >= cutoff_CDR["severe"]] <- 3
-  
+
   return(sev)
 }
 

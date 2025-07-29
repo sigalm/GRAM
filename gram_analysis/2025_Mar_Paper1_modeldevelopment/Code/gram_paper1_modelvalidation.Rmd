@@ -20,7 +20,7 @@ sample1 <- readRDS("gram_data/acs_data/acs_age50.rds")
 ```{r inputs}
 l.inputs1 <- l.inputs
 l.inputs1[["n.cycle"]] <- 51
-l.inputs1[["n.ind"]] <- 5000
+l.inputs1[["n.ind"]] <- 100000
 l.inputs1[["p.HCARE_start"]] <- c(0.25,0.75)
 l.inputs1[["hr.mort_mci_age"]] <- c(1, 1, 1)
 l.inputs1[["hr.mort_mod_age"]] <- l.inputs1[["hr.mort_sev_age"]] <- c(1, 1, 1)
@@ -79,7 +79,7 @@ figure2 <- compare_prevalence(sim_calib$sim, description = "", n = l.inputs1["n.
 figure2 <- figure2$fig_prev_by_age + 
   labs(title = NULL, subtitle = NULL) + 
   xlim(NA,96) + 
-  ylim(NA, 0.5)
+  ylim(NA, .5)
 figure2
 ggsave("../Figures/figure2.pdf", plot = figure2, 
        width = 10, height = 6, dpi = 300)

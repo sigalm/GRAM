@@ -2,7 +2,7 @@
 # This section defines the functions for updating sociodemographic attributes.
 
 #### Module Wrapper ####
-f.module_socdem <- function(a.out, t, a.random, alive) {
+f.module_socdem <- function(l.inputs, a.out, t, a.random, alive) {
   
   # AGE
   a.out[t,"AGE",alive] <- f.update_AGE(

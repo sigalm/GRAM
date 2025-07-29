@@ -21,6 +21,8 @@ f.run <- function(l.inputs, microdata, printLevel) {
   # run subsequent cycles
   for(t in 2:l.inputs[["n.cycle"]]) {
     
+    gc()  # garbage collection (otherwise running into memory issues with large n's)
+    
     # TIME
     a.out[t,"TIME",] <- a.out[t-1,"TIME",] + 1
 
@@ -31,20 +33,20 @@ f.run <- function(l.inputs, microdata, printLevel) {
     #     could be used by tracking the history of an attribute in a separate attribute. For each attribute a function is written to update it. 
     #     Then, in a loop all functions are called to update their status cycle by cycle. 
     
-    a.out <- f.module_mortality(a.out, t, a.random)
+    a.out <- f.module_mortality(l.inputs, a.out, t, a.random)
     
     # identify those alive at current observation (to be used for subsetting the other functions 
     #       so they don't have to process the data of the individuals no longer alive)
     alive <- a.out[t,"ALIVE",]==1
     n.alive <- sum(alive)   # number of individuals alive
     
-    a.out <- f.module_socdem(a.out, t, a.random, alive)
+    a.out <- f.module_socdem(l.inputs, a.out, t, a.random, alive)
 
-    a.out <- f.module_true_health(a.out, t, a.random, alive, n.alive)
+    a.out <- f.module_true_health(l.inputs, a.out, t, a.random, alive, n.alive)
     
-    a.out <- f.module_medical_record(a.out, t, a.random, alive, n.alive)
+    a.out <- f.module_medical_record(l.inputs, a.out, t, a.random, alive, n.alive)
 
-    a.out <- f.module_treatment(a.out, t, a.random, alive, n.alive)
+    a.out <- f.module_treatment(l.inputs, a.out, t, a.random, alive, n.alive)
       
     # update progress bar
     if (printLevel > 1) setTxtProgressBar(pb, t)
