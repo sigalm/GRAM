@@ -30,10 +30,6 @@ l.inputs1[["r.CDRslow_mean"]] <-
   (seq(0, 1, length.out = 51)^1.5) * (1.5 * l.inputs[["r.CDRslow_mean"]])
 l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 2.2 /4
 
-l.inputs1[["scenario"]][["stop_rule"]] <- function(...) {
-    args <- list(...)
-    args$v.any_BHA_positive == TRUE   # stop BHA if any prior positive BHA
-  }
 
 
 ```

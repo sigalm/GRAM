@@ -96,6 +96,7 @@ f.initialize <- function(l.inputs, microdata) {
   a.out[1,"SEV_obs",]   <- -9   # will be assigned as people are tested
   
   a.out[1,"DX",]        <- f.qcat(p_rand = a.random[1,"DX",], p_cat = l.inputs[["p.DX_start"]], values = l.inputs[["v.DX_val"]])
+  a.out[1,"PCP",]       <- NA
   a.out[1,"PET",]       <- NA   
   a.out[1,"NP",]        <- NA   
   a.out[1,"TX2",]       <- 0    # no one is on treatment at start

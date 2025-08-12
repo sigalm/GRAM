@@ -24,8 +24,9 @@ l.inputs <- vector(mode = "list", length = 0)
 l.inputs[["v.attr_names"]] <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCOME","MEDBUR","APOE4","HCARE",
                                 "DX","TX","TCI","SYN","COGCON","BHA","any_BHA_pos","last_BHA_age",
                                 "CDR_track","CDR", "MEMLOSS","SEV",
-                                "CDRfast_sd1","CDRslow_sd1","CDR_obs","SEV_obs","PET",
-                                "NP","TX2","LTC","QALY","COST_test","COST_fu","COST_tx2","COST_care","COST_tx")
+                                "CDRfast_sd1","CDRslow_sd1","CDR_obs","SEV_obs",
+                                "PCP","PET","NP",
+                                "TX2","LTC","QALY","COST_test","COST_fu","COST_tx2","COST_care","COST_tx")
 l.inputs[["n.attr"]] <- length(l.inputs[["v.attr_names"]])    # number of attributes
 
 # define or describe possible attribute values
@@ -147,6 +148,13 @@ l.inputs[["r.CDR_sd3"]] <- 0                           # rater error (inter-rate
 # Source: Possin 2018, MCI due to AD vs. control
 l.inputs[["sens_BHA"]] <- c(0.50, 0.54, 0.72, 1.00)  # sens[1] for prodromal CI, sens[2] for memory loss (assumed), sens[3] for MCI, sens[4] for dem
 l.inputs[["spec_BHA"]] <- 0.85
+l.inputs[["sens_PCP"]] <- 0.56
+l.inputs[["spec_PCP"]] <- 0.89
+l.inputs[["rr_PCP_BHA"]] <- c("sens_BHApos" = 2,      # if you have CI and positive BHA, overall sensitivity will be 2-fold of PCP alone (PCP very likely to agree)
+                              "spec_BHApos" = 0.50,   # if you don't have CI but have positive BHA, specificity will be 50% of PCP alone (PCP somewhat likely to be misled)
+                              "sens_BHAneg" = 0.50,   # if you have CI but negative BHA, overall sensitivity will be sensitivity will be 50% of PCP alone (PCP somewhat likely to be misled)
+                              "spec_BHAneg" = 2)      # if you don't have CI and have negative BHA, overall specificity will be 2-fold of PCP alone (PCP very likely to agree) 
+
 
 
 ## Health state utilities
@@ -184,26 +192,13 @@ l.inputs[["m.cogcon_elic"]] <- readRDS("gram_data/cogcon/m.cogcon_elic.RDS")
 l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]] %>%
   mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
 
+l.inputs[["rr.cogcon_prior"]] <- 2    # risk ratio for reporting cognitive concerns if concerns were reported in previous cycle (only acts on t-1)
+
 l.inputs[["scenario"]] <- list(
-  scenario = NULL,
-  
-  # Universal BHA eligibility criteria
-  HCARE = 1,    # 1 = requires healthcare provider, 0 = ignore
-  DX = 0,       # 0 = requires no prior diagnosis, 1 = ignore
+  title       = "Natural progression model - US",
+  description = "Natural progression of cognitive impairment, no intervention, US",
   
   # Core scenario parameters
-  age_first_test = 60,   # age at which first BHA is administered
-  repeat_interval = 1,   # years between BHA administrations
-  stop_rule = function(...) {
-    args <- list(...)
-    FALSE == TRUE   # stop BHA if any prior positive BHA
-  }, 
-  
-  # Optional parameters
-  COGCON = 1,           # TRUE if scenario involves cognitive concerns, else NULL,
-  probs_cogcon = l.inputs[["m.cogcon"]], # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternative scenarios.
-  NP = NULL,               # TRUE if scenario involves NP assessment, else NULL,
-  PET = NULL,              # TRUE if scenario involves PET scan, else NULL,
-  repeat_after_FP = NULL  # Number of years to wait after a detected false positive BHA (i.e., NP is negative)
+  test            = FALSE
   
 )

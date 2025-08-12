@@ -287,25 +287,29 @@ f.out_aggregate <- function(a.out, l.inputs) {
   rowSums(l.out[["state_trace_obs"]])
   
   # correct/incorrect detection
-  l.out[["state_concordance"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 13,
-                                         dimnames = list(NULL, c("h_NA","h_neg","h_pos",
+  l.out[["state_concordance"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 14,
+                                         dimnames = list(NULL, c("eligible","h_NA","h_neg","h_pos",
                                                                  "tci_NA", "tci_neg","tci_pos",
                                                                  "mci_NA","mci_neg","mci_pos",
                                                                  "dem_NA","dem_neg","dem_pos",
                                                                  "dth")))
-  l.out[["state_concordance"]][,"h_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"h_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"h_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"tci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"tci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"tci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"mci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==-9, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dem_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
-  l.out[["state_concordance"]][,"dth"] <- as.matrix(apply(X = a.out[,"ALIVE",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
+
+  # eligible <- matrix(FALSE, nrow = l.inputs[["n.cycle"]], ncol = n)
+  # eligible[2:l.inputs[["n.cycle"]], ] <- (a.out[2:l.inputs[["n.cycle"]], "HCARE", ] == 1) & (a.out[1:(l.inputs[["n.cycle"]]-1), "DX", ] == 0)
+  # l.out[["state_concordance"]][,"eligible"] <- as.matrix(apply(X = eligible, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"h_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==-8, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"h_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"h_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"tci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==-8, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"tci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"tci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0.5 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"mci_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==-8, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"mci_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"mci_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"dem_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==-8, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"dem_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"dem_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==1 & a.out[,"SEV",]>=1 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  l.out[["state_concordance"]][,"dth"] <- as.matrix(apply(X = a.out[,"ALIVE",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   rowSums(l.out[["state_concordance"]])
   
   
