@@ -4,7 +4,11 @@ scenario_inputs <- list(
   
   title       = as.factor("R1BHAPOS"),
   description = "Repeat BHA whenever concerns are brought up, until first positive result",
-  test        = TRUE,                 # BHA test is on
+
+  # Test parameters
+  test        = "BHA-CS", 
+  sensitivity = l.inputs[["sens_BHACS"]], 
+  specificity = l.inputs[["spec_BHACS"]],
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore

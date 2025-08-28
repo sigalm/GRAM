@@ -4,7 +4,11 @@ scenario_inputs <- list(
   
   title       = as.factor("R1"),
   description = "Repeat BHA when concerns are brought up regardless of test history",
-  test        = TRUE,                 # BHA test is on
+  
+  # Test parameters
+  test        = "BHA-CS", 
+  sensitivity = l.inputs[["sens_BHACS"]], 
+  specificity = l.inputs[["spec_BHACS"]],
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
@@ -13,8 +17,6 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 60,                   # age at which first BHA is administered
   probs_cogcon = l.inputs[["m.cogcon_spon"]],  # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternatives.
-  
-  # Initiation parameters
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters

@@ -21,7 +21,7 @@ f.run <- function(l.inputs, microdata, printLevel) {
   # run subsequent cycles
   for(t in 2:l.inputs[["n.cycle"]]) {
     
-    gc()  # garbage collection (otherwise running into memory issues with large n's)
+    invisible(gc())  # garbage collection (otherwise running into memory issues with large n's)
     
     # TIME
     a.out[t,"TIME",] <- a.out[t-1,"TIME",] + 1

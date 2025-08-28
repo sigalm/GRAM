@@ -4,7 +4,11 @@ scenario_inputs <- list(
   
   title       = as.factor("U1PCPPOS"),
   description = "Repeat BHA every year regardless of cognitive concern until a PCP diagnosis",
-  test        = TRUE,                 # BHA test is on
+
+  # Test parameters
+  test        = "BHA-CS", 
+  sensitivity <- l.inputs[["sens_BHACS"]], 
+  specificity <- l.inputs[["spec_BHACS"]],
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
@@ -13,8 +17,6 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 60,                   # age at which first BHA is administered
   probs_cogcon = l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternatives.
-  
-  # Initiation parameters
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters

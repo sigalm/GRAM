@@ -32,8 +32,6 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.SYN            = a.out[t,"SYN",alive],
     v.SEV            = a.out[t,"SEV",alive],
     v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
-    sens_BHA         = l.inputs[["sens_BHA"]],
-    spec_BHA         = l.inputs[["spec_BHA"]],
     random_cycle     = a.random[t,"BHA",alive],
     n.alive          = n.alive,
     v.any_BHA_pos    = a.out[t-1,"any_BHA_pos",alive],
@@ -107,7 +105,7 @@ f.update_COGCON <- function(scenario, v.AGE, v.SYN, v.SEV, v.COGCON.lag, rr.cogc
   
   cogcon <- rep(-9, n.alive)
   
-  if(scenario[["test"]] == TRUE) {
+  if(!is.null(scenario[["test"]])) {
     
     select_col <- case_when(
       v.SYN < 1 ~ 2,
@@ -132,12 +130,12 @@ f.update_COGCON <- function(scenario, v.AGE, v.SYN, v.SEV, v.COGCON.lag, rr.cogc
 
 
 f.update_BHA <- function(scenario, v.HCARE, v.DX.lag, v.COGCON, v.AGE, v.last_BHA_age, v.BHA.lag, 
-                         v.NP.lag = NULL, v.PET.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, sens_BHA, spec_BHA, random_cycle, n.alive, 
+                         v.NP.lag = NULL, v.PET.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive, 
                          v.any_BHA_pos, v.last_FP_age, v.PCP.lag) {
   
   bha <- rep(-9, n.alive)
   
-  if(scenario[["test"]] == TRUE) {
+  if(!is.null(scenario[["test"]])) {
     
     # universally eligible for assessment
     assess <- (v.HCARE == scenario$HCARE) & (v.DX.lag == scenario$DX)
@@ -176,11 +174,12 @@ f.update_BHA <- function(scenario, v.HCARE, v.DX.lag, v.COGCON, v.AGE, v.last_BH
     
     if(any(eligible)) {
       bha[eligible] <- case_when(
-        v.SYN[eligible] == 0      ~ as.numeric((1 - spec_BHA) > random_cycle[eligible]),
-        v.SYN[eligible] == 0.5    ~ as.numeric(sens_BHA[1] > random_cycle[eligible]),
-        v.MEMLOSS[eligible] == 1  ~ as.numeric(sens_BHA[2] > random_cycle[eligible]),
-        v.SEV[eligible] == 0      ~ as.numeric(sens_BHA[3] > random_cycle[eligible]),
-        v.SEV[eligible] >= 1      ~ as.numeric(sens_BHA[4] > random_cycle[eligible])
+        v.SYN[eligible] == 0      ~ as.numeric((1 - scenario$specificity) > random_cycle[eligible]),
+        v.SYN[eligible] == 0.5 & (v.BHA.lag[eligible] >= 0 & !is.na(v.BHA.lag[eligible]))  ~ as.numeric((scenario$sensitivity[1] * 0.8) > random_cycle[eligible]),  # TCI and second consecutive BHA (sens is lower due to practice effect)
+        v.SYN[eligible] == 0.5 & (v.BHA.lag[eligible] < 0 | is.na(v.BHA.lag[eligible]))  ~ as.numeric(scenario$sensitivity[1] > random_cycle[eligible]),  # TCI and first BHA
+        v.MEMLOSS[eligible] == 1  ~ as.numeric(scenario$sensitivity[2] > random_cycle[eligible]),
+        v.SEV[eligible] == 0      ~ as.numeric(scenario$sensitivity[3] > random_cycle[eligible]),
+        v.SEV[eligible] >= 1      ~ as.numeric(scenario$sensitivity[4] > random_cycle[eligible])
       )
     }
   }

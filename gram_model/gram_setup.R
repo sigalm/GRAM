@@ -146,8 +146,11 @@ l.inputs[["r.CDR_sd3"]] <- 0                           # rater error (inter-rate
 
 ## Cognitive test performance
 # Source: Possin 2018, MCI due to AD vs. control
-l.inputs[["sens_BHA"]] <- c(0.50, 0.54, 0.72, 1.00)  # sens[1] for prodromal CI, sens[2] for memory loss (assumed), sens[3] for MCI, sens[4] for dem
-l.inputs[["spec_BHA"]] <- 0.85
+l.inputs[["sens_BHACS"]] <- c(0.50, 0.54, 0.72, 1.00)  # sens[1] for prodromal CI, sens[2] for memory loss (assumed), sens[3] for MCI, sens[4] for dem
+l.inputs[["spec_BHACS"]] <- 0.85
+
+l.inputs[["sens_BHAGS"]] <- c(0.58, 0.62, 0.83, 1.00)
+l.inputs[["spec_BHAGS"]] <- 0.85
 l.inputs[["sens_PCP"]] <- 0.56
 l.inputs[["spec_PCP"]] <- 0.89
 l.inputs[["rr_PCP_BHA"]] <- c("sens_BHApos" = 2,      # if you have CI and positive BHA, overall sensitivity will be 2-fold of PCP alone (PCP very likely to agree)
@@ -197,8 +200,5 @@ l.inputs[["rr.cogcon_prior"]] <- 2    # risk ratio for reporting cognitive conce
 l.inputs[["scenario"]] <- list(
   title       = "Natural progression model - US",
   description = "Natural progression of cognitive impairment, no intervention, US",
-  
-  # Core scenario parameters
-  test            = FALSE
-  
+  test = NULL
 )
