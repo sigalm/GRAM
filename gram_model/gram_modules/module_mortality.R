@@ -9,6 +9,7 @@ f.module_mortality <- function(l.inputs, a.out, t, a.random) {
   a.out[t,"ALIVE",alive.lag] <- f.update_ALIVE(
     alive.lag     = alive.lag,
     v.AGE.lag     = a.out[t-1,"AGE",alive.lag], 
+    v.SEX.lag     = a.out[t-1,"SEX",alive.lag],
     v.SYN.lag     = a.out[t-1,"SYN",alive.lag],
     v.SEV.lag     = a.out[t-1,"SEV",alive.lag], 
     random_cycle  = a.random[t,"ALIVE",alive.lag], 
@@ -37,7 +38,7 @@ f.module_mortality <- function(l.inputs, a.out, t, a.random) {
 
 f.update_ALIVE <- function(
     alive.lag,
-    v.AGE.lag, v.SYN.lag, v.SEV.lag, 
+    v.AGE.lag, v.SEX.lag, v.SYN.lag, v.SEV.lag, 
     m.lifetable, 
     hr.mort_mci, hr.mort_mil, hr.mort_mod, hr.mort_sev, 
     hr.mort_mci_age, hr.mort_mil_age, hr.mort_mod_age, hr.mort_sev_age,
@@ -46,8 +47,8 @@ f.update_ALIVE <- function(
   
   # generate life table coordinates for looking up age-specific mortality 
   # (see https://adv-r.hadley.nz/subsetting.html paragraph 4.2.3 subsetting > selecting multiple elements > subsetting)
-  lifetable_lookup_coordinates <- matrix(data = round(v.AGE.lag,0), ncol = 1) - 50 + 1
-  
+  lifetable_lookup_coordinates <- cbind(round(v.AGE.lag, 0) - 50 + 1, v.SEX.lag)
+
   # determine relative mortality risk related to syndrome and severity
   healthy <- v.SYN.lag<1
   mci <- v.SYN.lag==1 & v.SEV.lag==0

@@ -8,7 +8,7 @@ f.calc_MCIprob <- function(l.inputs, v.AGE, v.EDU.lag, v.SEX.lag, v.RACEETH.lag,
   hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = round(v.AGE,0), ncol = 1) - 50 + 1]
   hazard <- hazards.age * exp(
     l.inputs[["log_EDU"]] * v.EDU.lag +
-      l.inputs[["log_SEX"]] * v.SEX.lag +
+      l.inputs[["log_SEX"]] * (v.SEX.lag == 2) +
       l.inputs[["log_RACEETHblack"]] * (v.RACEETH.lag == 1) +
       l.inputs[["log_RACEETHhisp"]] * (v.RACEETH.lag == 2) +
       l.inputs[["log_APOE4"]] * v.APOE4.lag +

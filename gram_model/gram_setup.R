@@ -110,9 +110,9 @@ l.inputs[["hr.mort_mod_age"]] <- c(1,0.6,0.3)
 l.inputs[["hr.mort_sev_age"]] <- c(1,0.6,0.3)
 
 
-l.inputs[["m.lifetable"]] <- array(data = as.matrix(
-  readRDS("gram_data/mortality/non_dementia_mortality_prob_by_age_v2.RDS")[ , "prob_non_dementia"]), 
-  dim = c(51,1), dimnames = list(50:100, "q"))
+l.inputs[["m.lifetable"]] <- as.matrix(readRDS("gram_data/mortality/non_dementia_mortality_prob_bysex_byage.RDS")[ , c("m_prob_non_dementia", "f_prob_non_dementia")])
+
+
 
 ## Logistic regression for transition to MCI from Healthy
 l.inputs[["m.hr_mci"]] <- array(data = readRDS("gram_data/mci_incidence/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
@@ -151,6 +151,7 @@ l.inputs[["spec_BHACS"]] <- 0.85
 
 l.inputs[["sens_BHAGS"]] <- c(0.58, 0.62, 0.83, 1.00)
 l.inputs[["spec_BHAGS"]] <- 0.85
+
 l.inputs[["sens_PCP"]] <- 0.56
 l.inputs[["spec_PCP"]] <- 0.89
 l.inputs[["rr_PCP_BHA"]] <- c("sens_BHApos" = 2,      # if you have CI and positive BHA, overall sensitivity will be 2-fold of PCP alone (PCP very likely to agree)

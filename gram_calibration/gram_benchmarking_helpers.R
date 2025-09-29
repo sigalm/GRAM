@@ -208,9 +208,9 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
     pivot_longer(cols = c(mci, dem), names_to = "condition", values_to = "prev")
 
   plot_prev <- ggplot(prev_strat, aes(x = age, y = prev, color = condition)) +
-    geom_line() +
-    facet_wrap(~ strat) +
-    labs(title = paste0("Prevalence by ", strat_var), x = "Age", y = "Prevalence", color = "Condition") +
+    geom_line(aes(linetype = strat)) +
+    # facet_wrap(~ strat) +
+    labs(title = paste0("Prevalence by ", strat_var), x = "Age", y = "Prevalence", color = "Condition", linetype = "Group") +
     scale_color_manual(
       labels = c("dem" = "Dementia", "mci" = "MCI"),
       values = c("dem" = "darkgreen", "mci" = "hotpink")) +
@@ -350,8 +350,10 @@ compare_reside_time <- function(sim, description, n) {
     theme_minimal(base_size = 16) +
     theme(axis.text.x = element_text(angle = 30, hjust = 0.5))
   
+  dat_return <- rbind(reside_time, benchmark_reside_time)
+  
   return(invisible(list(fig_reside_time = fig_reside_time,
-                        dat = reside_time)))
+                        dat = dat_return)))
   
 }
 

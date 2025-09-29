@@ -1,0 +1,178 @@
+"Notes","Sex","Sex Code","Single-Year Ages","Single-Year Ages Code",Deaths,Population,Crude Rate
+,"Female","F","49 years","49",10,1936933,Unreliable
+,"Female","F","51 years","51",16,2052848,Unreliable
+,"Female","F","52 years","52",22,2168568,1.0
+,"Female","F","53 years","53",17,2134513,Unreliable
+,"Female","F","54 years","54",29,2056712,1.4
+,"Female","F","55 years","55",50,2014056,2.5
+,"Female","F","56 years","56",54,2026928,2.7
+,"Female","F","57 years","57",91,2057408,4.4
+,"Female","F","58 years","58",92,2145182,4.3
+,"Female","F","59 years","59",97,2196292,4.4
+,"Female","F","60 years","60",147,2200363,6.7
+,"Female","F","61 years","61",164,2208227,7.4
+,"Female","F","62 years","62",198,2205798,9.0
+,"Female","F","63 years","63",245,2165952,11.3
+,"Female","F","64 years","64",280,2130360,13.1
+,"Female","F","65 years","65",371,2113784,17.6
+,"Female","F","66 years","66",440,2079118,21.2
+,"Female","F","67 years","67",440,1994754,22.1
+,"Female","F","68 years","68",641,1951621,32.8
+,"Female","F","69 years","69",772,1886191,40.9
+,"Female","F","70 years","70",881,1809211,48.7
+,"Female","F","71 years","71",1195,1740156,68.7
+,"Female","F","72 years","72",1353,1660982,81.5
+,"Female","F","73 years","73",1601,1580761,101.3
+,"Female","F","74 years","74",1916,1533626,124.9
+,"Female","F","75 years","75",2336,1490475,156.7
+,"Female","F","76 years","76",2832,1551093,182.6
+,"Female","F","77 years","77",2781,1104696,251.7
+,"Female","F","78 years","78",3155,1055637,298.9
+,"Female","F","79 years","79",3727,1019493,365.6
+,"Female","F","80 years","80",4505,1019564,441.9
+,"Female","F","81 years","81",4792,865416,553.7
+,"Female","F","82 years","82",5066,769057,658.7
+,"Female","F","83 years","83",5322,695974,764.7
+,"Female","F","84 years","84",5798,634193,914.2
+,"Female","F","85 years","85",6291,Not Applicable,Not Applicable
+,"Female","F","86 years","86",6712,Not Applicable,Not Applicable
+,"Female","F","87 years","87",6934,Not Applicable,Not Applicable
+,"Female","F","88 years","88",7433,Not Applicable,Not Applicable
+,"Female","F","89 years","89",7202,Not Applicable,Not Applicable
+,"Female","F","90 years","90",7467,Not Applicable,Not Applicable
+,"Female","F","91 years","91",7604,Not Applicable,Not Applicable
+,"Female","F","92 years","92",7375,Not Applicable,Not Applicable
+,"Female","F","93 years","93",7184,Not Applicable,Not Applicable
+,"Female","F","94 years","94",6600,Not Applicable,Not Applicable
+,"Female","F","95 years","95",6004,Not Applicable,Not Applicable
+,"Female","F","96 years","96",5142,Not Applicable,Not Applicable
+,"Female","F","97 years","97",4326,Not Applicable,Not Applicable
+,"Female","F","98 years","98",3506,Not Applicable,Not Applicable
+,"Female","F","99 years","99",2689,Not Applicable,Not Applicable
+,"Female","F","100+ years","100",5603,Not Applicable,Not Applicable
+"Total","Female","F",,,149541,169165495,88.4
+,"Male","M","52 years","52",11,2161378,Unreliable
+,"Male","M","53 years","53",16,2123079,Unreliable
+,"Male","M","54 years","54",23,2037774,1.1
+,"Male","M","55 years","55",23,1988381,1.2
+,"Male","M","56 years","56",44,1984546,2.2
+,"Male","M","57 years","57",58,2007902,2.9
+,"Male","M","58 years","58",86,2071240,4.2
+,"Male","M","59 years","59",69,2114322,3.3
+,"Male","M","60 years","60",118,2105429,5.6
+,"Male","M","61 years","61",133,2104747,6.3
+,"Male","M","62 years","62",191,2091013,9.1
+,"Male","M","63 years","63",244,2044859,11.9
+,"Male","M","64 years","64",271,1991406,13.6
+,"Male","M","65 years","65",318,1963214,16.2
+,"Male","M","66 years","66",378,1913891,19.8
+,"Male","M","67 years","67",437,1812312,24.1
+,"Male","M","68 years","68",525,1757006,29.9
+,"Male","M","69 years","69",646,1678837,38.5
+,"Male","M","70 years","70",726,1595441,45.5
+,"Male","M","71 years","71",912,1523668,59.9
+,"Male","M","72 years","72",1009,1433201,70.4
+,"Male","M","73 years","73",1150,1353838,84.9
+,"Male","M","74 years","74",1364,1303672,104.6
+,"Male","M","75 years","75",1626,1263897,128.6
+,"Male","M","76 years","76",1919,1326967,144.6
+,"Male","M","77 years","77",1869,908720,205.7
+,"Male","M","78 years","78",1992,854068,233.2
+,"Male","M","79 years","79",2450,812371,301.6
+,"Male","M","80 years","80",2923,800819,365.0
+,"Male","M","81 years","81",2994,663736,451.1
+,"Male","M","82 years","82",3107,574372,540.9
+,"Male","M","83 years","83",3147,505470,622.6
+,"Male","M","84 years","84",3387,452079,749.2
+,"Male","M","85 years","85",3572,Not Applicable,Not Applicable
+,"Male","M","86 years","86",3692,Not Applicable,Not Applicable
+,"Male","M","87 years","87",3710,Not Applicable,Not Applicable
+,"Male","M","88 years","88",3731,Not Applicable,Not Applicable
+,"Male","M","89 years","89",3667,Not Applicable,Not Applicable
+,"Male","M","90 years","90",3513,Not Applicable,Not Applicable
+,"Male","M","91 years","91",3278,Not Applicable,Not Applicable
+,"Male","M","92 years","92",3018,Not Applicable,Not Applicable
+,"Male","M","93 years","93",2750,Not Applicable,Not Applicable
+,"Male","M","94 years","94",2258,Not Applicable,Not Applicable
+,"Male","M","95 years","95",1837,Not Applicable,Not Applicable
+,"Male","M","96 years","96",1505,Not Applicable,Not Applicable
+,"Male","M","97 years","97",1089,Not Applicable,Not Applicable
+,"Male","M","98 years","98",799,Not Applicable,Not Applicable
+,"Male","M","99 years","99",539,Not Applicable,Not Applicable
+,"Male","M","100+ years","100",803,Not Applicable,Not Applicable
+"Total","Male","M",,,73980,165749400,44.6
+"Total",,,,,223521,334914895,66.7
+"---"
+"Dataset: Provisional Mortality Statistics, 2018 through Last Week"
+"Query Parameters:"
+"Title: allcausedeathsbysexbyage"
+"UCD - ICD-10 Codes: F01.0 (Vascular dementia of acute onset); F01.1 (Multi-infarct dementia); F01.2 (Subcortical vascular"
+"dementia); F01.3 (Mixed cortical and subcortical vascular dementia); F01.8 (Other vascular dementia); F01.9 (Vascular dementia,"
+"unspecified); F03 (Unspecified dementia); F06.7 (Mild cognitive disorder); G30.0 (Alzheimer disease with early onset); G30.1"
+"(Alzheimer disease with late onset); G30.8 (Other Alzheimer disease); G30.9 (Alzheimer disease, unspecified)"
+"Year/Month: 2023"
+"Group By: Sex; Single-Year Ages"
+"Show Totals: True"
+"Show Zero Values: False"
+"Show Suppressed: False"
+"Calculate Rates Per: 100,000"
+"Rate Options: Default intercensal populations for years 2001-2009 (except Infant Age Groups)"
+"---"
+"Help: See http://wonder.cdc.gov/wonder/help/mcd-provisional.html for more information."
+"---"
+"Query Date: Aug 29, 2025 9:37:17 PM"
+"---"
+"Suggested Citation: Centers for Disease Control and Prevention, National Center for Health Statistics. National Vital Statistics"
+"System, Provisional Mortality on CDC WONDER Online Database. Data are from the final Multiple Cause of Death Files, 2018-2023,"
+"and from provisional data for years 2024 and later, as compiled from data provided by the 57 vital statistics jurisdictions"
+"through the Vital Statistics Cooperative Program. Accessed at http://wonder.cdc.gov/mcd-icd10-provisional.html on Aug 29, 2025"
+"9:37:17 PM"
+"---"
+Messages:
+"1. Rows with zero Deaths are hidden, but the Population values in those rows are included in the totals. Use Quick Options above"
+"to show zero rows."
+"2. Rows with suppressed Deaths are hidden, but the Deaths and Population values in those rows are included in the totals. Use"
+"Quick Options above to show suppressed rows."
+"---"
+Caveats:
+"1. Population and rates are labeled 'Not Applicable' when they include a subset of ages 85-100+ because populations are not"
+"available for those ages. More information: http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Ages 85-100."
+"2. Data are Suppressed when the data meet the criteria for confidentiality constraints. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Assurance of Confidentiality."
+"3. Death rates are flagged as Unreliable when the rate is calculated with a numerator of 20 or less. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Unreliable."
+"4. Deaths of persons with Age ""Not Stated"" are included in ""All"" counts and rates, but are not distributed among age groups,"
+"so are not included in age-specific counts, age-specific rates or in any age-adjusted rates. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Not Stated."
+"5. The population figures for years 2023 and later are single-race estimates of the July 1 resident population, from the Vintage"
+"2023 postcensal series released by the Census Bureau on June 27, 2024. The population figures for years 2022 and later are"
+"single-race estimates of the July 1 resident population, from the Vintage 2022 postcensal series released by the Census Bureau"
+"on June 22, 2023. The 2022 and 2023 series is based on the Modified Blended Base produced by the US Census Bureau in lieu of the"
+"April 1, 2020 decennial population count. The Modified Blended Base consists of the blend of Vintage 2020 postcensal population"
+"estimates for April 1, 2020, 2020 Demographic Analysis Estimates, and 2020 Census data from the internal Census Edited File"
+"(CEF). The population figures for years 2021 are single-race estimates of the July 1 resident population, based on the Blended"
+"Base produced by the US Census Bureau in lieu of the April 1, 2020 decennial population count, from the Vintage 2021 postcensal"
+"series released by the Census Bureau on June 30, 2022. The population figures for year 2020 are single-race estimates of the"
+"July 1 resident population, from the Vintage 2020 postcensal series based on April 2010 Census, released by the Census Bureau on"
+"July 27, 2021. The population figures for year 2019 are single-race estimates of the July 1 resident population, from the"
+"Vintage 2019 postcensal series based on April 2010 Census, released by the Census Bureau on June 25, 2020. The population"
+"figures for year 2018 are single-race estimates of the July 1 resident population, from the Vintage 2018 postcensal series based"
+"on April 2010 Census, released by the Census Bureau on June 20, 2019. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Population Data."
+"6. The population figures used in the calculation of death rates for the age group 'under 1 year' are the estimates of the"
+"resident population that is under one year of age. More information: http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Age"
+"Group."
+"7. Connecticut population estimates for 2022 and later years are reported for 9 planning regions as county equivalent areas,"
+"instead of the former 8 legacy counties in the Vintage 2022 postcensal series released by the Census Bureau on June 22, 2023,"
+"and in the Vintage 2023 postcensal series released by the Census Bureau on June 27, 2024. Populations estimates for the former"
+"counties are not available for 2022 and later years. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#Connecticut-2022."
+"8. After the creation of the final 2023 dataset, North Carolina updated the cause of death information for over 900 death"
+"certificates to include a cause of death code indicating drug overdose (ICD-10 underlying cause-of-death codes: X40-X44,"
+"X60-X64, X85, and Y10-Y14). Jurisdictions can continue to update death certificates after the closing of the mortality file. As"
+"a result, users should consider that the actual death count for drug overdose deaths for North Carolina in 2023 is over 4,400"
+"deaths, with a crude rate of approximately 41.0 per 100,000 population, and an age-adjusted rate of approximately 42.1 per"
+"100,000 population. These deaths will not be updated on the final mortality datasets."
+"9. Changes to cause of death classification affect reporting trends. More information:"
+"http://wonder.cdc.gov/wonder/help/mcd-provisional.html#ICD-10 Changes."
+"10. Deaths occurring through August 16, 2025 as of August 24, 2025."
