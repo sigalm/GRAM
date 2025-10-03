@@ -56,26 +56,27 @@ acs_data <- acs_data %>%
       EDUC == 114 ~ 18,  # Master’s
       EDUC == 115 ~ 19,  # Professional
       EDUC == 116 ~ 20,  # Doctorate
-      EDUC == 999 ~ NA  # Missing values
+      EDUC == 999 ~ NA_real_  # Missing values
     ),
     HISP = case_when(
       HISP == 0 ~ 0,  # Not Hispanic
       HISP %in% c(1,2,3,4) ~ 1,  # Mexican, Puerto Rican, Cuban, Other
-      HISP == 9 ~ NA  # Missing
+      HISP == 9 ~ NA_real_  # Missing
     ),
     RACEETH = case_when(
       RACE == 1 & HISP == 0 ~ 0,  # Non-Hispanic White 
       RACE == 2 & HISP == 0 ~ 1,  # Non-Hispanic Black
-      HISP == 1 ~ 2 # Hispanic (can be other race too)
+      HISP == 1 ~ 2, # Hispanic (can be other race too)
+      RACE >= 3 ~ 3 # Other race (Non-Hispanic American Indian or Alaska Native, Chinese, Japanese, Other Asian or Pacific Islander, Other Race, Multiple Race)
     ),
     INCOME_CAT = case_when(
-      INCOME < 0 ~ NA,
-      INCOME >= 9999998 ~ NA,
+      INCOME < 0 ~ NA_real_,
+      INCOME >= 9999998 ~ NA_real_,
       INCOME < 9000 ~ 0,
       INCOME < 36000 ~ 1,
       INCOME >= 36000 ~ 2
     ),
-    INSURANCE = INSURANCE - 1) %>%
+    INSURANCE = INSURANCE - 1)  %>%
   filter(AGE == 50, !is.na(RACEETH))
 
 head(acs_data)
@@ -131,7 +132,7 @@ summary(acs_data) # Income has NAs, remove them
 acs_data <- acs_data %>%
   filter(!is.na(INCOME_CAT))
 
-saveRDS(acs_data, "gram_data/acs_data/acs_age50.RDS")
+saveRDS(acs_data, "gram_data/acs_data/acs_age50_RACE-revised.RDS")
 
 
 # Create sample cohorts: 3 sets with 10,000 people, accounting for person weights.

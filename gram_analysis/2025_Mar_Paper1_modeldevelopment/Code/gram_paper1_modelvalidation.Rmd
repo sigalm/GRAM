@@ -15,7 +15,7 @@ source("gram_calibration/gram_benchmarking_helpers.r")
 source("gram_model/gram_helpers/source_all.r")
 library(tableone)
 library(easystats)
-sample1 <- readRDS("gram_data/acs_data/acs_age50.rds")
+sample1 <- readRDS("gram_data/acs_data/acs_age50_RACE-revised.rds")
 ```
 
 ```{r inputs}
@@ -39,7 +39,7 @@ l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 2.2 /4
 sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 
 setwd(dirname(dirname(dirname(getwd()))))
-# saveRDS(sim_calib, "gram_analysis/2025_Mar_Paper1_modeldevelopment/Code/sim_calib_20250904_111500x.RDS")
+# saveRDS(sim_calib, "gram_analysis/2025_Mar_Paper1_modeldevelopment/Code/sim_calib_20250929_164200x.RDS")
 
 ```
 
@@ -47,8 +47,8 @@ setwd(dirname(dirname(dirname(getwd()))))
 ```{r table 2}
 tableone_vars <- c("AGE","SEX","RACEETH","EDU","INCOME","MEDBUR","HCARE","APOE4","SYN")
 factor_vars <- list(
-  SEX  = c("1" = "Male", "2" = "Female"),
-  RACEETH   = c("0" = "Non-Hispanic White", "1" = "Non-Hispanic Black", "2" = "Hispanic"),
+  SEX  = c("0" = "Male", "1" = "Female"),
+  RACEETH   = c("0" = "Non-Hispanic White", "1" = "Non-Hispanic Black", "2" = "Hispanic", "3" = "Other Race"),
   INCOME = c("0" = "Low Income", "1" = "Medium Income", "2" = "High Income"),
   HCARE = c("0" = "No regular healthcare provider", "1" = "Has regular healthcare provider"),
   SYN  = c("0" = "Cognitively Healthy", "1" = "Cognitively Impaired"),
@@ -70,7 +70,7 @@ table2
 figure1 <- sim_calib$sim$fig.progression
 figure1 <- figure1 + labs(title = NULL, subtitle = NULL)
 figure1
-ggsave("../Figures/figure1.pdf", plot = figure1, 
+ggsave("../Figures/figure1_20250929.pdf", plot = figure1, 
        width = 10, height = 6, dpi = 300)
 ```
 
@@ -82,7 +82,7 @@ figure2 <- figure2$fig_prev_by_age +
   xlim(NA,95) + 
   ylim(NA, .5)
 figure2
-ggsave("../Figures/figure2.pdf", plot = figure2, 
+ggsave("../Figures/figure2_20250929.pdf", plot = figure2, 
        width = 10, height = 6, dpi = 300)
 ```
 
@@ -92,9 +92,9 @@ figure3_dat <- compare_reside_time(sim_calib$sim, description = "", n = l.inputs
 figure3_fig <- figure3_dat$fig_reside_time + labs(title = NULL, subtitle = NULL)
 figure3_fig
 
-figure3_fig_60plus <- figure3 + scale_x_discrete(limits = setdiff(levels(figure3_dat$dat$age_group), c("50-54", "55-59", "Overall_adj")))
+figure3_fig_60plus <- figure3_fig + scale_x_discrete(limits = setdiff(levels(figure3_dat$dat$age_group), c("50-54", "55-59", "Overall_adj")))
 
-ggsave("../Figures/figure3_60plus.pdf", plot = figure3_fig_60plus, 
+ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus, 
        width = 10, height = 6, dpi = 300)
 ```
 
@@ -103,7 +103,7 @@ ggsave("../Figures/figure3_60plus.pdf", plot = figure3_fig_60plus,
 figure4 <- compare_mortality(sim_calib$sim, description = "", n = l.inputs1["n.ind"])
 figure4 <- figure4$cumulative_mort[[1]] + labs(title = NULL, subtitle = NULL)
 figure4
-ggsave("../Figures/figure4.pdf", plot = figure4, 
+ggsave("../Figures/figure4_20250929.pdf", plot = figure4, 
        width = 10, height = 6, dpi = 300)
 ```
 
@@ -213,7 +213,7 @@ figS1_sex <- stratify_prevalence_by(sim_calib$sim, "SEX",
                                     strat_labels = c("Male", "Female"),
                                     stratify_by_baseline = TRUE)
 figS1_raceeth <- stratify_prevalence_by(sim_calib$sim, "RACEETH", 
-                                        strat_labels = c("Non-Hispanic White", "Non-Hispanic Black", "Hispanic"),
+                                        strat_labels = c("Non-Hispanic White", "Non-Hispanic Black", "Hispanic", "Other Race"),
                                         stratify_by_baseline = TRUE)
 figS1_income <- stratify_prevalence_by(sim_calib$sim, "INCOME", 
                                        strat_labels = c("Low", "Medium", "High"), 
@@ -292,7 +292,7 @@ figS1_all <-
 
 figS1_all
 
-ggsave("../Figures/figureS1_combined.pdf", plot = figS1_all, 
+ggsave("../Figures/figureS1_combined_20250929.pdf", plot = figS1_all, 
        width = 12, height = 14, dpi = 300)
 ```
 
@@ -301,8 +301,8 @@ onset_df <- data.frame(
   age_onset = sim_calib$sim$aggregated_results_totpop$age_at_onset,
   SEX = factor(sim_calib$sim$output[1, "SEX", ], levels = c(0, 1),
                labels = c("Male", "Female")),
-  RACEETH = factor(sim_calib$sim$output[1, "RACEETH", ], levels = c(0, 1, 2), 
-                   labels = c("Non-Hispanic White", "Non-Hispanic Black", "Hispanic")),
+  RACEETH = factor(sim_calib$sim$output[1, "RACEETH", ], levels = c(0, 1, 2, 3), 
+                   labels = c("Non-Hispanic White", "Non-Hispanic Black", "Hispanic", "Other Race")),
   INCOME = factor(sim_calib$sim$output[1, "INCOME", ], levels = c(0, 1, 2), 
                   labels = c("Low Income", "Medium Income", "High Income")),
   EDU_BIN = cut(sim_calib$sim$output[1,"EDU",], breaks = c(0,12,16,Inf), 
@@ -364,7 +364,7 @@ figS2_all <-
 
 figS2_all
 
-ggsave("../Figures/figureS2_combined.pdf", plot = figS2_all, width = 12, height = 14, dpi = 300)
+ggsave("../Figures/figureS2_combined_20250929.pdf", plot = figS2_all, width = 14, height = 14, dpi = 300)
 
 ```
 
