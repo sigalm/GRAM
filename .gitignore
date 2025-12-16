@@ -42,10 +42,18 @@ vignettes/*.pdf
 .Renviron
 
 # pkgdown site
-docs/
+# docs/
 
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# raw ACS data (large files, not for publishing)
+data/acs_data/raw/
+
+# Analysis outputs (can be regenerated)
+analyses/**/results/
+analyses/**/*.RDS
+analyses/**/*.rds
