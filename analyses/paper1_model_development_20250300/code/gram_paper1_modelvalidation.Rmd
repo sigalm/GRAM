@@ -9,13 +9,13 @@ knitr::opts_chunk$set(warning = FALSE, echo = FALSE)
 
 ```{r setup, include = FALSE}
 setwd(dirname(dirname(dirname(getwd()))))
-source("gram_model/gram_setup.r")
-source("gram_model/gram_simulation.r")
-source("gram_calibration/gram_benchmarking_helpers.r")
-source("gram_model/gram_helpers/source_all.r")
+source("model/setup.R")
+source("model/simulation.R")
+source("calibration/gram_benchmarking_helpers.R")
+source("model/helpers/source_all.R")
 library(tableone)
 library(easystats)
-sample1 <- readRDS("gram_data/acs_data/acs_age50_RACE-revised.rds")
+sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 ```
 
 ```{r inputs}
@@ -39,7 +39,7 @@ l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 2.2 /4
 sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 
 setwd(dirname(dirname(dirname(getwd()))))
-# saveRDS(sim_calib, "gram_analysis/2025_Mar_Paper1_modeldevelopment/Code/sim_calib_20250929_164200x.RDS")
+# saveRDS(sim_calib, "analyses/paper1_model_development_20250300/code/sim_calib_20250929_164200x.RDS")
 
 ```
 

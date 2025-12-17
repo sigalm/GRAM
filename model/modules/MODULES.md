@@ -1,6 +1,6 @@
 # GRAM Model: Module Documentation
 
-This document provides an overview of each major module in the `gram_helpers/` directory. Each module encapsulates a specific aspect of the simulation, supporting code clarity, modularity, and ease of extension. Each module consists of one or more functions that update specific attributes, and one wrapper function that calls all the update functions for that module.
+This document provides an overview of each major module in the `modules/` directory. Each module encapsulates a specific aspect of the simulation. Each module consists of one or more functions that update specific attributes, and one wrapper function that calls all the update functions for that module.
 
 ---
 
@@ -10,11 +10,11 @@ This document provides an overview of each major module in the `gram_helpers/` d
 - Handles both synthetic and microdata-driven population initialization.
 
 **Functions:**
-- `f.initialize(l.inputs, microdata)`: Sets up the 3D arrays for simulation state and random numbers. Assigns starting values to all attributes for each individual, based on input parameters or microdata.
+- `f.initialize(l.inputs, microdata)`: Sets up the 3D arrays for simulation state and random numbers. Assigns starting values to all attributes for each individual, based on input parameters or external microdata.
 
 **Inputs:**
 - `l.inputs`: Model input list (attributes, distributions, settings)
-- `microdata`: Optional data frame for initializing the population
+- `microdata`: Optional data frame for initializing the population (if not provided, a synthetic population is generated from distributions defined in `l.inputs`)
 
 **Outputs:**
 - List containing `a.random` (random number array) and `a.out` (state array)
@@ -27,7 +27,7 @@ This document provides an overview of each major module in the `gram_helpers/` d
 
 **Attribute Updates:**
 - `f.update_ALIVE(alive.lag, v.AGE.lag, v.SYN.lag, v.SEV.lag, m.lifetable, hr.mort_mci, hr.mort_mil, hr.mort_mod, hr.mort_sev, hr.mort_mci_age, hr.mort_mil_age, hr.mort_mod_age, hr.mort_sev_age, random_cycle)`
-  - Computes death probability for each individual based on age, syndrome, severity, and life table. Randomly determines survival or death for each individual based on the computed probability. Returns a vector (0=dead, 1=alive) for the current cycle.
+  - Computes death probability for each individual based on age, cognitive state, and life table. Randomly determines survival or death for each individual based on the computed probability. Returns a vector (0=dead, 1=alive) for the current cycle.
 
 ---
 
@@ -45,15 +45,15 @@ This document provides an overview of each major module in the `gram_helpers/` d
 - `f.update_RACEETH(v.RACEETH.lag)`
   - Keeps race/ethnicity fixed (no change over time).
 - `f.update_INCOME(v.INCOME.lag)`
-  - Keeps income fixed (no change over time). Income is categorical, and we assume no change in one's income group after the age of 50 (starting age of the cohort).
+  - Keeps income fixed (no change over time). Income is categorical, and we assume there are no changes in one's income group after the age of 50 (starting age of the cohor in base model). 
 - `f.update_HCARE(v.HCARE.lag, v.AGE, random_cycle)`
-  - Updates healthcare access; allows for new healthcare access at age 65 for those without it, using a random draw, to reflect the introduction of Medicare at age 65.
+  - Updates healthcare access; uses a random draw to allow for new healthcare access at age 65 for those without it, to reflect the introduction of Medicare.
 
 ---
 
 ## module_true_health.R: True Health Module
 **Purpose:**
-- Manages cognitive health progression and related attributes, including multimorbidity, cognitive status, memory loss, and CDR scores (unobserved).
+- Manages cognitive disease progression and related attributes, including multimorbidity, cognitive status, memory loss, and CDR scores (unobserved).
 
 **Attribute Updates:**
 - `f.update_MEDBUR(v.MEDBUR.lag, ...)`
@@ -61,13 +61,13 @@ This document provides an overview of each major module in the `gram_helpers/` d
 - `f.update_APOE4(v.APOE4.lag)`
   - Keeps APOE4 status fixed (genetic risk, no change over time).
 - `f.update_SYN(v.SYN.lag, ...)`
-  - Updates syndrome status (e.g., normal, MCI, dementia) based on risk factors and previous state.
+  - Updates cognitive syndrome status (e.g., normal, transitional cognitive impairment, cognitively impaired) based on risk factors and previous state.
 - `f.update_MEMLOSS(v.MEMLOSS.lag, ...)`
   - Updates memory loss indicator which flags those with potentially reversible, non-progressive cognitive impairment.
 - `f.update_CDR(v.CDR.lag, ...)`
   - Updates Clinical Dementia Rating (CDR) score (unobserved true score).
 - `f.update_SEV(v.SEV.lag, ...)`
-  - Updates severity of cognitive impairment.
+  - Updates severity of cognitive impairment for those with cognitive impairment (SYN == 1) as MCI or mild-moderate-severe dementia based on standard CDR-SB categorization.
 
 ---
 
@@ -77,21 +77,21 @@ This document provides an overview of each major module in the `gram_helpers/` d
 
 **Attribute Updates:**
 - `f.update_COGCON(v.COGCON.lag, ...)`
-  - Updates observed cognitive concern. For scenarios that do not consider cognitive concerns, this attribute is set to 1 for all individuals.
+  - Updates observed cognitive concern. For scenarios that do not consider cognitive concerns, this attribute is set to 1 for all individuals. Alternatively, it could be operationalized to flag eligibility for intervention based on different criteria.
 - `f.update_BHA(v.BHA.lag, ...)`
   - Updates Brain Health Assessment (BHA) test result.
 - `f.update_CDR_obs(v.CDR_obs.lag, ...)`
-  - Updates observed CDR score (may differ from true CDR).
+  - Updates observed CDR-SB score (may differ from true CDR-SB).
 - `f.update_SEV_obs(v.SEV_obs.lag, ...)`
-  - Updates observed severity of cognitive impairment.
+  - Updates observed severity of cognitive impairment (based on observed CDR-SB score).
 - `f.update_DX(v.DX.lag, ...)`
-  - Updates diagnosis status (e.g., MCI, dementia, normal). This attribute tracks diagnoses that occur outside of the BHA pathway, such that those with DX == 1 are ineligible for future BHA testing. It reflects empirical estimates of underdiagnosis of MCI and dementia.
+  - Updates clinical/pre-existing diagnosis status (e.g., MCI, dementia, normal). This attribute tracks diagnoses that occur outside of the BHA pathway, such that those with DX == 1 are ineligible for future BHA testing. It reflects empirical estimates of underdiagnosis of MCI and dementia.
 - `f.update_PCP(v.PCP.lag, ...)`
-  - Updates primary care provider assessment of cognitive status.
+  - Updates primary care provider assessment of cognitive status, if applicable.
 - `f.update_PET(v.PET.lag, ...)`
-  - Updates PET scan result.
+  - Updates PET scan result, if applicable.
 - `f.update_NP(v.NP.lag, ...)`
-  - Updates neuropsychological or specialist assessment of cognitive status.
+  - Updates neuropsychological or specialist assessment of cognitive status, if applicable.
 
 ---
 
@@ -111,18 +111,9 @@ This document provides an overview of each major module in the `gram_helpers/` d
 - `l.inputs`, `a.out`, `t`, `a.random`, `alive`, `n.alive`
 
 **Outputs:**
-- Updated state array with cognitive and health status attributes
+- Updated state array (`a.out`) with cognitive and health status attributes
 
 ---
 
 
-## Additional Helper Modules
-
-- **output_formatters.R**: Functions for formatting simulation outputs (tables, summaries)
-- **plotting_helpers.R**: Functions for generating plots and figures
-- **test_performance_helpers.R**: Functions for calculating test performance metrics (sensitivity, specificity, etc.)
-- **generic_helpers.R, epi_helpers.R, program_utility_helpers.R**: General-purpose utilities for probability, sampling, and code infrastructure
-- **run_wrappers.R**: Wrapper functions to run scenarios and aggregate results
-- **source_all.R**: Utility to source all helper scripts at once
-
-For more details, see in-code comments and function documentation within each script.
+For more details, see in-code comments and function documentation within each module.

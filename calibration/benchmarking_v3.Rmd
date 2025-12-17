@@ -20,14 +20,14 @@ library(patchwork)
 
 ```{r source files, include = FALSE}
 # The following will only run properly when knit. While working on document, run this chunk in the console.
-source("gram_model/gram_01setup.r") 
-source("gram_model/gram_02helpers.r")
-source("gram_model/gram_03simulation.r")
-source("gram_calibration/gram_benchmarking_helpers.r")
+source("model/setup.R") 
+source("model/helpers/source_all.R")
+source("model/simulation.R")
+source("calibration/gram_benchmarking_helpers.R")
 l.inputs[["n.cycle"]] <- 51
-sample1 <- readRDS("gram_data/acs_data/acs_sample_1.rds")
-sample2 <- readRDS("gram_data/acs_data/acs_sample_2.rds")
-lifetable <- read.csv("gram_data/table_prob_die_next_year.csv")
+sample1 <- readRDS("data/acs_data/acs_sample_1.rds")
+sample2 <- readRDS("data/acs_data/acs_sample_2.rds")
+lifetable <- read.csv("data/mortality/table_prob_die_next_year.csv")
 ```
 
 

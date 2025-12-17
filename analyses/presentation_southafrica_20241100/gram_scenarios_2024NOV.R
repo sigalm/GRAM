@@ -1,9 +1,9 @@
 # ********************************************************************************
 # ======= GRAM SCENARIOS FOR JIM SOUTH AFRICA PRESENTATION - 2024 NOVEMBER ======= 
 # ********************************************************************************
-source("gram_model/gram_01setup.r")
-source("gram_model/gram_02helpers.r")
-source("gram_model/gram_03simulation.r")
+source("model/setup.R")
+source("model/helpers/source_all.R")
+source("model/simulation.R")
 
 
 l.inputs[["r.CDRslow_mean"]] <- 0.3
@@ -63,10 +63,10 @@ reside_time_scenario5 <- format_reside_time_table(scenario5$aggregated_results_t
 
 
 # Save plots as png files
-ggsave("gram_results/2024_Nov_presentation/fig1_gram_natural_history.png", plot = fig_scenario1, width = 10, height = 6, dpi = 300)
-ggsave("gram_results/2024_Nov_presentation/fig2_gram_dmt_at_mci.png", plot = fig_scenario2, width = 10, height = 6, dpi = 300)
-ggsave("gram_results/2024_Nov_presentation/fig3_gram_dmt_at_milddem.png", plot = fig_scenario3, width = 10, height = 6, dpi = 300)
-ggsave("gram_results/2024_Nov_presentation/fig4_gram_prevent_mci.png", plot = fig_scenario4, width = 10, height = 6, dpi = 300)
+ggsave("analyses/presentation_southafrica_20241100/fig1_gram_natural_history.png", plot = fig_scenario1, width = 10, height = 6, dpi = 300)
+ggsave("analyses/presentation_southafrica_20241100/fig2_gram_dmt_at_mci.png", plot = fig_scenario2, width = 10, height = 6, dpi = 300)
+ggsave("analyses/presentation_southafrica_20241100/fig3_gram_dmt_at_milddem.png", plot = fig_scenario3, width = 10, height = 6, dpi = 300)
+ggsave("analyses/presentation_southafrica_20241100/fig4_gram_prevent_mci.png", plot = fig_scenario4, width = 10, height = 6, dpi = 300)
 
 # Save tables to word
 save_as_docx(
@@ -74,11 +74,11 @@ save_as_docx(
   "Start DMT at MCI" = reside_time_scenario2,
   "Start DMT at mild dementia" = reside_time_scenario3,
   "MCI prevention" = reside_time_scenario4,
-  path = "gram_results/2024_Nov_presentation/reside_time_tables.docx")
+  path = "analyses/presentation_southafrica_20241100/reside_time_tables.docx")
 save_as_docx(
   "Natural history, no intervention" = prevalence_scenario1, 
   "Start DMT at MCI" = prevalence_scenario2,
   "Start DMT at mild dementia" = prevalence_scenario3,
   "MCI prevention" = prevalence_scenario4,
-  path = "gram_results/2024_Nov_presentation/prevalence_tables.docx"
+  path = "analyses/presentation_southafrica_20241100/prevalence_tables.docx"
 )

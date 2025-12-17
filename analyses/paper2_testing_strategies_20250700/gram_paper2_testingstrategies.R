@@ -1,13 +1,12 @@
 ######################################## GRAM-US PAPER 2: BHA TESTING STRATEGIES ########################################
 
 # Setup, load libraries, source scripts
-source("gram_model/gram_setup.r")
-source("gram_model/gram_simulation.r")
-source("gram_calibration/gram_benchmarking_helpers.r")
-source("gram_model/gram_helpers/source_all.r")
+source("model/setup.R")
+source("model/simulation.R")
+source("calibration/benchmarking_helpers.R")
+source("model/helpers/source_all.R")
 library(tableone)
-sample1 <- readRDS("gram_data/acs_data/acs_age50_RACE-revised.rds")
-# scenario_files <- list.files("gram_model/gram_config/bha_scenarios", full.names = TRUE, pattern = "\\.R$")
+sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
 # Calibration
 l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
@@ -25,12 +24,12 @@ scenario_list <- list(
 )
 
 # Directory paths
-config_dir <- "gram_analysis/2025_Jul_paper2_testingstrategies/bha_scenarios"
-output_dir <- "gram_analysis/2025_Jul_paper2_testingstrategies/sim_results"
+config_dir <- "analyses/paper2_testing_strategies_20250700/bha_scenarios"
+output_dir <- "analyses/paper2_testing_strategies_20250700/sim_results"
 
 
 ## Run scenarios ####
-for (scen in names(scenario_list[4])) {
+for (scen in names(scenario_list[1:3])) {
   local({
     config_file <- file.path(config_dir, scenario_list[[scen]])
     cat("Running scenario:", scen, "\n")
@@ -50,44 +49,15 @@ for (scen in names(scenario_list[4])) {
 for (scen in names(scenario_list[1:3])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
+  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies_20250700/test_perf_results", paste0(scen, ".rds")))
 }
 
 # Step 2: generate plots
 plot_list <- list()
 
-# all plots have max y axis 100,000 (total N in simulation)
-# can change using the y_max argument of plot_test_results()
-
-# # linear y axis - all lines
-# for (scen in names(scenario_list[1:3])) {
-#   test_data <- readRDS(file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
-#   test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen)
-#   plot_list[[scen]] <- test_plot
-# }
-# 
-# plot_bhapos_linear <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + plot_list[["r1bhapos"]]) + 
-#   plot_layout(ncol = 3, guides = "collect") + 
-#   plot_annotation(theme = theme(legend.position = "bottom"))
-# ggsave("gram_analysis/2025_Jul_paper2_testingstrategies/plots/all-lines-linear.jpeg", plot_bhapos_linear, height = 4, width = 10)  
-# 
-# 
-# # log y axis - all lines
-# for (scen in names(scenario_list[1:3])) {
-#   test_data <- readRDS(file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
-#   test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen, y_transform = "log10")
-#   plot_list[[scen]] <- test_plot
-# }
-# 
-# plot_bhapos_log10 <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + plot_list[["r1bhapos"]]) + 
-#   plot_layout(ncol = 3, guides = "collect") + 
-#   plot_annotation(theme = theme(legend.position = "bottom"))
-# ggsave("gram_analysis/2025_Jul_paper2_testingstrategies/plots/all-lines-semilog10.jpeg", plot_bhapos_log10, height = 4, width = 10) 
-# 
-
 # linear y axis - no early positives (i.e., dotted lines)
 for (scen in names(scenario_list[1:3])) {
-  test_data <- readRDS(file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
+  test_data <- readRDS(file.path("analyses/paper2_testing_strategies_20250700/test_perf_results", paste0(scen, ".rds")))
   test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen, show_early_pos = FALSE, y_max = 75000)
   plot_list[[scen]] <- test_plot
 }
@@ -96,44 +66,19 @@ plot_bhapos_noearlypos <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + p
   plot_layout(ncol = 3, guides = "collect") + 
   plot_annotation(theme = theme(legend.position = "bottom",
                                 legend.box = "vertical", legend.spacing.y = unit(0.1, "cm")))
-ggsave("gram_analysis/2025_Jul_paper2_testingstrategies/plots/no-early-positives.jpeg", plot_bhapos_noearlypos, height = 5, width = 8) 
+ggsave("analyses/paper2_testing_strategies_20250700/plots/no-early-positives.jpeg", plot_bhapos_noearlypos, height = 5, width = 8) 
 
-
-# # linear y axis - no non-testers (i.e., x marked lines)
-# for (scen in names(scenario_list[1:3])) {
-#   test_data <- readRDS(file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
-#   test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen, show_non_testers = FALSE)
-#   plot_list[[scen]] <- test_plot
-# }
-# 
-# plot_bhapos_nonontesters <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + plot_list[["r1bhapos"]]) + 
-#   plot_layout(ncol = 3, guides = "collect") + 
-#   plot_annotation(theme = theme(legend.position = "bottom"))
-# ggsave("gram_analysis/2025_Jul_paper2_testingstrategies/plots/no-non-testers.jpeg", plot_bhapos_nonontesters, height = 4, width = 10) 
-# 
-# 
-# # linear y axis - no non-testers or early positives
-# for (scen in names(scenario_list[1:3])) {
-#   test_data <- readRDS(file.path("gram_analysis/2025_Jul_paper2_testingstrategies/test_perf_results", paste0(scen, ".rds")))
-#   test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen, show_non_testers = FALSE, show_early_pos = FALSE)
-#   plot_list[[scen]] <- test_plot
-# }
-# 
-# plot_bhapos_nonontesters_noearlypositives <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + plot_list[["r1bhapos"]]) + 
-#   plot_layout(ncol = 3, guides = "collect") + 
-#   plot_annotation(theme = theme(legend.position = "bottom"))
-# ggsave("gram_analysis/2025_Jul_paper2_testingstrategies/plots/no-non-testers-or-early-positives.jpeg", plot_bhapos_nonontesters_noearlypositives, height = 4, width = 10) 
 
 
 ## Reporting methods ####
 # Table 1: Testing likelihood by strategy and cognitive state
-reactive_testing_likelihood <- l.inputs_calibrated$m.cogcon_spon[1,-1]
-l.inputs_calibrated$m.cogcon_elic
+reactive_testing_likelihood <- l.inputs_calibrated$m.cogcon_reactive[1,-1]
+l.inputs_calibrated$m.cogcon_selective
 l.inputs_calibrated$m.cogcon
 
 tab1 <- flextable(as.data.frame(rbind(
-  l.inputs_calibrated$m.cogcon_spon[1,-1],
-  l.inputs_calibrated$m.cogcon_elic[1,-1],
+  l.inputs_calibrated$m.cogcon_reactive[1,-1],
+  l.inputs_calibrated$m.cogcon_selective[1,-1],
   l.inputs_calibrated$m.cogcon[1,-1]
 )))
 

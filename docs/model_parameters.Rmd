@@ -337,7 +337,7 @@ Outputs are saved to the global environment.
 To ensure the script runs successfully:
 
 1.  **Data Files**
-    -   Make sure the required RDS files (`non_dementia_mortality_prob_by_age_v2.RDS`, `mci_incidence_rate_by_age.RDS`) are placed in the `../gram_data/` directory.
+    -   Make sure the required RDS files (`non_dementia_mortality_prob_by_age_v2.RDS`, `mci_incidence_rate_by_age.RDS`) are placed in the `data/` directory.
 2.  **R Libraries**
     -   Install the necessary libraries: `install.packages(c("tidyverse", "scales", "ggpattern", "flextable","knittr"))`
 3.  **Working Directory**

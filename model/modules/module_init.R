@@ -28,7 +28,9 @@ f.initialize <- function(l.inputs, microdata) {
     a.out[1,"MEDBUR",] <- synthetic_pop$MEDBUR
     a.out[1,"APOE4",] <- synthetic_pop$APOE4
     a.out[1,"HCARE",] <- synthetic_pop$INSURANCE * as.numeric(a.random[1,"HCARE",] < l.inputs[["p.HCARE_start"]][2]) 
+  
   } else {
+    
     a.out[1,"AGE",]       <- round(qnorm(p = a.random[1,"AGE",], mean = l.inputs[["AGE_start_mean"]], sd = l.inputs[["AGE_start_sd"]]),0)
     a.out[1,"AGE",][a.out[1,"AGE",]<50] <- 50
     a.out[1,"AGE",][a.out[1,"AGE",]>99] <- 99
@@ -54,7 +56,7 @@ f.initialize <- function(l.inputs, microdata) {
     tmp_probs_2plus_medbur <- case_when(
       a.out[1,"EDU",] >= 16 ~ 1,
       a.out[1,"EDU",] >= 12 ~ 1.32,
-      a.out[1,"EDU",] < 12 ~ 1.58) * 0.531    # See script "calculate_initial_medbur.R"
+      a.out[1,"EDU",] < 12 ~ 1.58) * 0.531    
     tmp_2plus_medbur <- qbinom(p = tmp_rand, size = 1, prob = tmp_probs_2plus_medbur)
     
     prev.no_of_conditions_male <- c(0.155, 0.205, 0.220, 0.175, 0.105, 0.060, 0.045, 0.020, 0.018, 0.005, 0.001)

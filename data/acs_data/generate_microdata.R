@@ -6,7 +6,7 @@ library(dplyr)
 set.seed(20240324)
 
 # Load the IPUMS DDI metadata
-ddi <- read_ipums_ddi("gram_data/acs_data/usa_00004.xml")
+ddi <- read_ipums_ddi("data/acs_data/usa_00004.xml")
 
 # Read the microdata file
 acs_data_raw <- read_ipums_micro(ddi)
@@ -132,49 +132,5 @@ summary(acs_data) # Income has NAs, remove them
 acs_data <- acs_data %>%
   filter(!is.na(INCOME_CAT))
 
-saveRDS(acs_data, "gram_data/acs_data/acs_age50_RACE-revised.RDS")
-
-
-# Create sample cohorts: 3 sets with 10,000 people, accounting for person weights.
-generate_synthetic_sample <- function(pop_data, target_size, seed) {
-  set.seed(seed)  # Ensure reproducibility for each dataset
-  pop_data %>%
-    slice_sample(n = target_size, weight_by = PERWT, replace = TRUE)
-}
-
-sample1 <- generate_synthetic_sample(acs_data, target_size = 10000, seed = 1001)
-sample2 <- generate_synthetic_sample(acs_data, target_size = 10000, seed = 1002)
-sample3 <- generate_synthetic_sample(acs_data, target_size = 10000, seed = 1003)
-
-
-# Validation checks
-colSums(is.na(acs_data))  
-
-sapply(list(sample1, sample2, sample3), nrow)
-
-summary(sample1$EDUC)
-summary(sample2$EDUC)
-summary(sample3$EDUC)
-
-prop.table(table(sample1$SEX))
-prop.table(table(sample2$SEX))
-prop.table(table(sample3$SEX))
-
-prop.table(table(sample1$APOE4))
-prop.table(table(sample2$APOE4))
-prop.table(table(sample3$APOE4))
-
-summary(acs_data$AGE)
-summary(acs_data$EDUC)
-summary(acs_data$MEDBUR)
-summary(acs_data$APOE4)
-prop.table(table(acs_data$APOE4))
-prop.table(table(acs_data$MEDBUR))
-
-
-# Save samples
-saveRDS(sample1, "gram_data/acs_data/acs_sample_1.rds")
-saveRDS(sample2, "gram_data/acs_data/acs_sample_2.rds")
-saveRDS(sample3, "gram_data/acs_data/acs_sample_3.rds")
-
+saveRDS(acs_data, "data/acs_data/acs_age50_RACE-revised.RDS")
 

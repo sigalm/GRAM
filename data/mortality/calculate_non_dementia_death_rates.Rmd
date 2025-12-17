@@ -17,8 +17,8 @@ getwd()
 The model utilizes the risk ratio for mortality to evaluate the increased risk for death among those with dementia. However, using the risk ratio in conjunction with all-cause mortality inflates overall mortality in the model. We thus estimated the non-dementia-related mortality rate (i.e, mortality among those without the risk factor) by subtracting dementia-related deaths from all-cause deaths at each age. All-cause and dementia-related death rates were obtained from the CDC Wonder database.
 
 ```{r load}
-path_allcause <- "gram_data/mortality/allcause_deaths_bysex_byage.csv"
-path_dementia <- "gram_data/mortality/dementia_deaths_bysex_byage.csv"
+path_allcause <- "data/mortality/allcause_deaths_bysex_byage.csv"
+path_dementia <- "data/mortality/dementia_deaths_bysex_byage.csv"
 
 
 allcause_raw <- read.csv(path_allcause)  

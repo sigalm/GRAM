@@ -57,3 +57,7 @@ data/acs_data/raw/
 analyses/**/results/
 analyses/**/*.RDS
 analyses/**/*.rds
+
+# Rendered notebook outputs (can be regenerated)
+*.nb.html
+calibration/*.html

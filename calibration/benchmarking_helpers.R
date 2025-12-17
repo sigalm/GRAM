@@ -20,7 +20,7 @@ benchmark_values <<- tribble(
 )
 
 
-lifetable <- read.csv("gram_data/mortality/table_prob_die_next_year.csv")
+lifetable <- read.csv("data/mortality/table_prob_die_next_year.csv")
 lifetable <<- lifetable %>%
   mutate(rate = - log(1 - qx))
 

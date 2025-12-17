@@ -26,4 +26,4 @@ df_predict <- df_predict %>%
 
 plot(df_predict$mci)
 
-saveRDS(df_predict, "gram_data/mci_incidence/mci_incidence_rate_by_age.RDS")
+saveRDS(df_predict, "data/mci_incidence/mci_incidence_rate_by_age.RDS")

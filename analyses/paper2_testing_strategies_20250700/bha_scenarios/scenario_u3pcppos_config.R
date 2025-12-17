@@ -17,7 +17,7 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternatives.
+  probs_cogcon = l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_reactive or m.cogcon_selective for alternatives.
   prob_pcpfu = 1,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
   repeat_interval = 3,    # years between BHA administrations
   cohort_split = 3,

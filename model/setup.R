@@ -10,12 +10,7 @@ gc() # garbage collection (i.e., clean up memory)
 # load necessary packages
 library(tidyverse)
 library(scales)
-library(ggpattern)
 library(flextable)
-library(knitr)
-library(tableone)
-library(kableExtra)
-library(tibble)
 library(patchwork)
 ######################################## 1. DEFINE MODEL INPUTS ########################################
 l.inputs <- vector(mode = "list", length = 0)
@@ -54,6 +49,7 @@ l.inputs[["v.LTC_val"]]  <- c(0,1)      # 0 = not institutionalized / not in lon
 ######################################## 1.1. USER-DEFINED MODEL SETTINGS ########################################
 
 # model settings
+
 l.inputs[["n.ind"]] <- 10000                               # number of individuals to simulate
 l.inputs[["n.cycle"]] <- 50                                # number of cycles to simulate
 l.inputs[["seed_stochastic"]] <- 20240202                  # seed for generating random values that drive stochastic parameters
@@ -70,18 +66,18 @@ l.inputs[["r.discount_COST"]] <- 0.03
 
 
 ######################################## 1.2. EXTERNAL MODEL INPUTS ########################################
-# model inputs for deterministic analysis
 
 ## Demographic inputs
+#### The following block is necessary only if NOT using an external microdata file
 l.inputs[["AGE_start_mean"]] <- 50
 l.inputs[["AGE_start_sd"]] <- 0
-
 l.inputs[["p.SEX_start_male"]] <- 0.49
 l.inputs[["p.SEX_start_female"]] <- 0.51
-
 l.inputs[["p.EDU_start"]] <- c(0.536, 0.362, 0.102) # p for college, high school, less than high school, respectively. must add to 1.
 l.inputs[["p.RACEETH_start"]] <- c(0.64, 0.14, 0.22)      # p for RACEETH = 0 (white), RACEETH = 1 (Black), and RACEETH = 2 (Hisp)
 l.inputs[["p.INCOME_start"]] <- c(0.05, 0.17, 0.78) # p for low, medium, high income, respectively
+####
+
 l.inputs[["p.APOE4_start"]] <- c(0.75, 0.25)        # p for non-carrier and carrier, respectively
 l.inputs[["p.HCARE_start"]] <- c(0.25, 0.75)        # p for no regular provider and has regular provider, respectively (assumed)
 l.inputs[["p.DX_start"]]    <- c(1,0)               # Everyone undiagnosed at start (assumed)
@@ -91,8 +87,6 @@ l.inputs[["p.MEMLOSS_start"]] <- c(1, 0)            # p for MEMLOSS == 0 (no mem
 l.inputs[["p.SEV_start"]] <- c(1, 0, 0, 0)          # p for MCI, mild dem, moderate dem, severe dem, respectively
 
 l.inputs[["p.MEMLOSS_new"]] <- 0.09   # prob of being non-progressive memory loss for new cognitive impairment
-
-l.inputs[["MEDBUR_start"]] <- readRDS("gram_data/medbur/initial_medbur.RDS")
 
 l.inputs[["coef_MEDBUR"]] <- 0.1       # 0.2
 l.inputs[["amplification_MEDBUR"]] <- 0.025
@@ -110,12 +104,12 @@ l.inputs[["hr.mort_mod_age"]] <- c(1,0.6,0.3)
 l.inputs[["hr.mort_sev_age"]] <- c(1,0.6,0.3)
 
 
-l.inputs[["m.lifetable"]] <- as.matrix(readRDS("gram_data/mortality/non_dementia_mortality_prob_bysex_byage.RDS")[ , c("m_prob_non_dementia", "f_prob_non_dementia")])
+l.inputs[["m.lifetable"]] <- as.matrix(readRDS("data/mortality/non_dementia_mortality_prob_bysex_byage.RDS")[ , c("m_prob_non_dementia", "f_prob_non_dementia")])
 
 
 
 ## Logistic regression for transition to MCI from Healthy
-l.inputs[["m.hr_mci"]] <- array(data = readRDS("gram_data/mci_incidence/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
+l.inputs[["m.hr_mci"]] <- array(data = readRDS("data/mci_incidence/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
                                 dimnames = list(50:100, "r")) / 1000 # divide by 1000 to scale from 1000 person-years to annual rate
 l.inputs[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 4    # adjust baseline for risk factors
 
@@ -191,9 +185,9 @@ l.inputs[["rr.Px_mci"]] <- 1 # Hypothetical -- risk ratio for developing MCI giv
 
 ## Scenarios
 
-l.inputs[["m.cogcon_spon"]] <- readRDS("gram_data/cogcon/m.cogcon_spon.RDS")
-l.inputs[["m.cogcon_elic"]] <- readRDS("gram_data/cogcon/m.cogcon_elic.RDS")
-l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_spon"]] %>%
+l.inputs[["m.cogcon_reactive"]] <- readRDS("data/cogcon/m.cogcon_reactive.RDS")
+l.inputs[["m.cogcon_selective"]] <- readRDS("data/cogcon/m.cogcon_selective.RDS")
+l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_reactive"]] %>%
   mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
 
 l.inputs[["rr.cogcon_prior"]] <- 2    # risk ratio for reporting cognitive concerns if concerns were reported in previous cycle (only acts on t-1)

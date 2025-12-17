@@ -17,7 +17,7 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon_elic"]],  # Defaults to everyone getting tested. Use m.cogcon_spon or m.cogcon_elic for alternatives.
+  probs_cogcon = l.inputs[["m.cogcon_selective"]],
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters
