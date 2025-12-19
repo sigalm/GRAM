@@ -233,8 +233,8 @@ plot_cumulative_count <- function(output_array,
 plot_test_results <- function(plot_data, 
                               y_axis_label = "Count",
                               ages = 50:100, 
-                              plot_title = "Cumulative Plot of All Testers",
-                              scenario_name = NULL,
+                              plot_title = "Testing Strategy Results",
+                              scenario_names = NULL, #must be a named list, where names correspond to scenario value in data
                               y_max = 100000,
                               y_transform = NULL,
                               show_early_pos = TRUE,
@@ -274,12 +274,12 @@ plot_test_results <- function(plot_data,
            notest_fn = ifelse((notest_fn == 0) & (fn_zero_rank > 1), 
                               NA, notest_fn)) %>%
     select(-tn_zero_rank, -fn_zero_rank) %>%
-    pivot_longer(cols = -age,
+    pivot_longer(cols = c(-age,-scenario),
                  names_to = "Result",
                  values_to = "Result_Value") %>%
     mutate(Result = factor(Result)) %>%
     left_join(category_map, by = "Result") %>%
-    rename(Age = age)
+    rename(Age = age, Scenario = scenario)
   
   no_test_data <- plot_data %>%
     filter(Test_Value == "No Test") %>%
@@ -337,8 +337,8 @@ plot_test_results <- function(plot_data,
     geom_point(data = subset(plot_data, Test_Value == "No Test"),
                aes(shape = Test_Value),
                color = "grey10") +
+    facet_wrap(~fct_rev(Scenario), labeller = as_labeller(scenario_names)) + 
     labs(title = plot_title,
-         subtitle = scenario_name,
          x = "Age",
          y = "Count") +
     ylim(0, y_max) + 
@@ -346,17 +346,16 @@ plot_test_results <- function(plot_data,
     scale_shape_manual(values = my_shapes, breaks = names(my_shapes)) +
     scale_fill_manual(values = my_fills, breaks = names(my_fills)) +
     guides(color = guide_legend(title = "Cognitive Status",
-                                override.aes = list(size = 4, linewidth = 3)),
-           # linetype = guide_legend(title = "Test Concordance With True Status"),
+                                override.aes = list(size = 3, linewidth = 1.5)),
            shape = guide_legend(title = "Test Result",
                                 override.aes = list(fill = my_fills,
                                                     size = 3)),
            fill = "none") +
-           
     theme_minimal() +
     theme(panel.grid.minor = element_blank(), 
           legend.position = "bottom",
-          legend.box = "vertical") 
+          legend.box = "vertical",
+          strip.text = element_text(size = 10)) 
   
   if (!is.null(y_transform)) {
     p <- p + scale_y_continuous(trans = y_transform)

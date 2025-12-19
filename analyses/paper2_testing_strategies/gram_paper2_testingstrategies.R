@@ -24,8 +24,8 @@ scenario_list <- list(
 )
 
 # Directory paths
-config_dir <- "analyses/paper2_testing_strategies_20250700/bha_scenarios"
-output_dir <- "analyses/paper2_testing_strategies_20250700/sim_results"
+config_dir <- "analyses/paper2_testing_strategies/bha_scenarios"
+output_dir <- "analyses/paper2_testing_strategies/sim_results"
 
 
 ## Run scenarios ####
@@ -49,24 +49,25 @@ for (scen in names(scenario_list[1:3])) {
 for (scen in names(scenario_list[1:3])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies_20250700/test_perf_results", paste0(scen, ".rds")))
+  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds")))
 }
 
 # Step 2: generate plots
-plot_list <- list()
-
-# linear y axis - no early positives (i.e., dotted lines)
-for (scen in names(scenario_list[1:3])) {
-  test_data <- readRDS(file.path("analyses/paper2_testing_strategies_20250700/test_perf_results", paste0(scen, ".rds")))
-  test_plot <- plot_test_results(test_data, ages = 65:80, plot_title = "All Test Results", scenario_name = scen, show_early_pos = FALSE, y_max = 75000)
-  plot_list[[scen]] <- test_plot
+test_data_combined <- data.frame()
+for (i in seq_along(names(scenario_list[1:3]))) {
+  scen <- names(scenario_list)[i]
+  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
+    mutate(scenario = scen)
+  test_data_combined <- rbind(test_data_combined, test_data)
 }
 
-plot_bhapos_noearlypos <- (plot_list[["u3bhapos"]] + plot_list[["s1bhapos"]] + plot_list[["r1bhapos"]]) + 
-  plot_layout(ncol = 3, guides = "collect") + 
-  plot_annotation(theme = theme(legend.position = "bottom",
-                                legend.box = "vertical", legend.spacing.y = unit(0.1, "cm")))
-ggsave("analyses/paper2_testing_strategies_20250700/plots/no-early-positives.jpeg", plot_bhapos_noearlypos, height = 5, width = 8) 
+subtitles <- c("Inclusive testing, every 3 years",
+               "Selective testing, annual",
+               "Reactive testing, annual")
+names(subtitles) <- names(scenario_list)[1:3]
+plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
+
+ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", height = 10, width = 8) 
 
 
 
