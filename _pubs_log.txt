@@ -1,0 +1,35 @@
+GRAM Publishing Log
+====================
+
+This file tracks what has been copied to the public GRAM repo.
+Do NOT publish this file.
+
+---
+
+[DATE] - v1.0 - INITIAL RELEASE: Core Model and Validation Paper
+  Folders copied:
+    - model/
+    - data/ (excluding data/acs_data/raw/)
+    - analyses/paper1_modeldevelopment/code/
+    - docs/
+    - calibration/ 
+  Files copied:
+    - README.md
+    - .gitignore
+    - GRAM.Rproj
+  Notes:
+    - First public release
+    - Model version used for Maya et al, [title]
+
+---
+
+[DATE] - v2.0 - PAPER RELEASE: Cognitive Testing Strategies in Primary Care
+  Folders added:
+    - analyses/paper2_testingstrategies/
+      - bha_scenarios/
+      - code/
+  Changes to model/:
+    - [list any bug fixes or updates]
+  Notes:
+    - Code for Maya et al, [title]
+    - Includes scenario configs for scenarios modeled in the paper, as well as a config template for adaptations
