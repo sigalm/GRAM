@@ -67,6 +67,10 @@ subtitles <- c("Inclusive testing, every 3 years",
 names(subtitles) <- names(scenario_list)[1:3]
 plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
 
+plot_testers(test_data_combined, 
+             ages = 65:80, 
+             scenario_names = subtitles) 
+
 ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", height = 10, width = 8) 
 
 

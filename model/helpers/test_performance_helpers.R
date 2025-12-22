@@ -364,3 +364,75 @@ plot_test_results <- function(plot_data,
   return(p)
   
 }
+
+
+plot_testers <- function(plot_data, 
+                         y_axis_label = "Count",
+                         ages = 50:100, 
+                         plot_title = "Testing Status",
+                         scenario_names = NULL, #must be a named list, where names correspond to scenario value in data
+                         y_max = 100000) {
+  
+  
+  category_map <- tribble(
+    ~Result,        ~Status,       ~Test_Value,
+    "all_testers",  NA,            "Tested",
+    "notest_tn",    "Healthy",     "Not Tested",
+    "notest_fn",    "Impaired",    "Not Tested",
+    "death",        "Deaths",      NA)
+  
+  
+  plot_data <- plot_data %>%
+    filter(age %in% ages) %>%
+    mutate(all_testers = tp + fp + tn + fn + early_pos + converted_tp,
+           .keep = "unused") %>%
+    mutate(tn_zero_rank = cumsum(notest_tn == 0),
+           notest_tn = ifelse((notest_tn == 0) & (tn_zero_rank > 1), 
+                              NA, notest_tn)) %>%
+    mutate(fn_zero_rank = cumsum(notest_fn == 0),
+           notest_fn = ifelse((notest_fn == 0) & (fn_zero_rank > 1), 
+                              NA, notest_fn)) %>%
+    select(-tn_zero_rank, -fn_zero_rank) %>%
+    pivot_longer(cols = c(-age,-scenario),
+                 names_to = "Result",
+                 values_to = "Result_Value") %>%
+    mutate(Result = factor(Result)) %>%
+    left_join(category_map, by = "Result") %>%
+    rename(Age = age, Scenario = scenario)
+  
+  # colors for true status (red = impaired, blue = healthy)
+  my_colors <- c("Impaired" = "firebrick",
+                 "Healthy"  = "deepskyblue",
+                 "Deaths"   = "grey")
+  
+  my_shapes <- c(
+    "Tested" = 16, # Filled circle (21) for tested
+    "Not Tested" = 4)
+  
+  
+  p <- ggplot(plot_data, aes(x = Age, y = Result_Value)) +
+    geom_line(aes(group = Result, color = Status)) +
+    geom_point(aes(shape = Test_Value)) +
+    facet_wrap(~fct_rev(Scenario), labeller = as_labeller(scenario_names)) + 
+    labs(title = plot_title,
+         x = "Age",
+         y = "Count") +
+    ylim(0, y_max) + 
+    scale_color_manual(values = my_colors, breaks = names(my_colors)) +    
+    scale_shape_manual(values = my_shapes, breaks = names(my_shapes)) +
+    guides(color = guide_legend(title = "Cognitive Status",
+                                override.aes = list(size = 3, linewidth = 1.5)),
+           shape = guide_legend(title = "Test Status",
+                                override.aes = list(size = 3))) +
+    theme_minimal() +
+    theme(panel.grid.minor = element_blank(), 
+          legend.position = "bottom",
+          legend.box = "vertical",
+          strip.text = element_text(size = 10)) 
+  
+  return(p)
+    
+  
+  
+  
+}

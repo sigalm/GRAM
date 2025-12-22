@@ -6,12 +6,11 @@ Do NOT publish this file.
 
 ---
 
-[DATE] - v1.0 - INITIAL RELEASE: Core Model and Validation Paper
+2025.12.19 - v1.0 - INITIAL RELEASE: Core Model and Validation Paper
   Folders copied:
     - model/
     - data/ (excluding data/acs_data/raw/)
     - analyses/paper1_modeldevelopment/code/
-    - docs/
     - calibration/ 
   Files copied:
     - README.md
@@ -19,7 +18,7 @@ Do NOT publish this file.
     - GRAM.Rproj
   Notes:
     - First public release
-    - Model version used for Maya et al, [title]
+    - Model version used for development and validation paper
 
 ---
 
