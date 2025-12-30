@@ -406,7 +406,7 @@ plot_testers <- function(plot_data,
                  "Deaths"   = "grey")
   
   my_shapes <- c(
-    "Tested" = 16, # Filled circle (21) for tested
+    "Tested" = 16, 
     "Not Tested" = 4)
   
   
