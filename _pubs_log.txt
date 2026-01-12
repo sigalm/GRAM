@@ -6,7 +6,7 @@ Do NOT publish this file.
 
 ---
 
-2025.12.19 - v1.0 - INITIAL RELEASE: Core Model and Validation Paper
+2025.12.19 - INITIAL COMMIT: Model Development and Validation
   Folders copied:
     - model/
     - data/ (excluding data/acs_data/raw/)
@@ -17,18 +17,40 @@ Do NOT publish this file.
     - .gitignore
     - GRAM.Rproj
   Notes:
-    - First public release
+    - First public commit
     - Model version used for development and validation paper
 
 ---
 
-[DATE] - v2.0 - PAPER RELEASE: Cognitive Testing Strategies in Primary Care
-  Folders added:
-    - analyses/paper2_testingstrategies/
-      - bha_scenarios/
-      - code/
-  Changes to model/:
-    - [list any bug fixes or updates]
+2025.12.30 - DOCUMENTATION UPDATE
+  Folders copied:
+    - docs/
   Notes:
-    - Code for Maya et al, [title]
-    - Includes scenario configs for scenarios modeled in the paper, as well as a config template for adaptations
+    - Added documentation for model structure, workflow, and data sources
+
+---
+
+2025.12.30 - GITHUB RELEASE v1.0.0 - PAPER 1: Model Development and Validation
+  Files added:
+    - .zenodo.json (metadata for Zenodo archiving)
+  Files updated:
+    - README.md (added DOI badge and citation section)
+  DOI:
+    - Concept DOI: 10.5281/zenodo.18100887 (always points to latest version)
+    - Version DOI: 10.5281/zenodo.18100888 (v1.0.0 specific)
+  Notes:
+    - First Zenodo release for citable software
+    - GitHub release v1.0.0 created
+  Associated manuscript(s):
+    - Maya S, Hoang M, Atkins K, Mostert C, Possin KL, Kahn JG. 2025. Microsimulation model of the natural history of cognitive impairment and dementia.
+
+---
+
+[DATE] - GITHUB RELEASE v2.0.0 - PAPER 2: Cognitive Testing Strategies in Primary Care
+  Folders added:
+    - [list folders added]
+  Changes to model:
+    - [list any bug fixes or updates]
+  DOI: [Version DOI]
+  Associated manuscript(s):
+    - [Manuscript Title]

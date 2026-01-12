@@ -5,6 +5,7 @@ source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
+source("analyses/paper2_testing_strategies/test_performance_helpers.R")
 library(tableone)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
@@ -65,13 +66,13 @@ subtitles <- c("Inclusive testing, every 3 years",
                "Selective testing, annual",
                "Reactive testing, annual")
 names(subtitles) <- names(scenario_list)[1:3]
-plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
+p1 <- plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
 
 plot_testers(test_data_combined, 
              ages = 65:80, 
              scenario_names = subtitles) 
 
-ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", height = 10, width = 8) 
+ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", plot = p1, height = 10, width = 8) 
 
 
 
@@ -87,13 +88,15 @@ tab1 <- flextable(as.data.frame(rbind(
   l.inputs_calibrated$m.cogcon[1,-1]
 )))
 
-
 l.inputs_calibrated$sens_BHAGS
 l.inputs_calibrated$spec_BHAGS
 l.inputs_calibrated$rr.cogcon_prior
 
 ## Reporting results ####
 u3bhapos <- latest_rds("u3bhapos")$output
+s1bhapos <- latest_rds("s1bhapos")$output
+r1bhapos <- latest_rds("r1bhapos")$output
+
 subset_age_65 <- as.data.frame(t(u3bhapos[65-50+1,,])) # rows are IDs, cols are attributes
 
 prev_in_undx_65 <- subset_age_65 %>%
@@ -105,16 +108,63 @@ prev_in_undx_65 <- subset_age_65 %>%
   summarise(n = n()) %>%
   mutate(prev = n/sum(n))
 
+# List of scenario arrays
+scenario_arrays <- list(
+  u3bhapos = u3bhapos,
+  s1bhapos = s1bhapos,
+  r1bhapos = r1bhapos
+)
+
+# Function to compute prevalence at first test
+get_prev_at_first_test <- function(scenario_array) {
+  bha_matrix <- scenario_array[, "BHA", ]
+  first_bha_cycle <- apply(bha_matrix, 2, function(x) which(x == 0 | x == 1 )[1])
+  
+  subset_first_test <- t(sapply(seq_along(first_bha_cycle), function(i) {
+    cycle <- first_bha_cycle[i]
+    if (!is.na(cycle)) {
+      scenario_array[cycle, , i]
+    } else {
+      rep(NA, dim(scenario_array)[2])
+    }
+  }))
+  colnames(subset_first_test) <- dimnames(scenario_array)[[2]]
+  subset_first_test <- as.data.frame(subset_first_test)
+  
+  prev_by_status <- subset_first_test %>%
+    filter(ALIVE == 1, DX == 0) %>%
+    mutate(status = case_when(SYN < 1 ~ "h",
+                              SEV == 0 ~ "mci",
+                              SEV >= 1 ~ "dem")) %>%
+    group_by(status) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    mutate(prev = n / sum(n))
+  
+  n_tested <- sum(!is.na(first_bha_cycle))
+  n_tested_alive <- sum(subset_first_test$ALIVE == 1, na.rm = TRUE)
+  prop_alive_at_test <- n_tested_alive / n_tested
+  
+  list(
+    prev_by_status = prev_by_status,
+    n_tested = n_tested
+  )
+}
+
+# Apply to all scenarios
+prev_in_first_test <- lapply(scenario_arrays, get_prev_at_first_test)
+prev_in_first_test$s1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
+prev_in_first_test$r1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
 
 
+predictive_value <- test_data_combined %>%
+  filter(age %in% c(65, 70, 75, 80)) %>%
+  mutate(ppv = (tp + early_pos + converted_tp) / (tp + early_pos + converted_tp + fp),
+         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)))
 
 
-
-
-
-
-
-
+prop_identified <- test_data_combined %>%
+  filter(age %in% c(65, 70, 75, 80)) %>%
+  mutate(prop_ci = (tp + early_pos + converted_tp) / (tp + early_pos + converted_tp + fn + notest_fn))
 
 
 
