@@ -162,6 +162,7 @@ post_processing_outputs <- function(output_array) {
     fn = rowSums(fn, na.rm = TRUE),
     notest_tn = rowSums(notest_tn, na.rm = TRUE),
     notest_fn = rowSums(notest_fn, na.rm = TRUE),
+    clinical_dx = rowSums(clinical_dx, na.rm = TRUE),
     death = rowSums(deaths))
   
   return(plot_data)

@@ -7,6 +7,7 @@ source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
 source("analyses/paper2_testing_strategies/test_performance_helpers.R")
 library(tableone)
+library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
 # Calibration
@@ -18,6 +19,8 @@ scenario_list <- list(
   u3bhapos = "scenario_u3bhapos_config.R",
   s1bhapos = "scenario_s1bhapos_config.R",
   r1bhapos = "scenario_r1bhapos_config.R",
+  
+  s1bhapos_emr = "scenario_s1bhapos_emr_config.R",
   
   u3pcppos = "scenario_u3pcppos_config.R",
   s1pcppos = "scenario_s1pcppos_config.R",
@@ -50,14 +53,14 @@ for (scen in names(scenario_list[1:3])) {
 for (scen in names(scenario_list[1:3])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds")))
+  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds")))
 }
 
 # Step 2: generate plots
 test_data_combined <- data.frame()
 for (i in seq_along(names(scenario_list[1:3]))) {
   scen <- names(scenario_list)[i]
-  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
+  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
     mutate(scenario = scen)
   test_data_combined <- rbind(test_data_combined, test_data)
 }
@@ -74,6 +77,14 @@ plot_testers(test_data_combined,
 
 ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", plot = p1, height = 10, width = 8) 
 
+## Sensitivity analyses ####
+### EMR-based selective strategy
+scen <- names(scenario_list)[4]
+test_data_emr_selective <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
+  mutate(scenario = scen)
+test_data_selective <- rbind(test_data_combined, test_data_emr_selective) %>%
+  filter(scenario %in% names(scenario_list[c(2,4)]))
+plot_test_results(test_data_selective, ages = 65:80, show_early_pos = FALSE, y_max = 75000)
 
 
 ## Reporting methods ####
@@ -152,22 +163,63 @@ get_prev_at_first_test <- function(scenario_array) {
 
 # Apply to all scenarios
 prev_in_first_test <- lapply(scenario_arrays, get_prev_at_first_test)
+
+# Calculate % of undx tested
 prev_in_first_test$s1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
 prev_in_first_test$r1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
 
+# Calculate total CI prev at first test
+sum(prev_in_first_test$u3bhapos$prev_by_status$prev[c(1,3)])
+sum(prev_in_first_test$s1bhapos$prev_by_status$prev[c(1,3)])
+sum(prev_in_first_test$r1bhapos$prev_by_status$prev[c(1,3)])
+
+
+# Make table with result numbers
+results_table <- test_data_combined %>%
+  filter(age %in% c(65,67,75)) %>%
+  mutate(age = age,
+         scenario = scenario,
+         tp = tp + converted_tp,
+         fp = fp + early_pos,
+         tn = tn + notest_tn,
+         fn = fn + notest_fn,
+         dead = death,
+         .keep = "none") %>%
+  flextable()
+
+
+
 
 predictive_value <- test_data_combined %>%
+  filter(age %in% c(65, 67, 70, 75, 80)) %>%
+  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
+         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
+         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
+         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
+         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
+
+predictive_value_emr <- test_data_emr_selective %>%
   filter(age %in% c(65, 70, 75, 80)) %>%
-  mutate(ppv = (tp + early_pos + converted_tp) / (tp + early_pos + converted_tp + fp),
-         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)))
-
-
-prop_identified <- test_data_combined %>%
-  filter(age %in% c(65, 70, 75, 80)) %>%
-  mutate(prop_ci = (tp + early_pos + converted_tp) / (tp + early_pos + converted_tp + fn + notest_fn))
+  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
+         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
+         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
+         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
+         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
 
 
 
+results_table <- data.frame(
+  Time = c(rep("First Test",3), rep("By Year 10", 3)),
+  Strategy = rep(c("Inclusive", "Selective", "Reactive"), 2),
+  Sensitivity = round(predictive_value$sens[c(2,6,11, 4,9,14)] * 100, digits = 1),
+  Specificity = round(predictive_value$spec[c(2,6,11, 4,9,14)] * 100, digits = 1),
+  PPV = round(predictive_value$ppv[c(2,6,11, 4,9,14)] * 100, digits = 1),
+  NPV = round(predictive_value$npv[c(2,6,11, 4,9,14)] * 100, digits = 1),
+  Accuracy = round(predictive_value$acc[c(2,6,11, 4,9,14)] * 100, digits = 1)
+)
+
+
+flextable(results_table)
 
 ## Early diagnoses ####
 
