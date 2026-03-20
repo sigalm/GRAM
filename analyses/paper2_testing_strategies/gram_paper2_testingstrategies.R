@@ -13,19 +13,32 @@ sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 # Calibration
 l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
 
+# Analysis plan:
+# Strategies analyzed will follow the GRAM-ish one-time testing paper
+#   (1) reactive testing
+#   (2) selective with eRADAR/EHR-based
+#   (3) inclusive 50% random opt-in
+
+# Outcomes reported:
+#   (a) overall sensitivity/specificity
+#   (b) PPV and NPV 
+#   all at two time points: at first test, and after 10 years
+
+# Sensitivity analyses
+#   (1) a question-based selective option
+#   (2) inclusive with non-random selection (NB, unlike GRAM-ish, total testing not fixed at 50% here)
+#   (3) threshold inclusive with random selection?? TBD
+
+
 # List of scenario config files and output names
 scenario_list <- list(
   
-  u3bhapos = "scenario_u3bhapos_config.R",
-  s1bhapos = "scenario_s1bhapos_config.R",
+  u3bhapos_rand50 = "scenario_u3bhapos_rand50_config.R",
+  s1bhapos_emr = "scenario_s1bhapos_emr_config.R",
   r1bhapos = "scenario_r1bhapos_config.R",
   
-  s1bhapos_emr = "scenario_s1bhapos_emr_config.R",
-  
-  u3pcppos = "scenario_u3pcppos_config.R",
-  s1pcppos = "scenario_s1pcppos_config.R",
-  r1pcppos = "scenario_r1pcppos_config.R"
-)
+  s1bhapos_question = "scenario_s1bhapos_question_config.R",
+  u3bhapos_nonrand = "scenario_u3bhapos_nonrand_config.R")
 
 # Directory paths
 config_dir <- "analyses/paper2_testing_strategies/bha_scenarios"
@@ -33,7 +46,7 @@ output_dir <- "analyses/paper2_testing_strategies/sim_results"
 
 
 ## Run scenarios ####
-for (scen in names(scenario_list[1:3])) {
+for (scen in names(scenario_list[1:5])) {
   local({
     config_file <- file.path(config_dir, scenario_list[[scen]])
     cat("Running scenario:", scen, "\n")
@@ -50,41 +63,50 @@ for (scen in names(scenario_list[1:3])) {
 
 ######## Evolution Charts ####
 # Step 1: create and save test performance data
-for (scen in names(scenario_list[1:3])) {
+for (scen in names(scenario_list[1:5])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
   saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds")))
 }
 
 # Step 2: generate plots
-test_data_combined <- data.frame()
+main_test_data <- data.frame()
 for (i in seq_along(names(scenario_list[1:3]))) {
   scen <- names(scenario_list)[i]
-  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
+  temp_test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
     mutate(scenario = scen)
-  test_data_combined <- rbind(test_data_combined, test_data)
+  main_test_data <- rbind(main_test_data, temp_test_data)
 }
 
-subtitles <- c("Inclusive testing, every 3 years",
-               "Selective testing, annual",
+subtitles <- c("Inclusive testing with 50% uptake, every 3 years",
+               "Selective testing with eRADAR, annual",
                "Reactive testing, annual")
 names(subtitles) <- names(scenario_list)[1:3]
-p1 <- plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
+p1 <- plot_test_results(main_test_data, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
 
-plot_testers(test_data_combined, 
+plot_testers(main_test_data, 
              ages = 65:80, 
              scenario_names = subtitles) 
 
 ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", plot = p1, height = 10, width = 8) 
 
 ## Sensitivity analyses ####
-### EMR-based selective strategy
+### Question-based selective strategy
 scen <- names(scenario_list)[4]
-test_data_emr_selective <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
+test_data_question_selective <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
   mutate(scenario = scen)
-test_data_selective <- rbind(test_data_combined, test_data_emr_selective) %>%
+test_data_selective <- rbind(main_test_data, test_data_question_selective) %>%
   filter(scenario %in% names(scenario_list[c(2,4)]))
 plot_test_results(test_data_selective, ages = 65:80, show_early_pos = FALSE, y_max = 75000)
+
+### Non-random inclusive
+scen <- names(scenario_list)[5]
+test_data_nonrand_inclusive <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
+  mutate(scenario = scen)
+test_data_inclusive <- rbind(main_test_data, test_data_nonrand_inclusive) %>%
+  filter(scenario %in% names(scenario_list[c(1,5)]))
+plot_test_results(test_data_inclusive, ages = 65:80, show_early_pos = FALSE, y_max = 75000)
+
 
 
 ## Reporting methods ####
@@ -104,11 +126,12 @@ l.inputs_calibrated$spec_BHAGS
 l.inputs_calibrated$rr.cogcon_prior
 
 ## Reporting results ####
-u3bhapos <- latest_rds("u3bhapos")$output
-s1bhapos <- latest_rds("s1bhapos")$output
+u3bhapos <- latest_rds("u3bhapos_rand50")$output
+s1bhapos <- latest_rds("s1bhapos_emr")$output
 r1bhapos <- latest_rds("r1bhapos")$output
 
 subset_age_65 <- as.data.frame(t(u3bhapos[65-50+1,,])) # rows are IDs, cols are attributes
+subset_age_67 <- as.data.frame(t(u3bhapos[67-50+1,,])) # rows are IDs, cols are attributes
 
 prev_in_undx_65 <- subset_age_65 %>%
   filter(ALIVE == 1, DX == 0) %>%
@@ -118,6 +141,17 @@ prev_in_undx_65 <- subset_age_65 %>%
   group_by(status) %>%
   summarise(n = n()) %>%
   mutate(prev = n/sum(n))
+
+
+prev_in_undx_67 <- subset_age_67 %>%
+  filter(ALIVE == 1, DX == 0) %>%
+  mutate(status = case_when(SYN < 1 ~ "h",
+                            SEV == 0 ~ "mci",
+                            SEV >= 1 ~ "dem")) %>%
+  group_by(status) %>%
+  summarise(n = n()) %>%
+  mutate(prev = n/sum(n))
+
 
 # List of scenario arrays
 scenario_arrays <- list(
@@ -165,8 +199,9 @@ get_prev_at_first_test <- function(scenario_array) {
 prev_in_first_test <- lapply(scenario_arrays, get_prev_at_first_test)
 
 # Calculate % of undx tested
-prev_in_first_test$s1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
-prev_in_first_test$r1bhapos$n_tested / prev_in_first_test$u3bhapos$n_tested
+prev_in_first_test$u3bhapos$n_tested / sum(prev_in_undx_67$n)
+prev_in_first_test$s1bhapos$n_tested / sum(prev_in_undx_65$n)
+prev_in_first_test$r1bhapos$n_tested / sum(prev_in_undx_65$n)
 
 # Calculate total CI prev at first test
 sum(prev_in_first_test$u3bhapos$prev_by_status$prev[c(1,3)])
@@ -175,7 +210,7 @@ sum(prev_in_first_test$r1bhapos$prev_by_status$prev[c(1,3)])
 
 
 # Make table with result numbers
-results_table <- test_data_combined %>%
+results_table <- main_test_data %>%
   filter(age %in% c(65,67,75)) %>%
   mutate(age = age,
          scenario = scenario,
@@ -190,7 +225,7 @@ results_table <- test_data_combined %>%
 
 
 
-predictive_value <- test_data_combined %>%
+predictive_value <- main_test_data %>%
   filter(age %in% c(65, 67, 70, 75, 80)) %>%
   mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
          npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
@@ -221,7 +256,7 @@ results_table <- data.frame(
 
 flextable(results_table)
 
-## Early diagnoses ####
+## OLD CODE -- Early diagnoses ####
 
 u1pcppos$output <- add_early_dx(u1pcppos$output, dx_var = "BHA-DX")
 

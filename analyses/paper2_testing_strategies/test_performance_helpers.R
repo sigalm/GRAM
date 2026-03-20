@@ -267,6 +267,7 @@ plot_test_results <- function(plot_data,
     
     
   plot_data <- plot_data %>%
+    select(-clinical_dx) %>%
     filter(age %in% ages) %>%
     mutate(tn_zero_rank = cumsum(notest_tn == 0),
            notest_tn = ifelse((notest_tn == 0) & (tn_zero_rank > 1), 
@@ -384,6 +385,7 @@ plot_testers <- function(plot_data,
   
   
   plot_data <- plot_data %>%
+    select(-clinical_dx) %>%
     filter(age %in% ages) %>%
     mutate(all_testers = tp + fp + tn + fn + early_pos + converted_tp,
            .keep = "unused") %>%

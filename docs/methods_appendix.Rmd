@@ -11,18 +11,13 @@ bibliography: references.bib
 
 # Abstract
 
-The Global Brain Health Institute (GBHI) Resource Allocation Model (GRAM) is a microsimulation model that simulates individual trajectories 
-through cognitive health states from age 50 onwards. The model portrays the natural progression of dementia, incorporating individual-level 
-heterogeneity in demographic characteristics, genetic risk factors, and disease progression rates. GRAM supports evaluation of screening 
-interventions, disease-modifying treatments, and cost-effectiveness analyses. The model is adapted from IPECAD 1.2 and implemented in R.
+The Global Brain Health Institute (GBHI) Resource Allocation Model (GRAM) is a microsimulation model that simulates individual trajectories through cognitive health states from age 50 onwards. The model portrays the natural progression of dementia, incorporating individual-level heterogeneity in demographic characteristics, genetic risk factors, and disease progression rates. GRAM supports evaluation of screening interventions, disease-modifying treatments, and cost-effectiveness analyses. The model is adapted from IPECAD 1.2 and implemented in R.
 
 # Model Structure
 
 ## Overview
 
-GRAM is a discrete-time microsimulation model with annual cycles. Simulated individuals transition through cognitive health states 
-based on age-specific incidence rates, individual risk factors, and stochastic variation. The model tracks multiple attributes for each 
-individual across time, stored in a 3-dimensional array with dimensions for time cycles, variables, and individuals.
+GRAM is a discrete-time microsimulation model with annual cycles. Simulated individuals transition through cognitive health states based on age-specific incidence rates, individual risk factors, and stochastic variation. The model tracks multiple attributes for each individual across time, stored in a 3-dimensional array with dimensions for time cycles, variables, and individuals.
 
 ## Health States
 
@@ -38,10 +33,7 @@ This is a tunnel state that lasts for 2 years before MCI. (SYN = 0.5)
 - **Severe Dementia**: Advanced dementia with substantial care needs (SYN = 1, SEV = 3)
 - **Death**: Absorbing state
 
-Transitions are generally unidirectional (no reversion to better health states), with the exception that 
-a proportion of incident memory loss cases may be reversible (e.g., due to treatable causes such as 
-medication effects, depression, or metabolic disturbances). The model distinguishes between true cognitive 
-status (SYN) and observed/diagnosed status, allowing for screening and diagnostic test performance to be modeled.
+Transitions are generally unidirectional (no reversion to better health states), with the exception that a proportion of incident memory loss cases may be reversible (e.g., due to treatable causes such as medication effects, depression, or metabolic disturbances). The model distinguishes between true cognitive status (SYN) and observed/diagnosed status, allowing for screening and diagnostic test performance to be modeled.
 
 ## Time Horizon and Cycle Length
 
@@ -99,9 +91,7 @@ The model tracks the following attributes for each simulated individual:
 
 ## Demographic Inputs
 
-The model initializes a cohort of individuals at age 50 with characteristics drawn from the American Community Survey (ACS). 
-Individual-level microdata are used to preserve correlations between demographic variables, 
-but alternative distributions may be defined for each attribute in `setup.R`.
+The model initializes a cohort of individuals at age 50 with characteristics drawn from the American Community Survey (ACS). Individual-level microdata are used to preserve correlations between demographic variables, but alternative distributions may be defined for each attribute in `setup.R`.
 
 | **Characteristic** | **Parameter** | **Default Value** | **Source** |
 |--------------------|---------------|-------------------|------------|
@@ -127,9 +117,7 @@ but alternative distributions may be defined for each attribute in `setup.R`.
 | Non-carrier | `p.APOE4_start[1]` | 0.75 | @dibattista2016 |
 | Carrier | `p.APOE4_start[2]` | 0.25 | @dibattista2016 |
 
-**Medical Burden**: Derived using education-adjusted prevalence from @chowdhury2023. 
-Baseline prevalence of 0–10 conditions from population data, adjusted by education-specific odds ratios 
-for having 2+ conditions (College = 1.0 reference, High School = 1.32, Less than High School = 1.58).
+**Medical Burden**: Derived using education-adjusted prevalence from @chowdhury2023. Baseline prevalence of 0–10 conditions from population data, adjusted by education-specific odds ratios for having 2+ conditions (College = 1.0 reference, High School = 1.32, Less than High School = 1.58).
 
 # Disease Progression
 
@@ -137,8 +125,7 @@ for having 2+ conditions (College = 1.0 reference, High School = 1.32, Less than
 
 ### Age-Specific Incidence Rates
 
-MCI incidence rates are based on @gillis2019, with age-specific rates per 1,000 person-years.
-Missing values were interpolated using log-linear regression.
+MCI incidence rates are based on @gillis2019, with age-specific rates per 1,000 person-years. Missing values were interpolated using log-linear regression.
 
 **Data source**: `mci_incidence_rate_by_age.RDS`
 
@@ -156,15 +143,13 @@ Individual MCI incidence probability is adjusted using logistic regression coeff
 
 ### Reversible MCI
 
-A proportion of incident MCI cases are assumed to be reversible (e.g., due to treatable causes 
-such as medication effects, depression, or metabolic disturbances):
+A proportion of incident MCI cases are assumed to be reversible (e.g., due to treatable causes such as medication effects, depression, or metabolic disturbances):
 
 - **Probability of reversible MCI**: `p.MEMLOSS_new` = 0.10 [@clarfield2003]
 
 ## CDR-SB Progression
 
-Disease severity is measured using the Clinical Dementia Rating Scale - Sum of Boxes (CDR-SB), 
-which ranges from 0 (no impairment) to 18 (severe impairment).
+Disease severity is measured using the Clinical Dementia Rating Scale - Sum of Boxes (CDR-SB), which ranges from 0 (no impairment) to 18 (severe impairment).
 
 ### Progression Rates
 
@@ -194,12 +179,9 @@ CDR-SB scores are mapped to categorical severity levels using validated cutoff s
 
 ## Non-Dementia Mortality
 
-Background mortality rates are derived from CDC WONDER data (2018–2024), with dementia-related deaths removed 
-to obtain non-dementia mortality probabilities [@cdcwonder].
+Background mortality rates are derived from CDC WONDER data (2018–2024), with dementia-related deaths removed to obtain non-dementia mortality probabilities [@cdcwonder].
 
-**Methodology**: All-cause mortality rates minus dementia-related mortality rates 
-(ICD-10 codes F01.0, F01.1, F01.2, F01.3, F01.8, F01.9, F03, F06.7, G30.0, G30.1, G30.8, G30.9), 
-converted to annual probabilities. Missing rates for ages 85+ were extrapolated using log-linear regression.
+**Methodology**: All-cause mortality rates minus dementia-related mortality rates (ICD-10 codes F01.0, F01.1, F01.2, F01.3, F01.8, F01.9, F03, F06.7, G30.0, G30.1, G30.8, G30.9), converted to annual probabilities. Missing rates for ages 85+ were extrapolated using log-linear regression.
 
 **Data source**: `non_dementia_mortality_prob_by_age_v2.RDS`
 
@@ -214,12 +196,7 @@ Mortality risk is increased for individuals with cognitive impairment, with haza
 | Moderate dementia vs. Healthy | `hr.mort_mod` | 3.85 |
 | Severe dementia vs. Healthy | `hr.mort_sev` | 9.52 |
 
-Individual mortality probability in each cycle is calculated as:
-
-$$p_{death} = 1 - (1 - p_{background})^{HR_{severity}}$$
-
-where $p_{background}$ is the age-specific non-dementia mortality probability and $HR_{severity}$ is 
-the hazard ratio for the individual's current cognitive status.
+Individual mortality probability in each cycle is calculated as: $$p_{death} = 1 - (1 - p_{background})^{HR_{severity}}$$ where $p_{background}$ is the age-specific non-dementia mortality probability and $HR_{severity}$ is the hazard ratio for the individual's current cognitive status.
 
 # Screening and Diagnosis
 
@@ -314,7 +291,7 @@ Future costs and QALYs are discounted at an annual rate of 3%:
 | **Parameter** | **Variable Name** | **Default Value** | **Description** |
 |---------------|-------------------|-------------------|-----------------|
 | Scenario name | `scenario` | "GRAM natural course of disease" | Descriptive name for simulation |
-| Number of individuals | `n.ind` | 10,000 | Cohort size |
+| Number of individuals | `n.ind` | 100,000 | Cohort size |
 | Number of cycles | `n.cycle` | 50 | Simulation time horizon (years) |
 | Stochastic seed | `seed_stochastic` | 20240202 | Random seed for reproducibility |
 
@@ -340,8 +317,7 @@ The model includes infrastructure for probabilistic sensitivity analysis (PSA), 
 
 # Model Validation and Calibration
 
-CDR-SB progression rates were calibrated through visual inspection of survival curves to ensure alignment with 
-observed dementia incidence and prevalence patterns. 
+CDR-SB progression rates were calibrated through visual inspection of survival curves to ensure alignment with observed dementia incidence and prevalence patterns. 
 
 # Software Implementation
 

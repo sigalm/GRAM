@@ -3,7 +3,7 @@
 
 scenario_inputs <- list(
   
-  title       = as.factor("U1-HYBRID"),
+  title       = as.factor("U1-HYBRID_FU"),
   description = "Assess BHA eligibility via a prompt, with some % of patients receive PCP follow-up",
   
   # Test parameters

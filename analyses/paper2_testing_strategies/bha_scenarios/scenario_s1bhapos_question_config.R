@@ -2,7 +2,7 @@
 
 scenario_inputs <- list(
   
-  title       = as.factor("S1BHAPOS"),
+  title       = as.factor("S1BHAPOS-QUESTION"),
   description = "Assess BHA eligibility via a prompt each year until first positive result",
   
   # Test parameters

@@ -294,7 +294,6 @@ compare_prevalence <- function(sim, description, n) {
                         dat = prev_overall)))
 }
 
-
 compare_reside_time <- function(sim, description, n) {
   reside_time <- as.data.frame(sim$aggregated_results_totpop$reside_time$noncensored) %>%
     # mutate(dem = mil + mod + sev) %>%
