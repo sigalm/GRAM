@@ -1,9 +1,14 @@
 ## Scenario Config File
 
+probs_select <-  l.inputs[["m.cogcon"]]
+probs_select[,"h"] <- 0.09
+probs_select[,"mci"] <- 0.8
+probs_select[,"dem"] <- 1
+
 scenario_inputs <- list(
   
-  title       = as.factor("S1PCPPOS"),
-  description = "Assess BHA eligibility with a prompt each year until a PCP diagnosis",
+  title       = as.factor("S1PCPPOS_EMR"),
+  description = "Assess BHA eligibility via eRADAR each year until a PCP diagnosis",
   
   # Test parameters
   test        = "BHA-GS", 
@@ -17,7 +22,7 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon_selective"]],
+  probs_cogcon = probs_select,
   repeat_interval = 1,    # years between BHA administrations
   prob_pcpfu = 1,
   

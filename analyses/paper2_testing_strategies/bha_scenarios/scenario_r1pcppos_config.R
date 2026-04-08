@@ -19,7 +19,8 @@ scenario_inputs <- list(
   age_stop_test = 80,
   probs_cogcon = l.inputs[["m.cogcon_reactive"]],
   repeat_interval = 1,    # years between BHA administrations
-  prob_pcpfu = 1,
+  prob_pcpfu = 1,         # prob PCP follow up given a POSITIVE BHA
+  
   
   # Optional parameters
   NP = NULL,              
