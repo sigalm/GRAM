@@ -9,9 +9,12 @@ calibrate <- function(inputs, n) {
   inputs[["hr.mort_mod_age"]] <- inputs[["hr.mort_sev_age"]] <- c(1, 1, 1)
   inputs[["seed_stochastic"]] <- 20250624
   
-  inputs[["r.CDRslow_mean"]] <-  
-    (seq(0, 1, length.out = 51)^1.5) * (1.5 * inputs[["r.CDRslow_mean"]])
-  inputs[["m.hr_mci"]] <- inputs[["m.hr_mci"]] * 2.2 /4
+  inputs[["param1"]]  <- 1.7900
+  inputs[["param2a"]] <- 1.8000
+  inputs[["param2b"]] <- 1.6680
+  inputs[["m.hr_mci"]] <- inputs[["m.hr_mci"]] * inputs[["param1"]]
+  inputs[["r.CDRslow_mean"]] <- (seq(0, 1, length.out = 51)^inputs[["param2a"]]) *
+                                 (inputs[["param2b"]] * inputs[["r.CDRslow_mean"]])
   
   return(inputs)
   

@@ -64,16 +64,16 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
   
   # PCP
   a.out[t,"PCP",alive] <- f.update_PCP(
-    prob_pcpfu     = l.inputs[["scenario"]][["prob_pcpfu"]],
-    v.DX.lag       = a.out[t-1,"DX",alive],
-    v.HCARE        = a.out[t,"HCARE",alive],
-    v.BHA          = a.out[t,"BHA",alive],
-    v.SYN          = a.out[t,"SYN",alive],
-    sens_PCP       = l.inputs[["sens_PCP"]], 
-    spec_PCP       = l.inputs[["spec_PCP"]],
-    rr_PCP_BHA     = l.inputs[["rr_PCP_BHA"]],
-    random_cycle   = a.random[t,"PCP",alive],
-    n.alive        = n.alive
+    prob_pcpfu         = l.inputs[["scenario"]][["prob_pcpfu"]],
+    v.DX.lag           = a.out[t-1,"DX",alive],
+    v.HCARE            = a.out[t,"HCARE",alive],
+    v.BHA              = a.out[t,"BHA",alive],
+    v.SYN              = a.out[t,"SYN",alive],
+    v.SEV              = a.out[t,"SEV",alive],
+    p.PCP_confirm_TP   = l.inputs[["scenario"]][["p.PCP_confirm_TP"]] %||% l.inputs[["p.PCP_confirm_TP"]],
+    p.PCP_reject_FP    = l.inputs[["scenario"]][["p.PCP_reject_FP"]] %||% l.inputs[["p.PCP_reject_FP"]],
+    random_cycle       = a.random[t,"PCP",alive],
+    n.alive            = n.alive
   )
   
   a.out[t,"any_PCP_pos",alive] <-  as.numeric((a.out[t-1,"any_PCP_pos",alive]) | (a.out[t,"PCP",alive] == 1))
@@ -252,11 +252,11 @@ f.update_DX <- function(v.DX.lag, v.SYN, v.SEV, v.HCARE, random_cycle, n.alive) 
 
 ######################################## PCP
 
-f.update_PCP <- function(prob_pcpfu, v.DX.lag, v.HCARE, v.BHA, v.SYN,
-                         sens_PCP, spec_PCP, rr_PCP_BHA, random_cycle, n.alive) {
+f.update_PCP <- function(prob_pcpfu, v.DX.lag, v.HCARE, v.BHA, v.SYN, v.SEV,
+                         p.PCP_confirm_TP, p.PCP_reject_FP, random_cycle, n.alive) {
 
   pcp <- rep(NA, n.alive)
-  
+
   if(is.null(prob_pcpfu) || prob_pcpfu == 0) {
     eligible <- rep(0, n.alive)
   } else {
@@ -264,11 +264,17 @@ f.update_PCP <- function(prob_pcpfu, v.DX.lag, v.HCARE, v.BHA, v.SYN,
     select_fu <- rbinom(n = length(eligible), size = 1, prob = prob_pcpfu)
     eligible <- eligible & select_fu
   }
-  
-  # if BHA result is available and positive
-  pcp[eligible & v.SYN < 1] <- as.numeric((1 - f.adjustprobability(spec_PCP,1,1,rr_PCP_BHA["spec_BHApos"])) > random_cycle[eligible & v.SYN < 1])
-  pcp[eligible & v.SYN == 1] <- as.numeric(f.adjustprobability(sens_PCP,1,1,rr_PCP_BHA["sens_BHApos"]) > random_cycle[eligible & v.SYN == 1])
-  
+
+  # PCP as filter on BHA-positive patients.
+  # Truly healthy: PCP correctly rejects FP BHA with probability p_PCP_reject_FP
+  pcp[eligible & v.SYN < 1] <- as.numeric((1 - p.PCP_reject_FP) > random_cycle[eligible & v.SYN < 1])
+
+  # Truly impaired: PCP confirms TP BHA with probability varying by SEV (SEV 0-3 -> index 1-4)
+  if(any(eligible & v.SYN == 1)) {
+    confirm_prob <- p.PCP_confirm_TP[v.SEV[eligible & v.SYN == 1] + 1]
+    pcp[eligible & v.SYN == 1] <- as.numeric(confirm_prob > random_cycle[eligible & v.SYN == 1])
+  }
+
   return(pcp)
 }
 

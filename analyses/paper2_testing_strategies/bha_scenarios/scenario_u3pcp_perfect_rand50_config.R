@@ -2,8 +2,8 @@
 
 scenario_inputs <- list(
   
-  title       = as.factor("U1PCPPOS-RAND50"),
-  description = "Repeat BHA every year regardless of cognitive concern until a PCP diagnosis (imperfect PCP)",
+  title       = as.factor("U1PCPPOS-PERFECT-RAND50"),
+  description = "Repeat BHA every year regardless of cognitive concern until a PCP diagnosis (perfect PCP)",
 
   # Test parameters
   test        = "BHA-GS", 
@@ -20,9 +20,9 @@ scenario_inputs <- list(
   probs_cogcon = 0.5 * l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_reactive or m.cogcon_selective for alternatives.
   prob_pcpfu = 1,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
   
-  # IMPERFECT PCP
-  p.PCP_confirm_TP = c(0.75, 0.88, 0.95, 0.98), # mci, mild, moderate, severe dem
-  p.PCP_reject_FP =  0.65,   # P(PCP correctly dismisses a BHA false positive)
+  # PERFECT PCP
+  p.PCP_confirm_TP = c(1, 1, 1, 1), # mci, mild, moderate, severe dem
+  p.PCP_reject_FP = 1,   # P(PCP correctly dismisses a BHA false positive)
   
   repeat_interval = 3,    # years between BHA administrations
   cohort_split = 3,

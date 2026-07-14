@@ -307,11 +307,12 @@ compare_reside_time <- function(sim, description, n) {
   
   age_group_weights <- as.data.frame(table(age_bins)) %>%
     rename(age_group = age_bins, count = Freq) %>%
+    filter(!age_group %in% c("Overall", "50-54", "55-59")) %>%
     mutate(weight = count / sum(count),
            age_group = unique(reside_time$age_group)[-11])
   
   reside_time_adjusted <- reside_time %>%
-    filter(age_group != "Overall") %>%
+    filter(!age_group %in% c("Overall", "50-54", "55-59")) %>%
     left_join(age_group_weights, by = "age_group") %>%
     mutate(weighted_duration = duration * weight) %>%
     group_by(condition) %>%
@@ -323,9 +324,11 @@ compare_reside_time <- function(sim, description, n) {
     rbind(reside_time_adjusted)
   
   # Remove rows where age_group == 'Overall'
-  reside_time <- reside_time[reside_time$age_group != "Overall", ]
+  reside_time <- reside_time %>%
+    filter(!age_group %in% c("50-54", "55-59"))
+    
   # Rename 'Overall_adj' to 'Overall'
-  reside_time$age_group[reside_time$age_group == "Overall_adj"] <- "Overall"
+#  reside_time$age_group[reside_time$age_group == "Overall_adj"] <- "Overall"
   
   desired_order <- c("any_dem", "mci", "benchmark_dem", "benchmark_mci")
   reside_time$condition <- factor(reside_time$condition, levels = desired_order)

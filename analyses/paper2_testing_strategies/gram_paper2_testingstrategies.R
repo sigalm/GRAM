@@ -81,17 +81,36 @@ for (i in seq_along(names(scenario_list[1:3]))) {
   main_test_data <- rbind(main_test_data, temp_test_data)
 }
 
-subtitles <- c("Inclusive testing with 50% uptake, every 3 years",
-               "Selective testing with eRADAR, annual",
-               "Reactive testing, annual")
+subtitles <- c("Inclusive",
+               "Selective",
+               "Reactive")
 names(subtitles) <- names(scenario_list)[1:3]
 p1 <- plot_test_results(main_test_data, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
+p1
+
+
+
+p1 <- p1 + theme(
+  text         = element_text(size = 18),      # base size for all text
+  axis.title   = element_text(size = 20, face = "bold"),
+  axis.text    = element_text(size = 16),
+  legend.text  = element_text(size = 16),
+  legend.title = element_text(size = 18, face = "bold"),
+  strip.text   = element_text(size = 20, face = "bold"),  # "Reactive/Selective/Inclusive" labels
+  plot.title   = element_text(size = 24, face = "bold"),
+  legend.key.size = unit(1.2, "cm")
+)
+
+ggsave("analyses/paper2_testing_strategies/plots/no-early-positives_reordered.jpeg",
+       plot = p1,
+       height = 10, width = 14,   # wider to give 3 panels more breathing room
+       dpi = 300)
 
 plot_testers(main_test_data, 
              ages = 65:80, 
              scenario_names = subtitles) 
 
-ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", plot = p1, height = 10, width = 8) 
+ggsave("analyses/paper2_testing_strategies/plots/no-early-positives_reordered.jpeg", plot = p1, height = 10, width = 8) 
 
 ## Sensitivity analyses ####
 ### Question-based selective strategy

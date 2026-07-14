@@ -43,7 +43,7 @@ GRAM/
 │   └── ...                   # Subfolders for each project
 │
 └── docs/                     # Extended documentation
-    └── model_parameters.Rmd  # Parameter definitions, data sources, rationale
+    └── methods_appendix.Rmd  # Parameter definitions, data sources, rationale
 ```
 
 ## Key Documentation
@@ -51,7 +51,7 @@ GRAM/
 | Document | Purpose |
 |----------|---------|
 | `model/modules/MODULES.md` | Function-level documentation for each simulation module |
-| `docs/model_parameters.Rmd` | Detailed parameter definitions, data sources, and rationale |
+| `docs/methods_appendix.Rmd` | Detailed parameter definitions, data sources, and rationale |
 | `data/README.md` | Data sources and how each input file was generated |
 
 ## Model Overview

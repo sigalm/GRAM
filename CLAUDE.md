@@ -35,7 +35,7 @@ Each cycle (year), modules execute in order:
 4. `f.module_medical_record()` — update BHA, CDR_obs, DX (observed/tested)
 5. `f.module_treatment()` — update TX, TX2, LTC
 
-`f.wrap_run()` orchestrates: run simulation → aggregate results → generate figures.
+`f.wrap_run()` (in `model/helpers/run_wrappers.R`) orchestrates: run simulation → aggregate results → generate figures.
 
 ### Module Pattern
 
@@ -65,7 +65,7 @@ Attributes are integer-encoded (e.g., ALIVE: 0/1, SEX: 1=male/2=female, SYN: 0=h
 ## Key Files
 
 - `model/setup.R` — all model parameters (`l.inputs`)
-- `model/simulation.R` — main simulation engine (`f.run`, `f.initialize`, `f.wrap_run`)
+- `model/simulation.R` — main simulation engine (`f.run`, `f.initialize`)
 - `model/modules/MODULES.md` — module-level documentation
 - `analyses/paper2_testing_strategies/` — active analysis (Paper 2: Testing Strategies)
 - `docs/ONBOARDING.md` — guide for country-specific adaptations

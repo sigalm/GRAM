@@ -10,6 +10,7 @@ gc() # garbage collection (i.e., clean up memory)
 # load necessary packages
 library(tidyverse)
 library(scales)
+library(rlang)
 library(flextable)
 library(patchwork)
 ######################################## 1. DEFINE MODEL INPUTS ########################################
@@ -68,7 +69,7 @@ l.inputs[["r.discount_COST"]] <- 0.03
 ######################################## 1.2. EXTERNAL MODEL INPUTS ########################################
 
 ## Demographic inputs
-#### The following block is necessary only if NOT using an external microdata file
+# ---- Parametric fallback: only used if microdata not provided to f.initialize() ----
 l.inputs[["AGE_start_mean"]] <- 50
 l.inputs[["AGE_start_sd"]] <- 0
 l.inputs[["p.SEX_start_male"]] <- 0.49
@@ -76,7 +77,7 @@ l.inputs[["p.SEX_start_female"]] <- 0.51
 l.inputs[["p.EDU_start"]] <- c(0.536, 0.362, 0.102) # p for college, high school, less than high school, respectively. must add to 1.
 l.inputs[["p.RACEETH_start"]] <- c(0.64, 0.14, 0.22)      # p for RACEETH = 0 (white), RACEETH = 1 (Black), and RACEETH = 2 (Hisp)
 l.inputs[["p.INCOME_start"]] <- c(0.05, 0.17, 0.78) # p for low, medium, high income, respectively
-####
+# ---- End parametric demographic inputs ----
 
 l.inputs[["p.APOE4_start"]] <- c(0.75, 0.25)        # p for non-carrier and carrier, respectively
 l.inputs[["p.HCARE_start"]] <- c(0.25, 0.75)        # p for no regular provider and has regular provider, respectively (assumed)
@@ -111,7 +112,9 @@ l.inputs[["m.lifetable"]] <- as.matrix(readRDS("data/mortality/non_dementia_mort
 ## Logistic regression for transition to MCI from Healthy
 l.inputs[["m.hr_mci"]] <- array(data = readRDS("data/mci_incidence/mci_incidence_rate_by_age.RDS")[ , 2], dim = c(51,1),
                                 dimnames = list(50:100, "r")) / 1000 # divide by 1000 to scale from 1000 person-years to annual rate
-l.inputs[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 4    # adjust baseline for risk factors
+l.inputs[["param1"]]  <- 1   # incidence multiplier (set to calibrated value via calibrate())
+l.inputs[["param2a"]] <- 1   # CDR progression curvature exponent (set to calibrated value via calibrate())
+l.inputs[["param2b"]] <- 2   # CDR max progression multiplier (set to calibrated value via calibrate()); default = 2 so age-averaged rate equals published mean of 0.6 CDR-SB/year
 
 l.inputs[["log_EDU"]] <- log(0.95)
 l.inputs[["log_SEX"]] <- log(1)
@@ -146,13 +149,11 @@ l.inputs[["spec_BHACS"]] <- 0.93
 l.inputs[["sens_BHAGS"]] <- c(0.56, 0.61, 0.84, 0.98)
 l.inputs[["spec_BHAGS"]] <- 0.92
 
-l.inputs[["sens_PCP"]] <- 0.56
-l.inputs[["spec_PCP"]] <- 0.89
-l.inputs[["rr_PCP_BHA"]] <- c("sens_BHApos" = 2,      # if you have CI and positive BHA, overall sensitivity will be 2-fold of PCP alone (PCP very likely to agree)
-                              "spec_BHApos" = 0.50,   # if you don't have CI but have positive BHA, specificity will be 50% of PCP alone (PCP somewhat likely to be misled)
-                              "sens_BHAneg" = 0.50,   # if you have CI but negative BHA, overall sensitivity will be sensitivity will be 50% of PCP alone (PCP somewhat likely to be misled)
-                              "spec_BHAneg" = 2)      # if you don't have CI and have negative BHA, overall specificity will be 2-fold of PCP alone (PCP very likely to agree) 
-
+# PCP acts as a downstream filter on BHA-positive patients.
+# Combined sens = BHA_sens[sev] * p.PCP_confirm_TP[sev]; combined spec = BHA_spec + (1-BHA_spec) * p.PCP_reject_FP
+# Indexed by SEV: [1]=MCI, [2]=mild, [3]=moderate, [4]=severe
+l.inputs[["p.PCP_confirm_TP"]] <- c(0.75, 0.88, 0.95, 0.98)
+l.inputs[["p.PCP_reject_FP"]]  <- 0.65   # P(PCP correctly dismisses a BHA false positive)
 
 
 ## Health state utilities

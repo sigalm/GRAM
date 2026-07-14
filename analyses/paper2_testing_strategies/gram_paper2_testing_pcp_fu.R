@@ -34,7 +34,8 @@ l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
 scenario_list <- list(
   u3pcppos_rand50 = "scenario_u3pcppos_rand50_config.R",
   s1pcppos_emr = "scenario_s1pcppos_emr_config.R",
-  r1pcppos = "scenario_r1pcppos_config.R"
+  u3pcp_perfect_rand50 = "scenario_u3pcp_perfect_rand50_config.R",
+  s1pcp_perfect_emr = "scenario_s1pcp_perfect_emr_config.R"
   )
 
 # Directory paths
@@ -63,29 +64,34 @@ for (scen in names(scenario_list)) {
 for (scen in names(scenario_list)) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260407.rds")))
+  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260505.rds")))
 }
 
 # Step 2: generate plots
 main_test_data <- data.frame()
 for (i in seq_along(names(scenario_list))) {
   scen <- names(scenario_list)[i]
-  temp_test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260407.rds"))) %>%
+  temp_test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260505.rds"))) %>%
     mutate(scenario = scen)
   main_test_data <- rbind(main_test_data, temp_test_data)
 }
 
-subtitles <- c("Inclusive BHA testing with 50% uptake, every 3 years",
-               "Selective BHA testing with eRADAR, annual",
-               "Reactive BHA testing, annual")
+  
+subtitles <- c("Inclusive, imperfect PCP",
+               "Selective, imperfect PCP",
+               "Inclusive, perfect PCP",
+               "Selective, perfect PCP")
 names(subtitles) <- names(scenario_list)
+
 p1 <- plot_test_results(main_test_data, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
+p1
+
 
 plot_testers(main_test_data,
              ages = 65:80,
              scenario_names = subtitles)
 
-# ggsave("analyses/paper2_testing_strategies/plots/WITH-PCP-no-early-positives.jpeg", plot = p1, height = 10, width = 8)
+# ggsave("analyses/paper2_testing_strategies/plots/WITH-PCP-no-early-positives2.jpeg", plot = p1, height = 10, width = 8)
 
 
 
@@ -256,5 +262,12 @@ p_cum_earlyID_u1pcppos <- plot_cumulative_count(u1pcppos$output,
                                                  variables = list("SYN" = list(variable_name = "SYN", condition_value = 1))))
 
 
-
-
+prev_in_70 <- subset_age_70 %>% 
+  filter(ALIVE == 1) %>%
+  mutate(status = case_when(SYN < 1 ~ "h",
+                            SEV == 0 ~ "mci",
+                            SEV >= 1 ~ "dem")) %>%
+  group_by(status) %>%
+  summarise(n = n()) %>%
+  mutate(prev = n/sum(n))
+prev_in_70

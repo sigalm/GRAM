@@ -7,8 +7,8 @@ probs_select[,"dem"] <- 1
 
 scenario_inputs <- list(
   
-  title       = as.factor("S1PCPPOS_EMR"),
-  description = "Assess BHA eligibility via eRADAR each year until a PCP diagnosis (imperfect PCP)",
+  title       = as.factor("S1PCPPOS_PERFECT_EMR"),
+  description = "Assess BHA eligibility via eRADAR each year until a PCP diagnosis (perfect PCP)",
   
   # Test parameters
   test        = "BHA-GS", 
@@ -26,9 +26,9 @@ scenario_inputs <- list(
   repeat_interval = 1,    # years between BHA administrations
   prob_pcpfu = 1,
   
-  # IMPERFECT PCP
-  p.PCP_confirm_TP = c(0.75, 0.88, 0.95, 0.98), # mci, mild, moderate, severe dem
-  p.PCP_reject_FP = 0.65,   # P(PCP correctly dismisses a BHA false positive)
+  # PERFECT PCP
+  p.PCP_confirm_TP = c(1, 1, 1, 1), # mci, mild, moderate, severe dem
+  p.PCP_reject_FP = 1,   # P(PCP correctly dismisses a BHA false positive)
   
   
   # Optional parameters

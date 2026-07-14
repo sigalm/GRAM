@@ -443,7 +443,7 @@ ggsave("analyses/paper2_testing_strategies/plots/my_comparison.jpeg",
 
 ## Additional Resources
 
-- **Model parameters**: See `docs/model_parameters.Rmd` for detailed parameter descriptions
+- **Model parameters**: See `docs/methods_appendix.Rmd` for detailed parameter descriptions
 - **Calibration benchmarks**: See `calibration/GRAM calibration benchmarks.xlsx`
 - **Cognitive concern data**: See `data/cogcon/` for probability matrices
 - **Planning documents**: See `planning/` folder for scenario design rationale
