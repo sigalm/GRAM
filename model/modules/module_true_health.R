@@ -32,14 +32,21 @@ f.module_true_health <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
       v.MEDBUR.lag    = a.out[t-1,"MEDBUR",alive],  
       v.INCOME.lag    = a.out[t-1,"INCOME",alive],
       v.SYN.lag       = a.out[t-1,"SYN",alive],
-      v.SYN.lag2      = a.out[t-2,"SYN",alive],
+      v.TCI.lag       = a.out[t-1,"TCI",alive],
       v.MEMLOSS.lag   = a.out[t-1,"MEMLOSS",alive],
-      random_tplus2   = a.random[t+2,"SYN",alive], 
+      random_tplus2   = a.random[t+2,"SYN",alive],
       n.alive         = n.alive
     )} else {
-      a.out[t,"SYN",alive] <- a.out[t-1,"SYN",alive]    # last two cycles no change in syndrome            
+      a.out[t,"SYN",alive] <- a.out[t-1,"SYN",alive]    # last two cycles no change in syndrome
     }
-  
+
+  # TCI
+  a.out[t,"TCI",alive] <- f.update_TCI(
+    v.SYN     = a.out[t,"SYN",alive],
+    v.TCI.lag = a.out[t-1,"TCI",alive],
+    n.alive   = n.alive
+  )
+
   # MEMLOSS 
   a.out[t,"MEMLOSS",alive] <- f.update_MEMLOSS(
     v.MEMLOSS.lag = a.out[t-1,"MEMLOSS",alive],
@@ -68,17 +75,13 @@ f.module_true_health <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   a.out[t,"CDRfast_sd1",alive] <- a.out[t-1,"CDRfast_sd1",alive]
   a.out[t,"CDRslow_sd1",alive] <- a.out[t-1,"CDRslow_sd1",alive]
   
-  if (length(l.inputs[["r.CDRfast_mean"]]) > 1) {
-    r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]][t]
-  } else {
-    r.CDRfast_mean <- l.inputs[["r.CDRfast_mean"]]
-  }
-  
-  if (length(l.inputs[["r.CDRslow_mean"]]) > 1) {
-    r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]][t]
-  } else {
-    r.CDRslow_mean <- l.inputs[["r.CDRslow_mean"]]
-  }
+  # CDR progression rates. A single value is age-invariant; a vector is an age curve running from
+  # age 50 upwards, read at each individual's current age. See the methods appendix:
+  #   r_slow(age) = ((age - 50)/50)^param2a * param2b * r.CDRslow_mean
+  # For a cohort that all starts at 50 the age index equals the cycle number, but for any other
+  # cohort the two diverge, so the curve must be indexed by age rather than by t.
+  r.CDRfast_mean <- f.age_rate(l.inputs[["r.CDRfast_mean"]], a.out[t,"AGE",alive])
+  r.CDRslow_mean <- f.age_rate(l.inputs[["r.CDRslow_mean"]], a.out[t,"AGE",alive])
   
   # CDR (true)
   a.out[t,"CDR",alive] <- f.update_CDR(
@@ -140,23 +143,38 @@ f.update_APOE4 <- function(v.APOE4.lag) {
 }
 
 ######################################## SYN
-f.update_SYN <- function(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag, 
-                         v.SYN.lag, v.SYN.lag2, v.MEMLOSS.lag,
+f.update_SYN <- function(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag,
+                         v.SYN.lag, v.TCI.lag, v.MEMLOSS.lag,
                          random_tplus2, n.alive) {
-  
+
   # start with empty vector
   symptoms <- rep(NA, n.alive)
-  
+
   prob_mci <- f.calc_MCIprob(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag)
-  
-  # apply dependent on previous state
+
+  # apply dependent on previous state. Time already spent in the TCI tunnel is read from TCI
+  # rather than from SYN two cycles back, so that a cohort starting with prevalent TCI cases
+  # (which have no cycle t-2 to look back to) progresses correctly.
   symptoms[v.SYN.lag == 0] <- as.numeric(prob_mci[v.SYN.lag == 0] > random_tplus2[v.SYN.lag == 0]) * 0.5
-  symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0] <- 0.5
-  symptoms[v.SYN.lag == 0.5 & v.SYN.lag2 == 0.5] <- 1
+  symptoms[v.SYN.lag == 0.5 & v.TCI.lag < 2] <- 0.5
+  symptoms[v.SYN.lag == 0.5 & v.TCI.lag >= 2] <- 1
   symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 1] <- as.numeric(0.07 < random_tplus2[v.SYN.lag == 1 & v.MEMLOSS.lag ==1])
   symptoms[v.SYN.lag == 1 & v.MEMLOSS.lag == 0] <- 1
-  
+
   return(symptoms)
+}
+
+######################################## TCI - cycles spent in the transitional impairment tunnel
+
+f.update_TCI <- function(v.SYN, v.TCI.lag, n.alive) {
+
+  # 0 for anyone not currently in the tunnel; otherwise counts up from 1 on the cycle of entry.
+  tci <- rep(0, n.alive)
+
+  in_tunnel <- v.SYN == 0.5
+  tci[in_tunnel] <- v.TCI.lag[in_tunnel] + 1
+
+  return(tci)
 }
 
 ######################################## MEMLOSS - memory loss flag (reflects non-progressive impairment)

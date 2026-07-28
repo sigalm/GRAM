@@ -47,7 +47,9 @@ f.update_ALIVE <- function(
   
   # generate life table coordinates for looking up age-specific mortality 
   # (see https://adv-r.hadley.nz/subsetting.html paragraph 4.2.3 subsetting > selecting multiple elements > subsetting)
-  lifetable_lookup_coordinates <- cbind(round(v.AGE.lag, 0) - 50 + 1, v.SEX.lag)
+  # Individuals can age past the oldest tabulated age (e.g. a cohort that does not start at 50),
+  # so f.age_index holds the lookup within the table rather than running off the end.
+  lifetable_lookup_coordinates <- cbind(f.age_index(v.AGE.lag, nrow(m.lifetable)), v.SEX.lag)
 
   # determine relative mortality risk related to syndrome and severity
   healthy <- v.SYN.lag<1

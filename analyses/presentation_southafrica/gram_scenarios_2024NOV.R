@@ -54,7 +54,7 @@ l.inputs5 <- l.inputs
 l.inputs5[["scenario"]] <- "everyone starts with MCI"
 l.inputs5[["AGE_start_mean"]] <- 70
 l.inputs5[["n.cycle"]] <- 30
-l.inputs5[["p.SYN_start"]] <- c(0,1)
+l.inputs5[["p.SYN_start"]] <- c(0,0,1)   # p for SYN == 0 (normal), 0.5 (TCI) and 1 (impaired)
 l.inputs5[["r.CDRslow_mean"]] <- 0.3 # original from lit, we then reduced to 0.3
 scenario5 <- f.wrap_run(l.inputs5)
 fig_scenario5 <- scenario5$fig.progression$fig.progression_true

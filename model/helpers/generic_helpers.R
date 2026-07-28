@@ -11,6 +11,25 @@ generate_synthetic_sample <- function(pop_data, target_size, weights_var = NULL,
     slice_sample(n = target_size, weight_by = weights_var, replace = TRUE)
 }
 
+######################################## look up age-indexed parameters
+
+# Parameters that vary by age (life tables, MCI incidence, CDR progression rates) are stored with
+# one element per year of age, running from AGE_min upwards. f.age_index returns the position of
+# each age in such a table, held within its bounds so that cohorts starting above AGE_min, or
+# ageing past the last tabulated year, stay in range instead of reading off the end.
+
+f.age_index <- function(v.AGE, n, AGE_min = 50) {
+  pmin(pmax(round(v.AGE, 0) - AGE_min + 1, 1), n)
+}
+
+# f.age_rate reads such a curve at each individual's age. A parameter given as a single value is
+# age-invariant and is returned unchanged.
+
+f.age_rate <- function(rate, v.AGE, AGE_min = 50) {
+  if (length(rate) <= 1) return(rate)
+  rate[f.age_index(v.AGE, length(rate), AGE_min)]
+}
+
 ######################################## convert probability to different time
 
 # formula from https://doi.org/10.1007/s40273-020-00937-z

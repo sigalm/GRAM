@@ -314,8 +314,26 @@ f.out_aggregate <- function(a.out, l.inputs) {
   
   
   # MCI incidence
+  l.out[["mci_incidence_overall"]] <- NA
+  new_cases <- 0
+  person_years <- 0
+  for (t in 2:(dim(a.out)[1]-1)) {  # 1 less than cycle count because last two cycles are flat
+    # Select individuals in the age group who were healthy at the start of the cycle
+    at_risk <- which(a.out[t - 1, "SYN", ] != 1 | a.out[t - 1, "SEV", ] == 0)
+    
+    # Calculate person-years at risk for this time point
+    person_years <- person_years + length(at_risk)
+    
+    # Count new MCI cases (healthy in previous cycle and MCI in current cycle)
+    new_cases <- new_cases + sum(a.out[t, "SEV", at_risk] > 0, na.rm = TRUE)
+  }
+  incidence_rate <- if (person_years > 0) new_cases / person_years else NA
+  l.out[["mci_incidence_overall"]] <- incidence_rate
+
+  
+  
   temp.age_groups <- seq(50, 100, by= 5)
-  l.out[["mci_incidence"]] <- matrix(NA, nrow = length(temp.age_groups), ncol = 1, 
+  l.out[["mci_incidence_by_age"]] <- matrix(NA, nrow = length(temp.age_groups), ncol = 1, 
                                      dimnames = list(paste0(temp.age_groups, "-", temp.age_groups + 4), "Incidence"))
   
   for (i in seq_along(temp.age_groups)) {
@@ -336,16 +354,17 @@ f.out_aggregate <- function(a.out, l.inputs) {
     }
     
     incidence_rate <- if (person_years > 0) new_cases / person_years else NA
-    l.out[["mci_incidence"]][i, 1] <- incidence_rate
+    l.out[["mci_incidence_by_age"]][i, 1] <- incidence_rate
   }
   
   # Prevalence by severity by age -- this requires that age and cycle are equal (everyone starts the same age)
   l.out[["prevalence_by_age"]] <- as.data.frame(l.out[["state_trace"]]) %>%
     mutate(age = l.inputs[["AGE_start_mean"]]:(l.inputs[["AGE_start_mean"]]+l.inputs[["n.cycle"]]-1)) %>%
     mutate(alive = 1 - dth,
-           age_group = factor(cut(age, breaks = c(50, 65, 75, 85, Inf), right = FALSE),
-                              labels = c("50-64", "65-74","75-84","85+")
-           )) %>%
+           # labels are given to cut() directly: wrapping it in factor() drops the age groups a
+           # cohort never occupies, which then mismatches the label vector
+           age_group = cut(age, breaks = c(50, 65, 75, 85, Inf), right = FALSE,
+                           labels = c("50-64", "65-74","75-84","85+"))) %>%
     mutate(mci = mci / alive,
            mil = mil / alive,
            mod = mod / alive,
