@@ -6,11 +6,9 @@
 # Goal is to replicate dementia incidence from: Satizabal 2016 (https://www.nejm.org/doi/full/10.1056/NEJMoa1504327)
 
 # The general model setup is sourced rather than copied, so this script only states what differs
-# from it. (Earlier versions of this analysis kept a full copy of model/setup.R in a separate
-# setup script; it drifted out of step, and the p.EDU_start override below was silently ignored
-# as a result.) No microdata is supplied, so the cohort is built from the parameters below.
+# from it. No microdata is supplied, so the cohort is built from defaults and the parameters below.
 
-source("model/setup.R")                    # note: this clears the environment, so keep it first
+source("model/setup.R") # note: this clears the environment, so keep it first
 source("model/helpers/source_all.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
@@ -23,11 +21,11 @@ library(easystats)
 
 ## Model settings
 l.inputs[["n.ind"]] <- 3100                         # number of individuals to simulate
-l.inputs[["n.cycle"]] <- 7                          # number of cycles to simulate
+l.inputs[["n.cycle"]] <- 7                          # number of cycles to simulate (2 more than Framingham because last 2 cycles of model flattens out)
 l.inputs[["seed_stochastic"]] <- 20250624
 
 ## Demographics of the Framingham cohort
-l.inputs[["AGE_start_mean"]] <- 70                  # start two years earlier to account for the TCI tunnel state
+l.inputs[["AGE_start_mean"]] <- 72                  
 l.inputs[["AGE_start_sd"]] <- 9
 l.inputs[["p.SEX_start_male"]] <- 0.44
 l.inputs[["p.SEX_start_female"]] <- 0.56
@@ -60,6 +58,24 @@ l.inputs[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 1.9869
 #  oldest tabulated age, which is what the padding did.)
 
 
+######################################## BENCHMARKS ########################################
+
+# Benchmarks are supplied explicitly rather than taken from the internal-validation defaults,
+# so it stays visible which targets this cohort is actually being held to.
+
+benchmarks_framingham <- benchmarks_internal
+
+# Reside time is dropped: 7 cycles is far too short a follow-up to observe a completed spell
+# in MCI or dementia, so every duration would be censored.
+benchmarks_framingham[["reside_time"]] <- NULL
+
+# NOTE: mortality, prev_by_age and age_of_onset are still the internal US general-population
+# targets, not Framingham-specific figures. Replace them as cohort-specific values become
+# available. The dementia incidence target from Satizabal 2016 is not compared here -- there
+# is no incidence comparison function.
+
+
 ######################################## RUN ########################################
 
-sim_calib <- run_benchmarking(l.inputs, "")
+sim_calib <- run_benchmarking(l.inputs, "", benchmarks = benchmarks_framingham)
+sim_calib$mort$result_plot
