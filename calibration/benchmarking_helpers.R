@@ -80,24 +80,93 @@ benchmark_reside_time <<- data.frame(
 benchmark_age_of_onset <<- 71.5
 
 
+######################################## BENCHMARK SETS ########################################
 
-compare_mortality <- function(sim, description, n) {
-  mortality <- as.data.frame(sim$aggregated_results_totpop$state_trace) %>%
-    mutate(new_dth = dth - lag(dth),  # new deaths per cycle
-           denom = 1 - lag(dth),       # those alive at the start of cycle
-           model_rate = new_dth / denom) %>%
-    mutate(model_rate = replace_na(model_rate, 0))
-  
-  mort_compare <- cbind(lifetable, mortality) %>%
-    mutate(benchmark_rate_1000 = rate * 1000,
-           model_rate_1000 = model_rate * 1000,
-           residual = model_rate_1000 - benchmark_rate_1000) %>%
+# Each compare_* function takes its benchmark as an argument rather than reading a global.
+# The list below bundles the internal-validation targets (US general population) and is the
+# default, so existing calls keep their current behaviour.
+#
+# To validate against a different source, build a list with the same element names and the
+# same column layouts, and pass it as run_benchmarking(benchmarks = ). An element that is
+# NULL or absent causes run_benchmarking() to skip that comparison -- useful when a cohort
+# cannot speak to a given target at all (e.g. reside times over a short follow-up, where
+# every spell is censored).
+
+benchmarks_internal <<- list(
+  # data.frame; requires columns `age` and `qx` (probability of dying within the next year)
+  mortality    = lifetable,
+  # long data.frame; requires `age`, `condition` ("mci"/"dem"), `prev`, `source`,
+  # and optionally `ci_lo`/`ci_hi`
+  prev_by_age  = benchmark_prev_by_age,
+  # data.frame; requires `age_group`, `condition` ("benchmark_mci"/"benchmark_dem"), `duration`
+  reside_time  = benchmark_reside_time,
+  # single number: mean age at MCI onset
+  age_of_onset = benchmark_age_of_onset
+)
+
+
+compare_mortality <- function(sim, description, n, benchmark = benchmarks_internal[["mortality"]],
+                              min_at_risk = 1, drop_max_age = TRUE) {
+  stopifnot(all(c("age", "qx") %in% names(benchmark)))
+
+  # Age-specific mortality is computed per individual rather than per cycle. The earlier
+  # version cbind()ed the life table onto the cycle-indexed state trace, which silently
+  # assumed cycle number == age -- true only for a cohort that starts at exactly age 50 with
+  # no spread and runs for as many cycles as the life table has rows. Pairing each person's
+  # age at the start of a cycle with whether they died during it lifts that restriction, so
+  # cohorts of any starting age, age spread, or follow-up length can be compared.
+  n_cycle <- dim(sim$output)[1]
+  alive   <- sim$output[, "ALIVE", ]
+
+  model_mort <- data.frame(
+    age       = as.vector(sim$output[-n_cycle, "AGE", ]),  # age at start of cycle
+    was_alive = as.vector(alive[-n_cycle, ]) == 1,
+    died      = as.vector(alive[-1, ]) == 0                # died during the cycle
+  ) %>%
+    filter(was_alive) %>%
+    group_by(age) %>%
+    summarise(n_at_risk = n(),
+              n_deaths  = sum(died, na.rm = TRUE),
+              .groups   = "drop") %>%
+    mutate(model_prob = n_deaths / n_at_risk)
+
+  # Only ages the cohort actually occupies are compared, and `min_at_risk` drops ages thin
+  # enough that the modelled probability is mostly noise.
+  mort_compare <- benchmark %>%
+    inner_join(model_mort, by = "age") %>%
+    filter(n_at_risk >= min_at_risk) %>%
+    arrange(age)
+
+  # The oldest age is dropped by default. Death is absorbing at the last row of the model's
+  # m.lifetable, so that age carries a modelled probability at or near 1 -- an artifact of
+  # where the table ends rather than a model result, and large enough to flatten everything
+  # else on the y axis.
+  if (drop_max_age && nrow(mort_compare) > 1) {
+    mort_compare <- mort_compare %>% filter(age < max(age))
+  }
+
+  mort_compare <- mort_compare %>%
     mutate(
-      cum_model_rate = mortality[ ,"dth"] * 1000,
-      cum_benchmark_rate = (1 - cumprod(1-qx)) * 1000,
+      # Annual panels compare hazard rates on both sides. The model produces a probability of
+      # dying within the cycle, so it is converted the same way the life table's `rate` column
+      # is derived from qx; the earlier version compared a model probability against a
+      # benchmark hazard, which inflated the benchmark by ~8% at age 90 and ~21% at age 99.
+      benchmark_rate = -log(1 - qx),
+      model_rate     = -log(1 - model_prob),
+      benchmark_rate_1000 = benchmark_rate * 1000,
+      model_rate_1000 = model_rate * 1000,
+      residual = model_rate_1000 - benchmark_rate_1000
+    ) %>%
+    mutate(
+      # Cumulative panels stay on the probability scale -- these are survival quantities, and
+      # both sides are built the same life-table way across the ages observed. The model side
+      # used to be the raw cumulative death fraction of the cohort, which is only comparable
+      # to the life table when everyone starts at the life table's first age.
+      cum_model_rate = (1 - cumprod(1 - model_prob)) * 1000,
+      cum_benchmark_rate = (1 - cumprod(1 - qx)) * 1000,
       cum_residual = cum_model_rate - cum_benchmark_rate
     )
-  
+
   fig_mort_compare <- ggplot(mort_compare, aes(x = age)) +
     geom_line(aes(y = benchmark_rate_1000, color = "Benchmark", linetype = "Benchmark"), linewidth = 1) +
     geom_line(aes(y = model_rate_1000, color = "Model", linetype = "Model"), linewidth = 1) +
@@ -191,7 +260,12 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
   # Apply labels if provided (for factor or binned stratification)
   if (!is.null(strat_labels)) {
     if (!is.null(strat_cutoffs)) {
-      df$strat <- factor(df$strat, labels = strat_labels)
+      # Levels are taken from cut()'s own bin set rather than left to default to
+      # sort(unique(df$strat)): the alive == 1 filter above can empty a bin, and the
+      # default would then drop that level so the rest no longer line up with
+      # strat_labels. Same failure mode as the cut() note in f.out_aggregate().
+      stopifnot(length(strat_labels) == nlevels(strat_binned))
+      df$strat <- factor(df$strat, levels = levels(strat_binned), labels = strat_labels)
     } else {
       df$strat <- factor(df$strat, levels = seq_along(strat_labels) - 1, labels = strat_labels)
     }
@@ -221,7 +295,7 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
                         raw = df)))
 }
 
-compare_prevalence <- function(sim, description, n) {
+compare_prevalence <- function(sim, description, n, benchmark = benchmarks_internal[["prev_by_age"]]) {
   df <- data.frame(
     id = rep(1:dim(sim$output)[3], times = dim(sim$output)[1]),
     age = as.vector(sim$output[,"AGE",]),
@@ -253,7 +327,7 @@ compare_prevalence <- function(sim, description, n) {
   
   # For plotting, harmonize 'condition' to "Dementia"/"MCI" for color
   
-  bench_prev <- benchmark_prev_by_age %>% mutate(
+  bench_prev <- benchmark %>% mutate(
     cond = case_when(
       condition == "dem" ~ "Dementia",
       condition == "mci" ~ "MCI",
@@ -261,7 +335,12 @@ compare_prevalence <- function(sim, description, n) {
     ),
     source = as.character(source)
   )
-  
+
+  # Confidence intervals are optional: not every published source reports them, so they are
+  # filled with NA when absent and the error bars simply do not draw.
+  if (!"ci_lo" %in% names(bench_prev)) bench_prev$ci_lo <- NA_real_
+  if (!"ci_hi" %in% names(bench_prev)) bench_prev$ci_hi <- NA_real_
+
   # Combine for plotting
   plot_prev <- bind_rows(
     prev_overall %>% select(age, prev, source, cond),
@@ -294,7 +373,8 @@ compare_prevalence <- function(sim, description, n) {
                         dat = prev_overall)))
 }
 
-compare_reside_time <- function(sim, description, n) {
+compare_reside_time <- function(sim, description, n, benchmark = benchmarks_internal[["reside_time"]]) {
+  benchmark_reside_time <- benchmark
   reside_time <- as.data.frame(sim$aggregated_results_totpop$reside_time$noncensored) %>%
     # mutate(dem = mil + mod + sev) %>%
     select(-mil, -mod, - sev) %>%
@@ -305,11 +385,21 @@ compare_reside_time <- function(sim, description, n) {
                   right = FALSE, 
                   include.lowest = TRUE)
   
+  # cut() labels the onset bins "[50,55)" etc., but reside_time labels them "50-54" etc.
+  # Relabel BEFORE filtering: the exclusion below is written against the reside_time
+  # labels, so filtering first matches nothing and leaves the weights normalised over
+  # all 10 bins while only 8 of them are used -- an Overall_adj biased low by the
+  # weight mass in the two dropped bins.
+  onset_labels <- setdiff(levels(reside_time$age_group), "Overall")
+  stopifnot(length(onset_labels) == nlevels(age_bins))
+
   age_group_weights <- as.data.frame(table(age_bins)) %>%
     rename(age_group = age_bins, count = Freq) %>%
+    mutate(age_group = factor(onset_labels[as.integer(age_group)],
+                              levels = levels(reside_time$age_group))) %>%
     filter(!age_group %in% c("Overall", "50-54", "55-59")) %>%
-    mutate(weight = count / sum(count),
-           age_group = unique(reside_time$age_group)[-11])
+    # renormalise over the retained groups so the weights sum to 1
+    mutate(weight = count / sum(count))
   
   reside_time_adjusted <- reside_time %>%
     filter(!age_group %in% c("Overall", "50-54", "55-59")) %>%
@@ -360,8 +450,8 @@ compare_reside_time <- function(sim, description, n) {
 }
 
 
-compare_age_onset <- function(sim, description, n) {
-  
+compare_age_onset <- function(sim, description, n, benchmark = benchmarks_internal[["age_of_onset"]]) {
+
   age_onset <- sim$aggregated_results_totpop$age_at_onset
   avg_age_onset <- mean(age_onset, na.rm = TRUE)
   df_age_onset <- data.frame(age_onset = age_onset, apoe4 = sim$output[1,"APOE4",],
@@ -370,7 +460,7 @@ compare_age_onset <- function(sim, description, n) {
   
   age_onset_compare <- data.frame(
     type = c("Model", "Benchmark"),
-    value = c(avg_age_onset, benchmark_age_of_onset)
+    value = c(avg_age_onset, benchmark)
   )
   
   fig_age_onset <- ggplot(data = age_onset_compare, aes(x = type, y = value)) +
@@ -399,15 +489,22 @@ compare_age_onset <- function(sim, description, n) {
                         dat = age_onset_compare)))
 }
 
-run_benchmarking <- function(l.inputs, description = NULL, sample = NULL) {
+run_benchmarking <- function(l.inputs, description = NULL, sample = NULL,
+                             benchmarks = benchmarks_internal) {
   sim <- f.wrap_run(l.inputs = l.inputs, microdata = sample)
   sim_desc <- description
   n <- l.inputs[["n.ind"]]
-  
-  mort <- compare_mortality(sim, sim_desc, n)
-  prev <- compare_prevalence(sim, sim_desc, n)
-  reside_time <- compare_reside_time(sim, sim_desc, n)
-  age_onset <- compare_age_onset(sim, sim_desc, n)
-  
+
+  # Each comparison runs only if a benchmark for it was supplied, so a benchmark set that
+  # omits an element (or sets it to NULL) skips that comparison instead of failing.
+  mort <- if (!is.null(benchmarks[["mortality"]]))
+    compare_mortality(sim, sim_desc, n, benchmark = benchmarks[["mortality"]])
+  prev <- if (!is.null(benchmarks[["prev_by_age"]]))
+    compare_prevalence(sim, sim_desc, n, benchmark = benchmarks[["prev_by_age"]])
+  reside_time <- if (!is.null(benchmarks[["reside_time"]]))
+    compare_reside_time(sim, sim_desc, n, benchmark = benchmarks[["reside_time"]])
+  age_onset <- if (!is.null(benchmarks[["age_of_onset"]]))
+    compare_age_onset(sim, sim_desc, n, benchmark = benchmarks[["age_of_onset"]])
+
   return(invisible(list(sim = sim, mort = mort, prev = prev, reside_time = reside_time, age_onset = age_onset)))
 }

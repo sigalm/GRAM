@@ -241,16 +241,21 @@ f.out_aggregate <- function(a.out, l.inputs) {
   time_in_dem_overall <- round(mean(time_in_dem[time_in_dem > 0], na.rm = TRUE), digits = 2)
   
   
-  result_df1 <- as.data.frame(result_matrix1) %>% 
-    mutate(age_group = factor(c(age_groups, "Overall"),
-                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
+  # The matrix rows are already in c(age_groups, "Overall") order, so the labels are assigned
+  # positionally. factor(x, labels = ) would sort x first, and under C collation "Overall"
+  # sorts ahead of "[50,55)" -- which silently shifts every age label by one bin and leaves
+  # the true overall row labelled "50-54". Same failure mode as the cut() note below.
+  reside_labels <- c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall")
+  stopifnot(length(reside_labels) == nrow(result_matrix1))
+
+  result_df1 <- as.data.frame(result_matrix1) %>%
+    mutate(age_group = factor(reside_labels, levels = reside_labels)) %>%
     select(age_group, mci, mil, mod, sev) %>%
     mutate(any_dem = c(time_in_dem_grouped, time_in_dem_overall))
   rownames(result_df1) <- NULL
   
-  result_df2 <- as.data.frame(result_matrix2) %>% 
-    mutate(age_group = factor(c(age_groups, "Overall"),
-                              labels = c("50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95+", "Overall"))) %>%
+  result_df2 <- as.data.frame(result_matrix2) %>%
+    mutate(age_group = factor(reside_labels, levels = reside_labels)) %>%
     select(age_group, mci, mil, mod, sev) %>%
     mutate(any_dem = c(time_in_dem_grouped, time_in_dem_overall))
   rownames(result_df2) <- NULL
