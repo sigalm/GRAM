@@ -61,3 +61,9 @@ analyses/**/*.rds
 # Rendered notebook outputs (can be regenerated)
 *.nb.html
 calibration/*.html
+
+# Word lock files
+~$*
+
+# Interim calibration grid results (regenerable; commit a final set with `git add -f`)
+calibration/calibration_results_*.RDS
