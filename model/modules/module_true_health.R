@@ -152,9 +152,10 @@ f.update_SYN <- function(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH
 
   prob_mci <- f.calc_MCIprob(l.inputs, v.AGE.tplus2, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag)
 
-  # apply dependent on previous state. Time already spent in the TCI tunnel is read from TCI
-  # rather than from SYN two cycles back, so that a cohort starting with prevalent TCI cases
-  # (which have no cycle t-2 to look back to) progresses correctly.
+  # apply dependent on previous state. Time already spent in the TCI tunnel is read from the
+  # TCI attribute, which counts cycles in the tunnel directly. This is what lets a cohort
+  # initialized with prevalent TCI cases progress correctly: those individuals have no cycle
+  # t-2 to look back to, so the elapsed time cannot be recovered from SYN's history.
   symptoms[v.SYN.lag == 0] <- as.numeric(prob_mci[v.SYN.lag == 0] > random_tplus2[v.SYN.lag == 0]) * 0.5
   symptoms[v.SYN.lag == 0.5 & v.TCI.lag < 2] <- 0.5
   symptoms[v.SYN.lag == 0.5 & v.TCI.lag >= 2] <- 1

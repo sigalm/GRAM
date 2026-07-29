@@ -26,7 +26,7 @@ f.run <- function(l.inputs, microdata, printLevel) {
     # TIME
     a.out[t,"TIME",] <- a.out[t-1,"TIME",] + 1
 
-    ########## !!!!!!!!!!!!!!! The model is run by updating each attribute in a loop over the cycles (over time). 
+    ########## The model is run by updating each attribute in a loop over the cycles (over time).
     # At each cycle attributes are updated using the attribute status at the previous cycle or the status at the current cycle. 
     # Except the first cycle, which is manually put in (i.e., starting values). 
     # For transparency, no information from other than the previous or current is used. Information from more than 1 cycle ago 
@@ -183,7 +183,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["TX.trc"]] <- as.matrix(apply(X = a.out[,"SEV",]==3, MARGIN = 1, FUN = sum, na.rm = TRUE)/n)
   l.out[["TX.sum"]] <- sum(sum(l.out[["TX.trc"]]))
   
-  # temporary to select outcomes
+  # Discounted time in each state, aliased under mean_time_* for the reporting tables below.
   l.out[["mean_time_alive"]] <- l.out[["alive.sum.dis"]]
   l.out[["mean_time_healthy"]] <- l.out[["healthy.sum.dis"]]
   l.out[["mean_time_MCI"]] <- l.out[["MCI.sum.dis"]]
@@ -262,9 +262,6 @@ f.out_aggregate <- function(a.out, l.inputs) {
   
   l.out[["reside_time"]] <- list(noncensored = result_df1, censored = result_df2)
   
-  # time in full-time care
-  # l.out[["mean_time_FTC"]] <- sum(a.out[,"INSTIT",]==1, na.rm=TRUE)/n
-  
   # state trace (undiscounted) (true states)
   l.out[["state_trace"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 6, 
                                    dimnames = list(NULL,c("healthy","mci","mil","mod","sev","dth")))
@@ -276,9 +273,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["state_trace"]][,"dth"] <- apply(X = a.out[,"ALIVE",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE)/n
   # check rowsum
   rowSums(l.out[["state_trace"]])
-  # trace institutionalized
-  # l.out[["state_trace_instit"]] <- as.matrix((apply(X = a.out[,"INSTIT",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE)/n))
-  
+
   # state trace (undiscounted) (observed states)
   l.out[["state_trace_obs"]] <- matrix(data = NA, nrow = l.inputs[["n.cycle"]], ncol = 6, 
                                        dimnames = list(NULL,c("healthy","mci","mil","mod","sev","dth")))
@@ -299,9 +294,7 @@ f.out_aggregate <- function(a.out, l.inputs) {
                                                                  "dem_NA","dem_neg","dem_pos",
                                                                  "dth")))
 
-  # eligible <- matrix(FALSE, nrow = l.inputs[["n.cycle"]], ncol = n)
-  # eligible[2:l.inputs[["n.cycle"]], ] <- (a.out[2:l.inputs[["n.cycle"]], "HCARE", ] == 1) & (a.out[1:(l.inputs[["n.cycle"]]-1), "DX", ] == 0)
-  # l.out[["state_concordance"]][,"eligible"] <- as.matrix(apply(X = eligible, MARGIN = 1, FUN = sum, na.rm = TRUE))
+  # NOTE: the "eligible" column is declared above but never populated, so it stays NA.
   l.out[["state_concordance"]][,"h_NA"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==-8, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["state_concordance"]][,"h_neg"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["state_concordance"]][,"h_pos"] <- as.matrix(apply(X = a.out[,"SYN",]==0 & a.out[,"BHA",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
@@ -392,8 +385,6 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["prevalence_by_raceeth"]] <- array(NA, dim = c(l.inputs[["n.cycle"]], length(severity_levels) + 1, length(l.inputs[["v.RACEETH_val"]])),
                                             dimnames = list(NULL, c("h", severity_levels), c("NHW","NHB","Hisp")))
   
-  # matrix_nhw <- matrix_nhb <- matrix_hisp <- matrix(0, nrow = l.inputs[["n.cycle"]], ncol = 5,
-  #                     dimnames = list(NULL, c("h", severity_levels)))
   l.out[["prevalence_by_raceeth"]][,"h","NHW"]   <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SYN",]<1, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mci","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==0, MARGIN = 1, FUN = sum, na.rm = TRUE))
   l.out[["prevalence_by_raceeth"]][,"mil","NHW"] <- as.matrix(apply(X = a.out[,"RACEETH",]==0 & a.out[,"SEV",]==1, MARGIN = 1, FUN = sum, na.rm = TRUE))
@@ -448,15 +439,15 @@ f.out_aggregate <- function(a.out, l.inputs) {
   l.out[["COST_care.dis"]] <- as.matrix(f.discount(x = l.out[["COST_care"]], discount_rate = l.inputs[["r.discount_COST"]], n.cycle = l.inputs[["n.cycle"]]))
   l.out[["COST_care.dis.sum"]] <- sum(l.out[["COST_care.dis"]])
   
-  # COST_tot
-  l.out[["COST_tot"]]         <- l.out[["COST_tx"]]         + l.out[["COST_care"]]         
-  # + l.out[["COST_test"]]         + l.out[["COST_fu"]]
-  l.out[["COST_tot.sum"]]     <- l.out[["COST_tx.sum"]]     + l.out[["COST_care.sum"]]     
-  # + l.out[["COST_test.sum"]]     + l.out[["COST_fu.sum"]]
-  l.out[["COST_tot.dis"]]     <- l.out[["COST_tx.dis"]]     + l.out[["COST_care.dis"]]     
-  # + l.out[["COST_test.dis"]]     + l.out[["COST_fu.dis"]]
-  l.out[["COST_tot.dis.sum"]] <- l.out[["COST_tx.dis.sum"]] + l.out[["COST_care.dis.sum"]] 
-  # + l.out[["COST_test.dis.sum"]] + l.out[["COST_fu.dis.sum"]]
+  # COST_tot = treatment + care ONLY.
+  # Testing (COST_test) and follow-up (COST_fu) costs are deliberately excluded, even though
+  # both are accumulated above and are available individually in l.out. Anything reporting the
+  # total cost of a testing strategy therefore has to add them back explicitly; NHB and NMB
+  # below inherit this exclusion, as do table_sum and table_trace.
+  l.out[["COST_tot"]]         <- l.out[["COST_tx"]]         + l.out[["COST_care"]]
+  l.out[["COST_tot.sum"]]     <- l.out[["COST_tx.sum"]]     + l.out[["COST_care.sum"]]
+  l.out[["COST_tot.dis"]]     <- l.out[["COST_tx.dis"]]     + l.out[["COST_care.dis"]]
+  l.out[["COST_tot.dis.sum"]] <- l.out[["COST_tx.dis.sum"]] + l.out[["COST_care.dis.sum"]]
   
   # net health benefit (NHB)
   l.out[["NHB"]]     <- l.out[["QALY.sum"]]     - l.out[["COST_tot.sum"]]     / 20000
@@ -476,37 +467,27 @@ f.out_aggregate <- function(a.out, l.inputs) {
       l.out[["mean_time_SEV2"]],
       l.out[["mean_time_SEV3"]],
       l.out[["mean_time_Tx"]],
-      # l.out[["mean_time_FTC"]],
       l.out[["QALY.sum"]],
-      # l.out[["COST_test.sum"]],
       l.out[["COST_tx.sum"]],
-      # l.out[["COST_fu.sum"]],
       l.out[["COST_care.sum"]],
       l.out[["COST_tot.sum"]],
       l.out[["NHB"]],
       l.out[["NMB"]],
       l.out[["QALY.dis.sum"]],
-      # l.out[["COST_test.dis.sum"]],
       l.out[["COST_tx.dis.sum"]],
-      # l.out[["COST_fu.dis.sum"]],
       l.out[["COST_care.dis.sum"]],
       l.out[["COST_tot.dis.sum"]],
       l.out[["NHB.dis"]],
       l.out[["NMB.dis"]]
     ),
     nrow = 1,
-    ncol = 24-5,
+    ncol = 19,
     dimnames = list(NULL, c("mean_time_alive","mean_time_healthy","mean_time_MCI","mean_time_SEV1","mean_time_SEV2","mean_time_SEV3","mean_time_Tx",
-                            # "mean_time_FTC",
                             "QALY.sum",
-                            # "COST_test.sum",
                             "COST_tx.sum",
-                            # "COST_fu.sum",
                             "COST_care.sum","COST_tot.sum","NHB","NMB",
                             "QALY.dis.sum",
-                            # "COST_test.dis.sum",
                             "COST_tx.dis.sum",
-                            # "COST_fu.dis.sum",
                             "COST_care.dis.sum","COST_tot.dis.sum","NHB.dis","NMB.dis")))
   
   # reporting table trace results
@@ -518,31 +499,21 @@ f.out_aggregate <- function(a.out, l.inputs) {
       l.out[["state_trace"]][,"mod"],
       l.out[["state_trace"]][,"sev"],
       l.out[["state_trace"]][,"dth"],
-      # l.out[["state_trace_instit"]],
       l.out[["QALY"]],
-      # l.out[["COST_test"]],
       l.out[["COST_tx"]],
-      # l.out[["COST_fu"]],
       l.out[["COST_care"]],
       l.out[["COST_tot"]],
       l.out[["QALY.dis"]],
-      # l.out[["COST_test.dis"]],
       l.out[["COST_tx.dis"]],
-      # l.out[["COST_fu.dis"]],
       l.out[["COST_care.dis"]],
       l.out[["COST_tot.dis"]]
     ),
-    ncol = 19-5,
+    ncol = 14,
     dimnames = list(NULL, c("healthy","mci","mil","mod","sev","dth",
-                            # "state_trace_instit",
                             "QALY",
-                            # "COST_test",
                             "COST_tx",
-                            # "COST_fu",
                             "COST_care","COST_tot","QALY.dis",
-                            # "COST_test.dis",
                             "COST_tx.dis",
-                            # "COST_fu.dis",
                             "COST_care.dis","COST_tot.dis"))
   )
   

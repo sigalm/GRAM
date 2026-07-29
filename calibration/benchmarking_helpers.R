@@ -84,7 +84,7 @@ benchmark_age_of_onset <<- 71.5
 
 # Each compare_* function takes its benchmark as an argument rather than reading a global.
 # The list below bundles the internal-validation targets (US general population) and is the
-# default, so existing calls keep their current behaviour.
+# default.
 #
 # To validate against a different source, build a list with the same element names and the
 # same column layouts, and pass it as run_benchmarking(benchmarks = ). An element that is
@@ -109,12 +109,11 @@ compare_mortality <- function(sim, description, n, benchmark = benchmarks_intern
                               min_at_risk = 1, drop_max_age = TRUE) {
   stopifnot(all(c("age", "qx") %in% names(benchmark)))
 
-  # Age-specific mortality is computed per individual rather than per cycle. The earlier
-  # version cbind()ed the life table onto the cycle-indexed state trace, which silently
-  # assumed cycle number == age -- true only for a cohort that starts at exactly age 50 with
-  # no spread and runs for as many cycles as the life table has rows. Pairing each person's
-  # age at the start of a cycle with whether they died during it lifts that restriction, so
-  # cohorts of any starting age, age spread, or follow-up length can be compared.
+  # Age-specific mortality is computed per individual rather than per cycle: each person's age
+  # at the start of a cycle is paired with whether they died during it, then joined to the
+  # benchmark on age. Pairing on age rather than on cycle position is what allows cohorts of
+  # any starting age, age spread, or follow-up length to be compared -- cycle number equals
+  # age only for a cohort starting at exactly the life table's first age with no spread.
   n_cycle <- dim(sim$output)[1]
   alive   <- sim$output[, "ALIVE", ]
 
@@ -148,9 +147,9 @@ compare_mortality <- function(sim, description, n, benchmark = benchmarks_intern
   mort_compare <- mort_compare %>%
     mutate(
       # Annual panels compare hazard rates on both sides. The model produces a probability of
-      # dying within the cycle, so it is converted the same way the life table's `rate` column
-      # is derived from qx; the earlier version compared a model probability against a
-      # benchmark hazard, which inflated the benchmark by ~8% at age 90 and ~21% at age 99.
+      # dying within the cycle, so it is converted to a rate the same way the life table's
+      # `rate` column is derived from qx. Both sides must be on the same scale: comparing a
+      # probability against a hazard overstates the benchmark by ~8% at age 90 and ~21% at 99.
       benchmark_rate = -log(1 - qx),
       model_rate     = -log(1 - model_prob),
       benchmark_rate_1000 = benchmark_rate * 1000,
@@ -159,9 +158,10 @@ compare_mortality <- function(sim, description, n, benchmark = benchmarks_intern
     ) %>%
     mutate(
       # Cumulative panels stay on the probability scale -- these are survival quantities, and
-      # both sides are built the same life-table way across the ages observed. The model side
-      # used to be the raw cumulative death fraction of the cohort, which is only comparable
-      # to the life table when everyone starts at the life table's first age.
+      # both sides are built the same life-table way across the ages observed, by compounding
+      # the age-specific probabilities. Note this is not the cohort's raw cumulative death
+      # fraction, which is only comparable to the life table when everyone starts at the life
+      # table's first age.
       cum_model_rate = (1 - cumprod(1 - model_prob)) * 1000,
       cum_benchmark_rate = (1 - cumprod(1 - qx)) * 1000,
       cum_residual = cum_model_rate - cum_benchmark_rate
@@ -283,7 +283,6 @@ stratify_prevalence_by <- function(sim, strat_var, strat_labels = NULL, strat_cu
 
   plot_prev <- ggplot(prev_strat, aes(x = age, y = prev, color = condition)) +
     geom_line(aes(linetype = strat)) +
-    # facet_wrap(~ strat) +
     labs(title = paste0("Prevalence by ", strat_var), x = "Age", y = "Prevalence", color = "Condition", linetype = "Group") +
     scale_color_manual(
       labels = c("dem" = "Dementia", "mci" = "MCI"),
@@ -376,7 +375,6 @@ compare_prevalence <- function(sim, description, n, benchmark = benchmarks_inter
 compare_reside_time <- function(sim, description, n, benchmark = benchmarks_internal[["reside_time"]]) {
   benchmark_reside_time <- benchmark
   reside_time <- as.data.frame(sim$aggregated_results_totpop$reside_time$noncensored) %>%
-    # mutate(dem = mil + mod + sev) %>%
     select(-mil, -mod, - sev) %>%
     pivot_longer(cols = c(mci, any_dem), names_to = "condition", values_to = "duration")
   
@@ -386,10 +384,9 @@ compare_reside_time <- function(sim, description, n, benchmark = benchmarks_inte
                   include.lowest = TRUE)
   
   # cut() labels the onset bins "[50,55)" etc., but reside_time labels them "50-54" etc.
-  # Relabel BEFORE filtering: the exclusion below is written against the reside_time
-  # labels, so filtering first matches nothing and leaves the weights normalised over
-  # all 10 bins while only 8 of them are used -- an Overall_adj biased low by the
-  # weight mass in the two dropped bins.
+  # Relabel before filtering: the exclusion below is written against the reside_time labels,
+  # so filtering first would match nothing and leave the weights normalised over all 10 bins
+  # while only 8 are used, biasing Overall_adj low by the weight mass of the dropped bins.
   onset_labels <- setdiff(levels(reside_time$age_group), "Overall")
   stopifnot(length(onset_labels) == nlevels(age_bins))
 
@@ -413,13 +410,10 @@ compare_reside_time <- function(sim, description, n, benchmark = benchmarks_inte
   reside_time <- reside_time %>%
     rbind(reside_time_adjusted)
   
-  # Remove rows where age_group == 'Overall'
+  # Drop the two youngest onset bins, which Overall_adj above already excludes.
   reside_time <- reside_time %>%
     filter(!age_group %in% c("50-54", "55-59"))
-    
-  # Rename 'Overall_adj' to 'Overall'
-#  reside_time$age_group[reside_time$age_group == "Overall_adj"] <- "Overall"
-  
+
   desired_order <- c("any_dem", "mci", "benchmark_dem", "benchmark_mci")
   reside_time$condition <- factor(reside_time$condition, levels = desired_order)
   benchmark_reside_time$condition <- factor(benchmark_reside_time$condition, levels = desired_order)

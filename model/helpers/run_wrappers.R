@@ -11,28 +11,11 @@ f.wrap_run <- function(l.inputs, microdata = NULL, printLevel = 0) {
   aggregated_results_totpop <- f.out_aggregate(a.out = output, l.inputs = l.inputs)
   fig.progression <- f.make_figures(l.out = aggregated_results_totpop, l.inputs = l.inputs)
   
-  # # Aggregate results for those who develop MCI at any point
-  # impaired <- apply(output[,"SYN",], 2, function(x) any(x == 1, na.rm = TRUE))
-  # output_impaired <- output[,,impaired]
-  # aggregated_results_impaired <- f.out_aggregate(a.out = output_impaired, l.inputs = l.inputs)
-  # figures_impaired <- f.figures(l.out = aggregated_results_impaired, l.inputs = l.inputs)
-  # 
-  # # Aggregate results for only DMT eligibles
-  # treated <- apply(output[,"TX",], 2, function(x) any(x == 1, na.rm = TRUE))
-  # output_treated <- output[,,treated]
-  # aggregated_results_treated <- f.out_aggregate(a.out = output_treated, l.inputs = l.inputs)
-  # figures_treated <- f.figures(l.out = aggregated_results_treated, l.inputs = l.inputs)
-  # 
   return(list(
     inputs = l.inputs,
     output = output,
     aggregated_results_totpop = aggregated_results_totpop,
     fig.progression = fig.progression
-    # ,
-    # aggregated_results_impaired = aggregated_results_impaired,
-    # figures_impaired = figures_impaired,
-    # aggregated_results_treated = aggregated_results_treated,
-    # figures_treated = figures_treated
   )
   )
 }
@@ -44,8 +27,6 @@ f.out_summary <- function(l.inputs1, l.inputs2, printLevel = 0) {
   
   # strategy 1
   l.inputs_strat1 <- l.inputs1
-  # l.inputs_strat1[["strategy"]] <- l.inputs[["strategy_strat1"]]
-  # l.inputs_strat1[["Tx"]] <- l.inputs[["Tx_strat1"]]
   a.out_strat1 <- f.run(l.inputs = l.inputs_strat1, printLevel = printLevel)
   a.out_qc_strat1 <- f.qaly_cost(a.out = a.out_strat1, l.inputs = l.inputs_strat1)
   out_strat1 <- f.out_aggregate(a.out = a.out_qc_strat1, l.inputs = l.inputs_strat1)
@@ -54,8 +35,6 @@ f.out_summary <- function(l.inputs1, l.inputs2, printLevel = 0) {
   
   # strategy 2
   l.inputs_strat2 <- l.inputs2
-  # l.inputs_strat2[["strategy"]] <- l.inputs[["strategy_strat2"]]
-  # l.inputs_strat2[["Tx"]] <- l.inputs[["Tx_strat2"]]
   a.out_strat2 <- f.run(l.inputs = l.inputs_strat2, printLevel = printLevel)
   a.out_qc_strat2 <- f.qaly_cost(a.out = a.out_strat2, l.inputs = l.inputs_strat2)
   out_strat2 <- f.out_aggregate(a.out = a.out_qc_strat2, l.inputs = l.inputs_strat2)
