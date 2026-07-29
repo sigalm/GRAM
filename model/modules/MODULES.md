@@ -62,8 +62,12 @@ This document provides an overview of each major module in the `modules/` direct
   - Keeps APOE4 status fixed (genetic risk, no change over time).
 - `f.update_SYN(v.SYN.lag, ...)`
   - Updates cognitive syndrome status (e.g., normal, transitional cognitive impairment, cognitively impaired) based on risk factors and previous state.
+- `f.update_TCI(v.SYN, v.TCI.lag, n.alive)`
+  - Counts how long an individual has been in the transitional cognitive impairment (TCI) tunnel, the `SYN == 0.5` state. Returns 0 for anyone not currently in the tunnel, and otherwise counts up from 1 on the cycle of entry. Tracking elapsed time in a dedicated attribute — rather than inferring it from `SYN` two cycles back — is what lets a cohort initialized with *prevalent* TCI cases progress correctly, since those individuals have no cycle *t-2* to look back to.
 - `f.update_MEMLOSS(v.MEMLOSS.lag, ...)`
   - Updates memory loss indicator which flags those with potentially reversible, non-progressive cognitive impairment.
+- `f.update_CDR_track(v.SEV.lag, n.alive)`
+  - Assigns each individual to a CDR-SB progression group: slow (0) for those with true MCI, fast (1) for those with true dementia.
 - `f.update_CDR(v.CDR.lag, ...)`
   - Updates Clinical Dementia Rating (CDR) score (unobserved true score).
 - `f.update_SEV(v.SEV.lag, ...)`
@@ -79,7 +83,7 @@ This document provides an overview of each major module in the `modules/` direct
 - `f.update_COGCON(v.COGCON.lag, ...)`
   - Updates observed cognitive concern. For scenarios that do not consider cognitive concerns, this attribute is set to 1 for all individuals. Alternatively, it could be operationalized to flag eligibility for intervention based on different criteria.
 - `f.update_BHA(v.BHA.lag, ...)`
-  - Updates Brain Health Assessment (BHA) test result.
+  - Updates Brain Health Assessment (BHA) test result. Whether an eligible individual is tested in a given cycle is governed by the active scenario's `stop_rule()`, which can retire someone from further testing based on their testing history (e.g. a previous positive result, or reaching a maximum age). See `scenario_TEMPLATE_config.R` for the arguments a `stop_rule` receives.
 - `f.update_CDR_obs(v.CDR_obs.lag, ...)`
   - Updates observed CDR-SB score (may differ from true CDR-SB).
 - `f.update_SEV_obs(v.SEV_obs.lag, ...)`

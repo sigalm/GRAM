@@ -27,9 +27,11 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
 3. **Run the simulation**:
 
    - **If a scenario config file is provided** (`$ARGUMENTS`):
-     First source the calibration and test performance helpers, calibrate the model, then load and run the scenario:
+     Source the test performance helpers, apply the calibrated parameters, then load and run
+     the scenario. `calibrate()` and `load_scenario()` both come from `source_all.R` in
+     step 1 — `calibrate()` is defined in `model/config/calibrate_config.R`, not in
+     `calibration/benchmarking_helpers.R`:
      ```r
-     source("calibration/benchmarking_helpers.R")
      source("analyses/paper2_testing_strategies/test_performance_helpers.R")
      l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
      config <- load_scenario("$ARGUMENTS", l.inputs_calibrated)
@@ -38,7 +40,8 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
      Save output to `analyses/paper2_testing_strategies/sim_results/` with a datetime suffix.
 
    - **If no argument is provided**:
-     Run the base model:
+     Run the base model. Note that `l.inputs` alone is **uncalibrated**; pass
+     `calibrate(inputs = l.inputs, n = <n>)` instead to reproduce published results:
      ```r
      result <- f.wrap_run(l.inputs, microdata = sample1)
      ```
@@ -52,4 +55,4 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
 - The working directory must be the GRAM project root (where `GRAM.Rproj` lives).
 - Scenario config files are typically located in `analyses/paper2_testing_strategies/bha_scenarios/`.
 - Simulations with 100,000 individuals can take several minutes.
-- If the user provides just a scenario name (e.g., `r1bhapos`), look for the matching config file in `analyses/paper2_testing_strategies/bha_scenarios/` with the pattern `scenario_<name>_config.R`.
+- If the user provides just a scenario name (e.g., `r1bhapos`, `u3bhapos_rand50`, `s1bhapos_emr`), look for the matching config file in `analyses/paper2_testing_strategies/bha_scenarios/` with the pattern `scenario_<name>_config.R`. Scenario names carry suffixes such as `_rand50`, `_nonrand`, `_emr` and `_question`, so list the directory rather than assuming a bare name resolves.

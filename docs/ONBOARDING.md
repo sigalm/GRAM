@@ -171,12 +171,22 @@ results$fig.progression
 
 #### Understanding Parameters (20 min)
 - **Goal**: Know which parameters to change for country adaptations
-- Walk through `model/setup.R` focusing on:
-  - **Demographics** (lines 72-88): Starting age, sex distribution, education, race/ethnicity, income
-  - **Mortality** (lines 95-107): Hazard ratios, life tables
-  - **Disease progression** (lines 111-139): MCI incidence, CDR progression rates
-  - **Costs** (lines 166-177): Country-specific healthcare costs
-  - **Utilities** (lines 158-164): Quality of life weights
+- Walk through `model/setup.R`, which is divided by `##` section headers. Search for the
+  header rather than jumping to a line number — the numbers move whenever the file is edited:
+  - `## Demographic inputs`: starting age, sex distribution, education, race/ethnicity,
+    income, medical burden. Everything between the `Parametric fallback` and
+    `End parametric demographic inputs` markers is used **only** when no microdata is
+    passed to `f.initialize()`.
+  - `## Mortality`: hazard ratios by syndrome and severity, and the life table
+  - `## Logistic regression for transition to MCI from Healthy`: MCI incidence and the
+    calibrated multipliers `param1`, `param2a`, `param2b`
+  - `## Cognitive test scoring and progression`: CDR-SB cutoffs and progression rates
+  - `## Cognitive test performance`: test sensitivity and specificity
+  - `## Health state utilities`: quality of life weights
+  - `## Costs`: country-specific healthcare costs
+- Note that `setup.R` holds **uncalibrated** defaults. `calibrate()`, in
+  `model/config/calibrate_config.R`, overlays the calibrated values and is what analyses
+  actually run with.
 
 #### GitHub Workflow Practice (15 min)
 - **Goal**: Comfortable with branching and committing
@@ -249,9 +259,17 @@ l.inputs[["scenario"]] <- list(
 # Demographics (example - replace with real data)
 l.inputs[["p.SEX_start_male"]] <- 0.48
 l.inputs[["p.SEX_start_female"]] <- 0.52
-l.inputs[["p.EDU_start"]] <- c(0.20, 0.45, 0.35)  # college, HS, <HS
+
+# Education is measured in YEARS, not ordinal levels. p.EDU_start is an optional
+# marginal override that must have one probability per entry of v.EDU_val
+# (currently 8: 8, 12, 14, 14, 16, 18, 19, 25 years) and sum to 1. Leaving it NULL
+# makes the model draw from the race-stratified matrix m.EDU_start instead.
+l.inputs[["v.EDU_val"]]   <- c(...)  # country-specific years-of-schooling levels
+l.inputs[["p.EDU_start"]] <- c(...)  # same length as v.EDU_val, sums to 1
 
 # Mortality - load country-specific life table
+# IMPORTANT: row 1 must be the probability at age 50, with one row per year of age
+# thereafter (see the warning below).
 l.inputs[["m.lifetable"]] <- as.matrix(
   readRDS("data/mortality/lifetable_brazil.RDS")[, c("m_prob", "f_prob")]
 )
@@ -262,12 +280,30 @@ l.inputs[["c.mil"]] <- 15000
 # ... etc
 ```
 
+> **The life table must start at age 50.** `f.update_ALIVE()` looks up mortality with
+> `f.age_index()`, which converts an age to a row as `round(AGE) - 50 + 1`. Row 1 is
+> therefore assumed to be age 50, row 2 age 51, and so on, one row per single year of age.
+> A table that starts at 51, or that uses 5-year age bands, will silently return the wrong
+> probability for every individual rather than raising an error. `f.initialize()` also
+> derives the oldest attainable age from the table's height
+> (`AGE_max <- 50 + nrow(m.lifetable) - 1`), so a short table quietly caps the cohort's age.
+> If your source life table starts at birth, subset it to ages 50+ before use; if it is
+> banded, expand it to single years first.
+
 ### Phase 4: Validation
 
 - [ ] Run baseline (no intervention) scenario
 - [ ] Compare dementia prevalence to published estimates for your country
 - [ ] Check mortality patterns match life tables
 - [ ] Verify age distribution over time looks reasonable
+- [ ] Confirm the life table is aligned as described above — plot modelled vs table
+      mortality by single year of age and look for a systematic one-year shift
+
+The calibration and validation approach used for the US model, including the targets,
+goodness-of-fit measure and acceptance criteria, is described in
+`calibration/GRAM_calibration_validation_protocol.docx`. Country adaptations that
+re-calibrate should follow the same structure; `calibration/run_calibration.R` is the
+reference implementation.
 
 ### Phase 5: Documentation
 
@@ -333,11 +369,11 @@ l.inputs[["p.EDU_start"]]
 |----------------|--------------|-------|
 | Starting age | `AGE_start_mean`, `AGE_start_sd` | |
 | Sex distribution | `p.SEX_start_male`, `p.SEX_start_female` | Must sum to 1 |
-| Education levels | `p.EDU_start` | Vector of 3, must sum to 1 |
-| Race/ethnicity | `p.RACEETH_start` | May need to redefine categories |
+| Education levels | `v.EDU_val`, `m.EDU_start`, `p.EDU_start` | Education is in **years**. By default drawn from `m.EDU_start` (one column per race/ethnicity level, each summing to 1). Set `p.EDU_start` instead — same length as `v.EDU_val`, summing to 1 — to draw independently of race/ethnicity; it takes precedence when non-`NULL`. |
+| Race/ethnicity | `p.RACEETH_start`, `v.RACEETH_val` | Must stay the same length as each other and as the number of columns in `m.EDU_start` |
 | Income categories | `p.INCOME_start` | Adjust thresholds in data generation |
-| Mortality | `m.lifetable` | Load country-specific file |
-| MCI incidence | `m.hr_mci` | Age-specific rates |
+| Mortality | `m.lifetable` | Country-specific file; **row 1 must be age 50**, one row per year (see Phase 3) |
+| MCI incidence | `m.hr_mci` | Age-specific rates, indexed by age from 50 the same way as the life table |
 | Healthcare access | `p.HCARE_start` | |
 | All costs | `c.*` parameters | Convert to consistent currency |
 
@@ -360,5 +396,5 @@ analyses/
 
 ---
 
-*Last updated: March 2026*
+*Last updated: July 2026*
 *Contact: sigal.maya@ucsf.edu*

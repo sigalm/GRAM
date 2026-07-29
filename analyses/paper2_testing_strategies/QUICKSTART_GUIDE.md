@@ -19,19 +19,28 @@ Each strategy can be configured with different testing frequencies and follow-up
 
 ```
 analyses/paper2_testing_strategies/
-├── gram_paper2_testingstrategies.R    # Main analysis script
+├── gram_paper2_testingstrategies.R     # Main analysis script
+├── gram_paper2_testing_pcp_fu.R        # PCP follow-up analysis
 ├── gram_evolution_charts.R             # Helper functions for early diagnosis analysis
 ├── test_performance_helpers.R          # Functions for test performance metrics & plotting
 ├── bha_scenarios/                      # Scenario configuration files
-│   ├── scenario_TEMPLATE_config.R      # Template for creating new scenarios
-│   ├── scenario_u3bhapos_config.R      # Universal testing every 3 years
-│   ├── scenario_s1bhapos_config.R      # Selective testing annually
-│   ├── scenario_r1bhapos_config.R      # Reactive testing annually
-│   └── scenario_*pcppos_config.R       # Variants with PCP follow-up
+│   ├── scenario_TEMPLATE_config.R          # Template for creating new scenarios
+│   ├── scenario_u3bhapos_rand50_config.R   # Universal every 3y, 50% random uptake
+│   ├── scenario_u3bhapos_nonrand_config.R  # Universal every 3y, non-random uptake
+│   ├── scenario_s1bhapos_emr_config.R      # Selective annually, EMR-triggered
+│   ├── scenario_s1bhapos_question_config.R # Selective annually, question-triggered
+│   ├── scenario_r1bhapos_config.R          # Reactive annually
+│   ├── scenario_u1hybrid_config.R          # Hybrid strategy
+│   └── scenario_*pcp*_config.R             # Variants with PCP follow-up
+├── planning/                           # Planning documents
+├── validation/                         # Validation outputs
 ├── sim_results/                        # Simulation output files (.rds)
 ├── test_perf_results/                  # Processed test performance data
 └── plots/                              # Generated figures
 ```
+
+Run `list.files("analyses/paper2_testing_strategies/bha_scenarios")` for the current set —
+scenarios are added and retired often enough that this listing goes out of date.
 
 ---
 
@@ -47,29 +56,34 @@ Open `gram_paper2_testingstrategies.R` in RStudio.
 # Load required libraries and scripts
 source("model/setup.R")
 source("model/simulation.R")
-source("calibration/benchmarking_helpers.R")
-source("model/helpers/source_all.R")
+source("model/helpers/source_all.R")   # also loads calibrate() from model/config/
 library(tableone)
 
 # Load microdata
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
-# Calibrate model (this may take a few minutes)
+# Apply the calibrated parameter values and set the cohort size
 l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
 ```
+
+`calibrate()` is defined in `model/config/calibrate_config.R` and loaded by
+`source_all.R` — it does not come from `calibration/benchmarking_helpers.R`, which only
+supplies benchmark targets and comparison functions. It applies the calibrated `param1`,
+`param2a` and `param2b`, and sets `n.ind` to `n` and `n.cycle` to 51; it does not re-run
+the calibration search (that is `calibration/run_calibration.R`), so it returns quickly.
 
 ### Step 3: Select Scenarios to Run
 
 The script defines scenarios in a list. Modify which scenarios to run by adjusting the indices:
 
 ```r
-# Current setup runs scenarios 1-3 (u3bhapos, s1bhapos, r1bhapos)
+# The three main strategies (u3bhapos_rand50, s1bhapos_emr, r1bhapos)
 for (scen in names(scenario_list[1:3])) {
   # ... simulation code ...
 }
 
-# To run all scenarios including PCP follow-up variants:
-for (scen in names(scenario_list[1:6])) {
+# All scenarios in the list, including the sensitivity analyses
+for (scen in names(scenario_list)) {
   # ... simulation code ...
 }
 
@@ -186,14 +200,16 @@ scenario_inputs <- list(
 
 ### Step 3: Add to Scenario List
 
-In `paper2_testingstrategies.R`, add your scenario to the list:
+In `gram_paper2_testingstrategies.R`, add your scenario to the list:
 
 ```r
 scenario_list <- list(
-  u3bhapos = "scenario_u3bhapos_config.R",
-  s1bhapos = "scenario_s1bhapos_config.R",
-  r1bhapos = "scenario_r1bhapos_config.R",
-  yourname = "scenario_yourname_config.R"  # Add your scenario here
+  u3bhapos_rand50   = "scenario_u3bhapos_rand50_config.R",
+  s1bhapos_emr      = "scenario_s1bhapos_emr_config.R",
+  r1bhapos          = "scenario_r1bhapos_config.R",
+  s1bhapos_question = "scenario_s1bhapos_question_config.R",
+  u3bhapos_nonrand  = "scenario_u3bhapos_nonrand_config.R",
+  yourname          = "scenario_yourname_config.R"  # Add your scenario here
 )
 ```
 
@@ -384,20 +400,23 @@ Check that:
 Here's a complete workflow for comparing two testing strategies:
 
 ```r
-# 1. Setup
+# 1. Setup -- source_all.R is required: it defines calibrate() and load_scenario()
 source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
+source("model/helpers/source_all.R")
+source("analyses/paper2_testing_strategies/test_performance_helpers.R")
 library(tableone)
+library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
-# 2. Calibrate
+# 2. Apply calibrated parameters
 l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)  # you only need to run this once
 
 # 3. Define scenarios
 scenario_list <- list(
-  u3bhapos = "scenario_u3bhapos_config.R",
-  s1bhapos = "scenario_s1bhapos_config.R"
+  u3bhapos_rand50 = "scenario_u3bhapos_rand50_config.R",
+  s1bhapos_emr    = "scenario_s1bhapos_emr_config.R"
 )
 
 # 4. Run simulations
