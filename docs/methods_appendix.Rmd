@@ -67,13 +67,13 @@ The model tracks the following attributes for each simulated individual:
 | `ALIVE` | Vital status | 0 = dead, 1 = alive |
 | `AGE` | Age in years | Starting at 50, increments annually |
 | `SEX` | Sex | 1 = male, 2 = female |
-| `EDU` | Education level | 1 = college or more, 2 = high school or GED, 3 = less than high school |
-| `RACEETH` | Race/Ethnicity | 0 = Non-Hispanic White, 1 = Non-Hispanic Black, 2 = Hispanic, 3 = Other |
+| `EDU` | Education, in **years** | Microdata cohorts carry the ACS `EDUC` value directly; parametric cohorts draw from `v.EDU_val` = 8, 12, 14, 14, 16, 18, 19, 25 |
+| `RACEETH` | Race/Ethnicity | 0 = Non-Hispanic White, 1 = Non-Hispanic Black, 2 = Hispanic, 3 = Other. Parametric cohorts draw only 0–2 (see `data/README.md`) |
 | `INCOME` | Income level | 0 = low (<\$9,000/year), 1 = medium (\$9,000–\$36,000/year), 2 = high (>\$36,000/year) |
 | `MEDBUR` | Medical burden | Integer from 0 to 15 (number of comorbid conditions) |
 | `APOE4` | APOE4 carrier status | 0 = non-carrier, 1 = carrier |
 | `TX` | Treatment status | 0 = not receiving treatment, 1 = receiving treatment |
-| `SYN` | True cognitive health | 0 = healthy, 0.5 = prodromal cognitive impairment, 1 = cognitively impaired |
+| `SYN` | True cognitive health | 0 = healthy, 0.5 = transitional cognitive impairment (TCI), 1 = cognitively impaired |
 | `COGCON` | Cognitive concerns | 0 = no subjective concerns, 1 = has subjective concerns |
 | `BHA` | Brain Health Assessment result | -9 = not yet tested, 0 = negative (normal), 1 = positive (impaired) |
 | `CDR_track` | CDR progression group | 0 = slow progressor, 1 = fast progressor |
@@ -120,7 +120,11 @@ MCI incidence rates are based on @gillis2019, with age-specific rates per 1,000 
 
 ### Baseline Rate Calibration
 
-A scalar multiplier (`param1`) is applied to the Gillis et al. baseline rates prior to individual risk adjustment. This accounts for the fact that GRAM models individual-level risk factors (education, income, APOE4, medical burden) explicitly — the population-average rates from Gillis embed an average risk profile that would otherwise be double-counted when individual hazard ratios are applied. The value of `param1` = 2.2 was determined through manual tuning and visual inspection against external prevalence benchmarks, and will be updated following formal calibration.
+A scalar multiplier (`param1`) is applied to the Gillis et al. baseline rates prior to individual risk adjustment. This accounts for the fact that GRAM models individual-level risk factors (education, income, APOE4, medical burden) explicitly — the population-average rates from Gillis embed an average risk profile that would otherwise be double-counted when individual hazard ratios are applied.
+
+`param1` is set by formal calibration rather than by manual tuning: `calibration/run_calibration.R` searches a full factorial grid over `param1`, `param2a` and `param2b`, scoring each combination against MCI prevalence, dementia prevalence and age-specific mortality with a normalised weighted sum of squared deviations. The procedure is specified in `calibration/GRAM_calibration_validation_protocol.docx`.
+
+**The calibrated values in force are those in `model/config/calibrate_config.R`**, which `calibrate()` applies on top of the `l.inputs` defaults. They are deliberately not restated here, so that this appendix cannot fall out of step with the model; read them from that file when reporting.
 
 ### Individual Risk Adjustment
 
@@ -162,13 +166,15 @@ Individual-level variation is incorporated by sampling from a normal distributio
 
 CDR-SB scores are mapped to categorical severity levels using validated cutoff scores [@obryant2010]:
 
-| **Severity Level** | **Parameter** | **CDR-SB Range** |
-|--------------------|---------------|------------------|
-| Healthy | `cutoff_CDR_healthy` | 0 |
-| MCI | `cutoff_CDR_mci` | 0.5–4.5 |
-| Mild dementia | `cutoff_CDR_mild` | 4.5–9.5 |
-| Moderate dementia | `cutoff_CDR_moderate` | 9.5–16.5 |
-| Severe dementia | `cutoff_CDR_severe` | 16.5–18.0 |
+| **Severity Level** | **Cutoff** | **CDR-SB Range** |
+|--------------------|------------|------------------|
+| Healthy | `cutoff_CDR["healthy"]` | $[0, 0.5)$ |
+| MCI | `cutoff_CDR["mci"]` | $[0.5, 4.5)$ |
+| Mild dementia | `cutoff_CDR["mild"]` | $[4.5, 9.5)$ |
+| Moderate dementia | `cutoff_CDR["moderate"]` | $[9.5, 16.5)$ |
+| Severe dementia | `cutoff_CDR["severe"]` | $[16.5, 18.0]$ |
+
+The cutoffs are the lower bounds of each band, held in the named vector `cutoff_CDR`. Because CDR-SB is drawn as a continuous quantity, the bands are half-open: a score falling exactly on a cutoff belongs to the *more* severe band. `f.update_SEV()` produces this by assigning bands in increasing order of severity, so the later assignment wins at each shared boundary.
 
 # Mortality
 

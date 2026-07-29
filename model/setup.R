@@ -157,7 +157,11 @@ l.inputs[["cutoff_CDR"]] <- c("healthy" = 0,
                               "mild" = 4.5, 
                               "moderate" = 9.5,
                               "severe" = 16.5,
-                              "max" = 18.0)  # 0 is healthy, 0.5-4.0 is MCI, 4.5-9.0 is mild, 9.5-16.0 mod, 16.5-18.0 severe 
+                              "max" = 18.0)
+# Lower bounds of each severity band. CDR is continuous, so the bands are half-open and a score
+# landing exactly on a cutoff belongs to the more severe band: [0,0.5) healthy, [0.5,4.5) MCI,
+# [4.5,9.5) mild, [9.5,16.5) moderate, [16.5,18.0] severe. f.update_SEV() gets this by assigning
+# bands in increasing order of severity, so the later assignment wins at each boundary.
 
 l.inputs[["r.CDRfast_mean"]] <- 1.6
 l.inputs[["r.CDRfast_sd1"]] <- 2.2/sqrt(160)           # individual variation from mean (fast)
