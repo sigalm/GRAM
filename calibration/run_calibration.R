@@ -44,7 +44,7 @@ cat(sprintf("Grid: %d combinations | n = %d per run\n", nrow(grid), n_calib))
 # Computes normalized WSSD (per protocol sec. 2.3):
 #   Total GOF = WSSD_prev / n_prev + WSSD_mort / n_mort
 
-compute_gof <- function(sim_output, aggregated, bench_prev, bench_lifetable) {
+compute_gof <- function(sim_output, bench_prev, bench_lifetable) {
 
   # -- Prevalence ---
   df_prev <- data.frame(
@@ -85,24 +85,46 @@ compute_gof <- function(sim_output, aggregated, bench_prev, bench_lifetable) {
   n_dem    <- nrow(dem_compare)
 
   # -- Mortality ---
-  # SE for life table (no published CI): proportional SE = 5% of rate, floored at 1e-4
-  state_trace <- as.data.frame(aggregated$state_trace)
-  model_rate <- state_trace %>%
-    mutate(
-      new_dth    = dth - lag(dth),
-      denom      = 1   - lag(dth),
-      model_rate = replace_na(new_dth / denom, 0)
-    ) %>%
-    pull(model_rate)
+  # Both sides are annual conditional probabilities of death: P(dies during the year |
+  # alive at its start). That is the life table's native unit (`qx`), the model's native
+  # input (m.lifetable holds probabilities), and what the simulation actually draws, so no
+  # scale conversion is needed on either side.
+  #
+  # Computed per individual, pairing each person's age at the start of a cycle with whether
+  # they died during it, the same way compare_mortality() does, then joined to the benchmark
+  # on age. The join must be on age rather than on cycle position: a death recorded at cycle
+  # t is drawn using AGE at t-1 (see f.update_ALIVE), and cycle number equals age only for a
+  # cohort that starts at exactly the life table's first age with no spread.
+  n_cycle <- dim(sim_output)[1]
+  alive   <- sim_output[, "ALIVE", ]
 
-  # Drop first element: lag() produces NA at cycle 1, replaced with 0 by replace_na,
-  # which biases the age-50 comparison. Both vectors trimmed to cycles 2–51 (ages 51–100).
-  model_rate <- model_rate[-1]
-  obs_rate   <- bench_lifetable$rate[-1]
-  se_mort    <- pmax(obs_rate * 0.05, 1e-4)
+  model_mort <- data.frame(
+    age       = as.vector(sim_output[-n_cycle, "AGE", ]),  # age at start of cycle
+    was_alive = as.vector(alive[-n_cycle, ]) == 1,
+    died      = as.vector(alive[-1, ]) == 0                # died during the cycle
+  ) %>%
+    filter(was_alive) %>%
+    group_by(age) %>%
+    summarise(n_at_risk = n(),
+              n_deaths  = sum(died, na.rm = TRUE),
+              .groups   = "drop") %>%
+    mutate(model_prob = n_deaths / n_at_risk)
 
-  wssd_mort <- sum((model_rate - obs_rate)^2 / se_mort^2, na.rm = TRUE)
-  n_mort    <- length(obs_rate)
+  # The life table's last age carries qx = 1 (death is absorbing where the table ends), an
+  # artifact of the table rather than a model target, so it is dropped explicitly instead of
+  # being swallowed by na.rm while still counting toward n_mort. The n_at_risk floor guards
+  # against ages thin enough that model_prob is mostly noise, which a high-mortality
+  # parameter set can produce at the oldest ages.
+  mort_compare <- bench_lifetable %>%
+    filter(qx < 1) %>%
+    inner_join(model_mort, by = "age") %>%
+    filter(n_at_risk >= 20) %>%
+    arrange(age)
+
+  # SE for life table (no published CI): proportional SE = 5% of qx, floored at 1e-4
+  se_mort   <- pmax(mort_compare$qx * 0.05, 1e-4)
+  wssd_mort <- sum((mort_compare$model_prob - mort_compare$qx)^2 / se_mort^2)
+  n_mort    <- nrow(mort_compare)
 
   # -- Total: three equal-weight targets (MCI prev, dementia prev, mortality) --
   gof <- wssd_mci / n_mci + wssd_dem / n_dem + wssd_mort / n_mort
@@ -136,11 +158,13 @@ run_one <- function(row, l.inputs, microdata, bench_prev, bench_lifetable, n_cal
   inputs_local[["r.CDRslow_mean"]] <- (seq(0, 1, length.out = 51)^row[["param2a"]]) *
                                         (row[["param2b"]] * r.CDRslow_base)
 
-  # Run simulation (f.run directly; skip figure generation)
+  # Run simulation (f.run directly; skip figure generation). f.out_aggregate() is not called:
+  # every GOF target is computed from the raw a.out array, so aggregating would build 181 list
+  # elements per grid point (~10% of each run's time) for nothing. Re-add it here if a future
+  # target needs an aggregated quantity such as reside time or age at onset.
   result <- tryCatch({
     output     <- f.run(l.inputs = inputs_local, microdata = microdata, printLevel = 0)
-    aggregated <- f.out_aggregate(a.out = output, l.inputs = inputs_local)
-    gof_vals   <- compute_gof(output, aggregated, bench_prev, bench_lifetable)
+    gof_vals   <- compute_gof(output, bench_prev, bench_lifetable)
     # Return a flat named list of scalars so bind_rows() works cleanly
     list(
       param1    = row[["param1"]],
@@ -285,21 +309,22 @@ run_calibration_grid <- function(grid, n_calib, n_steps,
 
 # ---- Run pass 1 (coarse grid) ----------------------------------------------
 
-calib_1  <- run_calibration_grid(grid, n_calib, n_steps)
+calib_1  <- run_calibration_grid(grid, n_calib, n_steps, 
+                                 results_file = "calibration/calibration_results_20260728.RDS")
 results  <- calib_1$results
 best     <- calib_1$best
 
 # ---- Run pass 2 (finer grid) -----------------------------------------------
 n_steps <- 10
 grid <- expand.grid(
-  param1  = seq(best$param1*(1-0.33), best$param1*(1+0.33), length.out = n_steps_2),
-  param2a = seq(best$param2a*(1-0.33), best$param2a*(1+0.33), length.out = n_steps_2),
-  param2b = seq(best$param2b*(1-0.33), best$param2b*(1+0.33), length.out = n_steps_2)
+  param1  = seq(best$param1*(1-0.33), best$param1*(1+0.33), length.out = n_steps),
+  param2a = seq(best$param2a*(1-0.33), best$param2a*(1+0.33), length.out = n_steps),
+  param2b = seq(best$param2b*(1-0.33), best$param2b*(1+0.33), length.out = n_steps)
 )
 n_calib <- 10000
 
 calib_2 <- run_calibration_grid(grid, n_calib, n_steps,
-                                results_file = "calibration/calibration_results_pass2.RDS")
+                                results_file = "calibration/calibration_results_20260728_pass2.RDS")
 results <- calib_2$results
 best    <- calib_2$best
 
