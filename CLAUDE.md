@@ -18,7 +18,7 @@ microdata <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 results <- f.wrap_run(l.inputs, microdata = microdata)
 ```
 
-There is no automated test suite. Validation is done via calibration notebooks (`calibration/benchmarking_v3.Rmd`) and analysis-specific validation scripts.
+There is no automated test suite. Calibration is run via `calibration/run_calibration.R`, and validation via analysis-specific scripts.
 
 ## Architecture
 
