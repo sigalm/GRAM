@@ -41,8 +41,8 @@ cat(sprintf("Grid: %d combinations | n = %d per run\n", nrow(grid), n_calib))
 
 
 # ---- 3. GOF FUNCTION -------------------------------------------------------
-# Computes normalized WSSD (per protocol sec. 2.3):
-#   Total GOF = WSSD_prev / n_prev + WSSD_mort / n_mort
+# Computes normalized WSSD (per protocol sec. 2.3), over three equally weighted targets:
+#   Total GOF = WSSD_prev_mci / n_prev_mci + WSSD_prev_dem / n_prev_dem + WSSD_mort / n_mort
 
 compute_gof <- function(sim_output, bench_prev, bench_lifetable) {
 
