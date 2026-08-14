@@ -49,20 +49,19 @@ is derived from the other.
 | `non_dementia_mortality_prob_bysex_byage.RDS` | Model input | `calculate_non_dementia_death_rates.Rmd` | CDC WONDER | Age- and sex-specific annual probability of non-dementia death |
 | `table_prob_die_next_year.csv` | Calibration benchmark | *not recorded* | *not recorded* | All-cause annual probability of death (`age`, `qx`) from age 50. Read by `calibration/benchmarking_helpers.R`; the calibration protocol attributes it to SSA actuarial life tables. **No script in this repository generates it** — if it needs regenerating, its provenance has to be re-established first. |
 
-**Methodology (model input):** All-cause mortality rates minus dementia-related mortality rates (ICD-10 codes F01.x, F03, F06.7, G30.x), converted to annual probabilities. Data from 2018-2024 (final 2018-2022, provisional 2023-2024). Missing rates for ages 85+ were extrapolated using log-linear regression.
+**Methodology (model input):** CDC WONDER publishes population denominators only through age 84, so all-cause mortality rates can't be computed directly above that age, though death counts (for both all-cause and dementia-related deaths, ICD-10 codes F01.x, F03, F06.7, G30.x) are complete through age 100. All-cause rates are extrapolated to ages 85-100 via sex-specific log-linear regression on observed rates at ages 76-84; the dementia-attributable share of deaths needs no such extrapolation, since it's computed from counts (not rates) and is observed at every age. Non-dementia rate = all-cause rate x (1 - dementia share); this is algebraically equivalent to subtracting where both are directly observed. Three age/sex cells with dementia deaths suppressed (<10 by CDC WONDER, at ages 50-51) are treated as zero (<0.1% error). Rates are converted to annual probabilities via 1 - e^(-rate). Data from 2018-2024 (final 2018-2022, provisional 2023-2024). See `data/mortality/calculate_non_dementia_death_rates.Rmd` for the full derivation.
 
 **Raw data files (from CDC WONDER):**
 - `allcause_deaths_bysex_byage.csv`
 - `dementia_deaths_bysex_byage.csv`
 
-**Other files in this directory** are earlier or by-age-only working versions that no live code
-reads, and whose provenance is not recorded here: `allcause_mortality_clean.RDS`,
+**Superseded files**, moved to `archive/`: earlier or by-age-only working versions that no live
+code reads, and whose provenance is not recorded here: `allcause_mortality_clean.RDS`,
 `mortality_rates_by_age.RDS`, `non_dementia_mortality_prob_by_age.RDS`,
 `non_dementia_mortality_rates_by_age.RDS`, `lifetablebysex.xlsx`,
 `GRAM Mortality Hazard Age Adjustments Worksheet.xlsx`, and the raw CDC WONDER exports
 `allcause_mortality_by_age.txt`, `dementia_mortality_by_age.txt`,
-`dementia_underlying_mortality_by_age.txt`. Treat them as historical unless you can confirm
-otherwise.
+`dementia_underlying_mortality_by_age.txt`.
 
 ---
 

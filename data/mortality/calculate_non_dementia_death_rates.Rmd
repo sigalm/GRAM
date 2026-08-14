@@ -1,7 +1,7 @@
 ---
 title: "Calculating Non-Dementia Mortality"
 author: "Sigal Maya"
-date: "Updated 02-20-2025"
+date: "Updated 07-29-2026"
 output: 
   html_notebook: 
     fig_width: 3
@@ -14,7 +14,12 @@ library(tidyverse)
 getwd()
 ```
 
-The model utilizes the risk ratio for mortality to evaluate the increased risk for death among those with dementia. However, using the risk ratio in conjunction with all-cause mortality inflates overall mortality in the model. We thus estimated the non-dementia-related mortality rate (i.e, mortality among those without the risk factor) by subtracting dementia-related deaths from all-cause deaths at each age. All-cause and dementia-related death rates were obtained from the CDC Wonder database.
+The model utilizes the risk ratio for mortality to evaluate the increased risk for death among those with dementia. However, using the risk ratio in conjunction with all-cause mortality inflates overall mortality in the model. We thus estimated the non-dementia-related mortality rate (i.e, mortality among those without the risk factor) by removing dementia-related deaths from all-cause deaths at each age and sex. Death counts and populations were obtained from the CDC WONDER database.
+
+Two features of the source data shape the approach:
+
+- **Population denominators are unavailable above age 84.** CDC WONDER publishes single-year populations only through age 84; above that it returns `Not Applicable`. Death *counts*, by contrast, are complete for both causes through age 100. The quantity missing at ages 85–100 is therefore the denominator, which is shared by both files — so while neither rate can be computed directly at those ages, the dementia *share* of deaths remains directly observable.
+- **Three dementia cells are suppressed.** CDC WONDER withholds counts below 10, so there is no dementia row for females aged 50 or for males aged 50 and 51. With roughly two million people per sex at those ages, at most 9 deaths corresponds to a dementia share below 0.08%, so we treat these cells as zero. The resulting error in the non-dementia rate is under 0.1%. This fill applies only to missing *counts* at ages 50–84; the ages 85–100 are missing a denominator, not deaths, and must never be zero-filled.
 
 ```{r load}
 path_allcause <- "data/mortality/allcause_deaths_bysex_byage.csv"
@@ -37,12 +42,11 @@ allcause <- allcause_raw %>%
          sex = as.factor(sex),
          population = as.numeric(population),
          rate = deaths/population) %>%
-  select(-deaths, -population) %>%
-  subset(age >= 50) %>%
-  pivot_wider(names_from = sex, values_from = rate)
+  subset(age >= 50)
 
 summary(allcause)  
-# all converted to numeric, no NAs in age, 16 in rate (those aged 85+), all rates are non-zero
+# all converted to numeric, no NAs in age or deaths; 32 NAs in rate (both sexes, ages 85-100,
+# where population is "Not Applicable"); all observed rates are non-zero
 
 summary(dementia_raw)
 
@@ -55,137 +59,130 @@ dementia <- dementia_raw %>%
          sex = as.factor(sex),
          population = as.numeric(population),
          rate = deaths/population) %>%
-  select(-deaths, -population) %>%
-  subset(age >= 50) %>%
-  pivot_wider(names_from = sex, values_from = rate)
+  subset(age >= 50)
 
 summary(dementia) 
-# all converted to numeric, no NAs in age, 16 in rate (those age 85+), all rates are non-zero
-```
+# same shape as allcause, but 3 rows short: no dementia row exists for F50, M50 or M51
+# (CDC WONDER suppresses counts < 10). 32 NAs in rate, again from the missing denominator.
 
-Rates for older ages (85+) were unavailable, so we extrapolated using available data. First, we visually inspected the data to examine the distribution by age, confirming that the rate grew exponentially with age:
-
-```{r plot original, include = TRUE}
-
-par(mfrow = c(2, 2))
-plot(allcause$age, allcause$`F`, xlab = "Age", ylab = "Rate", main = "Crude All-Cause\nMortality Rate by Age, Females")
-plot(dementia$age, dementia$`F`, xlab = "Age", ylab = "Rate", main = "Crude Dementia-Related\nMortality Rate by Age, Females") 
-
-plot(allcause$age, allcause$`M`, xlab = "Age", ylab = "Rate", main = "Crude All-Cause\nMortality Rate by Age, Males")
-plot(dementia$age, dementia$`M`, xlab = "Age", ylab = "Rate", main = "Crude Dementia-Related\nMortality Rate by Age, Males") 
-
+counts <- allcause %>%
+  left_join(dementia %>%
+              select(sex, age, d_dem = deaths), by = c("sex", "age")) %>%
+  mutate(d_dem = replace_na(d_dem, 0),
+         dem_share = d_dem / deaths,
+         rate_allcause = deaths / population)
 
 ```
 
-We used a log-transformed linear model with age as the predictor variable to extrapolate all-cause mortality rates up to the age of 100 (the maximum age allowed in the microsimulation). Initial models using all data points resulted in predictions that were not smooth, thus we used rates for ages 76 and up for predictions. The `predict()` function in R was used to predict the missing estimates, which were then exponentiated to obtain rates. Data were visually inspected to confirm a smooth and uninterrupted exponential increase in all-cause mortality rate with age.
+Because rates cannot be computed above age 84, all-cause mortality must be extrapolated over that range. We first inspected the crude rates by age to confirm that mortality grows exponentially with age, which is what motivates the log-linear extrapolation below:
+
+```{r plot original, include = TRUE, fig.width = 7, fig.height = 5}
+# Points stop at age 84 in both panels: that is the missing denominator, not missing deaths.
+counts %>%
+  mutate(rate_dementia = d_dem / population) %>%
+  select(-rate) %>%   # `rate` from the clean chunk duplicates rate_allcause; drop to free the name
+  pivot_longer(c(rate_allcause, rate_dementia), names_to = "cause", values_to = "rate") %>%
+  mutate(cause = recode(cause, rate_allcause = "All-cause", rate_dementia = "Dementia-related"),
+         sex   = recode(sex,   `F` = "Females", `M` = "Males")) %>%
+  ggplot(aes(age, rate)) +
+  geom_point(size = 0.7) +
+  facet_grid(cause ~ sex, scales = "free_y") +
+  labs(x = "Age", y = "Crude mortality rate") +
+  theme_minimal(base_size = 11)
+```
+
+We used a log-transformed linear model with age as the predictor variable to extrapolate all-cause mortality rates up to age 100 (the maximum age allowed in the microsimulation), fitting the two sexes separately. Initial models using all data points resulted in predictions that were not smooth, so the fit uses observed rates from ages 76–84 only. The `predict()` function was applied to every age and the exponentiated predictions were used to fill the missing rates, leaving observed rates untouched. Data were visually inspected to confirm a smooth and uninterrupted exponential increase in all-cause mortality rate with age.
+
+This is the only extrapolation the pipeline depends on, and it is its weakest step: nine observed points projected sixteen years. `data/mortality/table_prob_die_next_year.csv` carries an independent $q(x)$ for ages 85–100 and can be used to sanity-check the shape. Sourcing single-year populations for ages 85–100 from Census or SSA would remove the need for this step entirely.
 
 ```{r predict all-cause mortality rates}
-any(allcause$`F`==0, na.rm=TRUE) # check to see if any zeros (log(0) is problematic) -- there are none
-any(allcause$`M`==0, na.rm=TRUE) # no zeros
-any(dementia$`F`==0, na.rm=TRUE) # no zeros
-any(dementia$`M`==0, na.rm=TRUE) # no zeros
 
+counts_fitted <- counts %>%
+  nest(data = -sex) %>%  # this creates a list with 2 dataframes (one for F one for M)
+  mutate(fit = map(data, ~ lm(log(rate_allcause) ~ age,    # this applies the lm function to each df
+                              data = filter(.x, age > 75, !is.na(rate_allcause)))),
+         data = map2(data, fit,                            # for each df and fit, this takes existing rate, or predicts based on fit is missing
+                     ~ mutate(.x, rate_allcause = coalesce(.x$rate_allcause,
+                                                           exp(predict(.y, newdata = .x)))))) %>%  
+  select(-fit) %>%
+  unnest(data)
 
-# Extrapolate all-cause mortality 
-summary(allcause_log_f <- lm(log(`F`) ~ age, data = na.omit(allcause[allcause$age > 75, c("age","F")])))   
-# using all data points gave weird fits, so only using ages 76 and up to predict
-# good fit (R^2 = 0.99), p(age) ~ 0
-
-summary(allcause_log_m <- lm(log(`M`) ~ age, data = na.omit(allcause[allcause$age > 75, c("age","M")])))   
-
-allcause_predict <- data.frame(age = allcause$age[is.na(allcause$`M`)])
-allcause_predict$f_predicted <- exp(predict(allcause_log_f, newdata = allcause_predict))
-
-allcause_predict$m_predicted <- exp(predict(allcause_log_m, newdata = allcause_predict))
-
-allcause_clean <- allcause %>%
-left_join(allcause_predict, by = "age") %>% 
-mutate(rate_f = coalesce(`F`, f_predicted),
-       rate_m = coalesce(`M`, m_predicted)) %>%
-select(-f_predicted, -m_predicted, -`F`, -`M`)
-summary(allcause_clean)  # no NAs in rates
-
-saveRDS(allcause_clean, "allcause_mortality_bysex_clean.RDS")
+non_dem_mort <- counts_fitted %>%
+  mutate(rate_non_dementia = rate_allcause * (1-dem_share))
 ```
 
-```{r all-cause mortality rates, include = TRUE}
-par(mfrow = c(1, 2))
+On a log scale the observed rates should fall on a straight line (that is what makes the
+log-linear fit appropriate) and the extrapolated points should continue it without a visible
+step at the 84/85 join:
 
-plot(allcause_clean$age, allcause_clean$rate_m, xlab = "Age", ylab = "Rate", main = "Extrapolated All-Cause Mortality Rate by Age, Males") # smooth exponential curve
-plot(allcause_clean$age, allcause_clean$rate_f, xlab = "Age", ylab = "Rate", main = "Extrapolated All-Cause Mortality Rate by Age, Females")
+```{r check extrapolation, include = TRUE, fig.width = 7, fig.height = 3.5}
+counts_fitted %>%
+  mutate(sex = recode(sex, `F` = "Females", `M` = "Males")) %>%
+  ggplot(aes(age, rate_allcause, colour = age > 84)) +
+  geom_point(size = 1.1) +
+  facet_wrap(~ sex) +
+  scale_y_log10() +
+  scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "firebrick")) +
+  labs(x = "Age", y = "All-cause mortality rate (log scale)", colour = "Extrapolated") +
+  theme_minimal(base_size = 11)
 ```
 
-Next, we calculated non-dementia-related mortality rates by subtracting dementia-related mortality rates from all-cause mortality rates. We fit another log-transformed linear model to the non-dementia-related mortality rates to obtain missing values for ages 85 and up.
 
-```{r predict non-dementia mortality rates}
-non_dementia <- allcause_clean[ ,c("age","rate_f","rate_m")] %>%
-  right_join(dementia[ ,c("age","F","M")], by="age") %>%
-  rename(f_rate_allcause = rate_f,
-         f_rate_dementia = `F`,
-         m_rate_allcause = rate_m,
-         m_rate_dementia = `M`) %>%
-  mutate(f_rate_non_dementia = pmax(f_rate_allcause - f_rate_dementia),
-         m_rate_non_dementia = pmax(m_rate_allcause - m_rate_dementia))
+Non-dementia mortality then follows from the observed dementia share of deaths:
 
-summary(non_dementia)
+$$\text{rate}_\text{non-dementia}(a) \;=\; \text{rate}_\text{all-cause}(a) \times \left(1 - \frac{d_\text{dementia}(a)}{d_\text{all-cause}(a)}\right)$$
 
-summary(non_dementia_logf <- lm(log(f_rate_non_dementia) ~ age, data = na.omit(non_dementia[non_dementia$age>=76,])))
-# good fit (R^2 ~= 1), p(age) ~ 0
-
-summary(non_dementia_logm <- lm(log(m_rate_non_dementia) ~ age, data = na.omit(non_dementia[non_dementia$age>=76,])))
-
-
-non_dementia_predict <- data.frame(age = non_dementia$age[is.na(non_dementia$m_rate_non_dementia)])
-non_dementia_predict$f_rate_predicted <- exp(predict(non_dementia_logf, newdata = non_dementia_predict))  
-non_dementia_predict$m_rate_predicted <- exp(predict(non_dementia_logm, newdata = non_dementia_predict))  
-
-
-non_dementia_clean <- non_dementia %>%
-left_join(non_dementia_predict, by = "age") %>% 
-mutate(f_rate_non_dementia = coalesce(f_rate_non_dementia, f_rate_predicted),
-       m_rate_non_dementia = coalesce(m_rate_non_dementia, m_rate_predicted)) %>%
-select(age, f_rate_allcause, m_rate_allcause, f_rate_non_dementia, m_rate_non_dementia) 
-summary(non_dementia_clean)
-```
-
-```{r non-dementia mortality rates, include = TRUE}
-par(mfrow = c(1, 2))
-plot(non_dementia_clean$age, non_dementia_clean$m_rate_non_dementia, xlab = "Age", ylab = "Rate",
-     main = "Non-Dementia-Related Mortality Rate by Age, Males")
-
-plot(non_dementia_clean$age, non_dementia_clean$f_rate_non_dementia, xlab = "Age", ylab = "Rate",
-     main = "Non-Dementia-Related Mortality Rate by Age, Females") 
-
-# smooth exponential curves
-
-```
+Wherever both rates are observed this is algebraically identical to subtracting one from the other, since $(d_\text{all} - d_\text{dem}) / \text{pop} = (d_\text{all} / \text{pop}) \times (1 - d_\text{dem} / d_\text{all})$. Its advantage is above age 84, where the share is still observed even though neither rate is, because the share is computed from counts and needs no denominator.
 
 Finally, we converted rates to probabilities using the equation $\text{probability} = 1 - e^{-\text{rate}}$.
 
 ```{r convert rates to probabilities}
-non_dementia_clean <- non_dementia_clean %>%
-  mutate(m_prob_allcause = 1-exp(-m_rate_allcause),
-         f_prob_allcause = 1-exp(-f_rate_allcause),
-         m_prob_non_dementia = 1-exp(-m_rate_non_dementia),
-         f_prob_non_dementia = 1-exp(-f_rate_non_dementia))
+non_dem_mort <- non_dem_mort %>%
+  mutate(prob_allcause = 1-exp(-rate_allcause),
+         prob_non_dementia = 1-exp(-rate_non_dementia)) %>%
+  select(-deaths, -population, -rate, -d_dem, -dem_share) %>%
+  pivot_wider(names_from = sex, values_from = c(prob_allcause, prob_non_dementia, rate_allcause, rate_non_dementia)) %>%
+  rename(f_prob_allcause = prob_allcause_F,
+         m_prob_allcause = prob_allcause_M,
+         f_prob_non_dementia = prob_non_dementia_F,
+         m_prob_non_dementia = prob_non_dementia_M,
+         f_rate_allcause = rate_allcause_F,
+         m_rate_allcause = rate_allcause_M,
+         f_rate_non_dementia = rate_non_dementia_F,
+         m_rate_non_dementia = rate_non_dementia_M)
+
+
 ```
 
-```{r inspect data}
-non_dementia_grouped <- non_dementia_clean %>%
-  mutate(age_group = cut(age, breaks = seq(50, 100, by = 5), right = FALSE)) %>%
-  group_by(age_group) %>%
-  summarise(f_avg_rate_allcause = mean(f_rate_allcause),
-            f_avg_rate_non_dementia = mean(f_rate_non_dementia),
-            m_avg_rate_allcause = mean(m_rate_allcause),
-            m_avg_rate_non_dementia = mean(m_rate_non_dementia)) %>%
-  mutate(
-    m_avg_prob_allcause = 1-exp(-m_avg_rate_allcause),
-    m_avg_prob_non_dementia = 1-exp(-m_avg_rate_non_dementia),
-    f_avg_prob_allcause = 1-exp(-f_avg_rate_allcause),
-    f_avg_prob_non_dementia = 1-exp(-f_avg_rate_non_dementia),
-  )
+## Output
+
+The saved table holds one row per single year of age from **50 to 100** — 51 rows, no missing
+values. `model/setup.R` reads the `m_prob_non_dementia` and `f_prob_non_dementia` columns into
+`m.lifetable`, and the model looks them up by position via `f.age_index()`, which maps age to
+`AGE - 50 + 1`. **Row 1 must therefore be age 50**, and the rows must stay sorted by age.
+
+The checks below verify the invariant.
+
+```{r inspect data, include = TRUE}
+nrow(non_dem_mort)                                     # 51
+range(non_dem_mort$age)                                # 50 100
+sum(is.na(non_dem_mort))                               # 0
+!is.unsorted(non_dem_mort$age)                         # TRUE
+
+# Age 50 exists at all, and age 51 is no longer back-extrapolated from the 76+ fit.
+non_dem_mort$m_prob_non_dementia[non_dem_mort$age == 50]   # 0.005136
+non_dem_mort$m_prob_non_dementia[non_dem_mort$age == 51]   # 0.005515 (was 0.002781)
+
+# Dementia is a negligible share of deaths before ~60, so the ratio should sit at ~1 there
+# and decline smoothly with age. The earlier version had 0.504 in its first row.
+non_dem_mort$m_prob_non_dementia / non_dem_mort$m_prob_allcause
+
+# Non-dementia mortality can equal all-cause mortality (at the three suppressed cells,
+# where the share is zero) but must never exceed it.
+all(non_dem_mort$m_rate_non_dementia <= non_dem_mort$m_rate_allcause)
+all(non_dem_mort$f_rate_non_dementia <= non_dem_mort$f_rate_allcause)
 ```
 
 ```{r save data}
-saveRDS(non_dementia_clean, "non_dementia_mortality_prob_bysex_byage.RDS")
+saveRDS(non_dem_mort, "data/mortality/non_dementia_mortality_prob_bysex_byage.RDS")
 ```
