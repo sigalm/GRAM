@@ -1,0 +1,111 @@
+---
+title: "GRAM Calibration and Validation Supplement"
+date: "2026-08-14"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+## 1. Overview
+
+This document describes the calibration and validation process for GRAM. Calibration was done via a full factorial analysis of three parameters, benchmarked against empirical prevalence of mild cognitive impairment (MCI) prevalence, dementia prevalence, and age-specific all-cause mortality. External validity was assessed by reproducing a Framingham Heart Study cohort and comparing modeled against observed dementia incidence.
+
+## 2. Calibration
+
+### 2.1 Calibration Parameters
+
+Initial exploratory runs of GRAM suggested that key outcomes (prevalence and mortality) were primarily driven by MCI incidence and rate of progression to dementia. These two components are defined by three configurable parameters that encode the shape and scale of the incidence and progression functions.
+
+**Component 1: MCI Incidence** `param1` is a scalar applied to the age-specific MCI baseline incidence hazard vector (derived from Gillis et al.[@gillis2019], see the natural history appendix). Its purpose is to remove the average risk factor profile implicitly embedded in the Gillis et al. study population, since GRAM applies explicit individual-level hazard ratios for education, income, APOE4, and medical burden.
+
+- **Search range:** 0.20 – 2.85
+
+- **Theoretical justification:** The range is bounded by the net hazard ratio of the most protective vs. most harmful individual risk factor profiles possible in GRAM. The most protective realistic profile (EDU=25, no APOE4, MEDBUR=0, high income) yields a net HR of $0.95^{25} \times 1.0 \times 1.0 \times 0.73 = 0.20$. The most harmful profile (EDU=8, APOE4 carrier, MEDBUR=15, low income) yields $0.95^8 \times 1.18 \times 1.09^{15} \times 1.0 = 2.85$.
+
+**Component 2: Annual progression of CDR-SB among those with MCI** We assume that during MCI, the mean annual cognitive impairment progression rate (using CDR-SB) increases with age, rather than being a fixed value applied to all. `param2a` controls the curvature of the increase and `param2b` scales the maximum rate as below:
+
+$$rate_{MCI}(age) = \left(\frac{age - 50}{50}\right)^{param2a} \times param2b \times r_{MCI\_mean}$$
+
+- **Search range (`param2a`):** 1 – 3
+
+- **Theoretical justification (`param2a`):** `param2a == 1` produces a linear increase; `param2a < 1` produces a concave curve (progression faster at younger ages), which is implausible for a progressive neurodegenerative disease. `param2a > 3` implies almost no progression until very old age, which is difficult to justify clinically.
+
+- **Search range (`param2b)`:** 1 – 2.67
+
+- **Theoretical justification (`param2b`):** Empirical evidence suggests that the CDR-SB progression rate is slower among those with MCI than it is among those with dementia. Thus, we constrain the maximum progression rate of MCI in GRAM to be between the published mean progression rate among those with MCI and among those with dementia. `param2b == 1` anchors the maximum progression rate during MCI to the average rate observed for this group. `param2b` == 2.67\` corresponds to a maximum rate of 1.6 CDR-SB points/year, which is equal to the mean CDR-SB annual progression rate among those with dementia.
+
+### 2.2 Calibration Targets
+
+1.  **Prevalence of MCI by age:** Three data points were available, at ages 65, 75, and 88 (roughly mid-points of 10-year age bands) for MCI prevalence in North America from a meta-analysis. [@bai2022]
+
+2.  **Prevalence of dementia by age:** Six data points at ages 67, 72, 77, 82, 87, and 95 (roughly mid-points of 5-year age bands) for dementia prevalence in the Health and Retirement Study. [@manly2022]
+
+3.  **Age-specific all-cause mortality**: Age-specific annual all-cause mortality rates derived from actuarial life tables published by the Social Security Administration. [ref]
+
+### 2.3 Goodness-of-Fit Measure
+
+The goodness-of-fit (GOF) was measured with the normalized Weighted Sum of Squared Differences (WSSD):
+
+$$ WSSD = \sum_i \frac{(\text{model}_i - \text{observed}_i)^2}{SE_i^2} $$
+
+where SE is the standard error of the published estimate. If only 95% CI was available: $SE = (upper − lower) / 3.92$.
+
+Given the different number of data points for each target, we computed the WSSD separately for each target, then normalized by the number of data points within that target before summing:
+
+$$ \text{Total GOF} = \frac{WSSD_{\text{prev_mci}}}{n_{\text{prev_mci}}} + \frac{WSSD_{\text{prev_dem}}}{n_{\text{prev_dem}}} + \frac{WSSD_{\text{mort}}}{n_{\text{mort}}} $$
+
+The parameter combination yielding the lowest total GOF was selected as the calibrated parameter set.
+
+### 2.4 Full Factorial Analysis
+
+All combinations of parameter values across their ranges were evaluated. Initial calibration used a coarse grid with 6 steps per parameter (216 total combinations), parallelized across available CPU cores. This run successfully found an interior solution; however the optimum parameter values yielded model estimates outside of published confidence intervals (for prevalence) or more than 10-percentage points away (for mortality). We thus did a second pass with a higher grid resolution (10 steps per parameters, 1000 total combinations) and narrower range (+/- 25% of the initial optimum). Each calibration run used N = 10,000 individuals to balance run time with maintaining stable model estimates.
+
+### 2.5 Calibration Results
+The full factorial search converged on `param1` = 1.6408, `param2a` = 1.9500, `param2b` = 1.8997. Under this parameter set, modeled prevalence tracked the published benchmarks at all nine calibration ages: mean absolute deviation was 6.9 percentage points for MCI prevalence [@bai2022] and 2.4 percentage points for dementia prevalence [@manly2022] at benchmark ages, with the model estimate falling within the reported 95% CI at every age for both targets (Figure S1).
+
+<< figure s1 here >>
+
+Variation by personal characteristics is shown in Figure S2. As expected, the prevalence of dementia was greater among females, and the gap increased with age. Prevalence of dementia was also greater among Hispanic individuals, compared to non-Hispanic White or non-Hispanic Black individuals. Similarly, those with lower income, fewer years of education, or two or more comorbidities at baseline (age 50) had greater dementia prevalence compared to those with greater income, more years of education, or no comorbidities as baseline. Dementia prevelance was also higher among APOE4 carriers compared to non-carriers.
+
+<< figure s2 here >>
+
+Fit to the mortality target was also good (Figure S3). Mean absolute deviation was 1.6 deaths per 1,000 at ages under 75, and 24.5 deaths per 1,000 at ages 75 and older. Predicted cumulative mortality was 119.9, 305.6, and 673.9 per 1,000 by ages 65, 75, and 85, respectively. The average absolute difference was 24.9 per 1,000 and the maximum absolute difference was 54.0 per 1,000 at age 89. Overall life expectancy at age 50 was predicted as 29.6 years, consistent with estimates by the US National Center for Health Statistics.[@arias2025]
+
+<< figure s3 here >>
+
+## 3. Internal Validation
+
+Face validity was assessed qualitatively to confirm that calibrated parameter values produce clinically reasonable disease trajectories. Expert input on estimated mean age of MCI onset, estimated mean duration in the MCI stage, and estimated mean duration in each of the dementia stages confirmed face validity of calibrated outputs. These were evaluated qualitatively, given limited flexibility of model after calibration.
+
+The predicted mean age of cognitive impairment onset was 76.9 years, which is older than a published average age of 71.5 [@hale2020]. We suspect that this benchmark value may be an underestimate of the true average age of onset; the study from which this number was obtained also reports 20-25% prevalence of MCI in each 10-year age band from 60-70-year-olds to those over 90. [@manly2022] This suggests that the cohort may be over-representing younger MCI patients, which would drive down the average age of onset.
+
+Predicted median time from MCI onset to dementia was 4 years (interquartile range [IQR]: 2 - 7 years, mean: 5.37), and median time from dementia to death was 4 years (IQR: 2 - 7 years, mean 4.77), varying widely with age of onset of first cognitive impairment (Figure s4). On average, individuals who developed cognitive impairment between ages 60 to 64 lived 10.2 years with MCI and another 6.8 years with dementia, whereas those who developed cognitive impairment later in life spent far fewer years with MCI and dementia. This difference is due to lower underlying mortality among younger individuals, as well as to slower progression of MCI among those who develop it at younger ages. Additionally, stochastic variation from the mean rate of change in CDR-SB progression creates heterogenous progression within age groups. Mean and median duration in dementia were slightly below published data, perhaps in part because, unlike for MCI, we did not account for potential differences in dementia progression across individuals based on age of onset as we did for MCI. Mean duration in MCI was slightly above published data, though the median duration is in line with Brück et al.’s systematic review findings.[@bruck2021] 
+
+<< figure s4 here >>
+
+To assess the internal validity of GRAM, we ran GRAM with a starting cohort parametrically defined to reflect the Angevaare et al [ref] study sample, among whom the MCI incidence function we use was estimated, and compared the predicted incidence rate to that reported empirically (56 [95% CI: 52-60] per 1,000 person-years). Using marginal distributions for age, sex, income, race/ethnicity, education, medical burden and APOE4, we defined a starting cohort (N=2000) that matched the WHICAP sample in Angevaare et al. We then ran GRAM for 12 cycles (1 cycle to initiate, 2 cycles to allow individuals to progress through the transitional cognitive impairment tunnel state, 8 cycles of follow up, and 1 cycle to terminate). During the 8 cycles of follow up, 439 incident cases occurred in 11,862 person-years of observation, producing unadjusted incidence rate of 37.0 per 1,000 person-years.
+
+GRAM is a closed cohort in which individuals are followed until death or the end of the simulation window, whereas the Angevaare et al. cohort is also subject to loss to follow-up unrelated to mortality (missed visits, dropout, staggered study enrollment/end). As a result, GRAM's non-cases accumulate more person-time on average than WHICAP's non-cases did. Angevaare et al. report that participants who did not develop incident MCI had roughly 3 fewer years of follow-up, on average, than those who did. To make the comparison fair, we subtracted 3 years of person-time from each non-case who survived GRAM's full 8-cycle follow-up window (n=1,035 of 1,402 non-cases). This adjustment reduced total person-years from 11,862 to 8,757 and increased the incidence rate to 50.1 per 1,000 person-years. While slightly below Angevaare et al.'s reported 95% CI (52-60), the adjusted estimate supports the internal validity of GRAM. 
+
+## 4. External Validation
+
+<< this section needs more work, stay tuned >>
+
+To assess the external validity of GRAM, we aimed to replicate an independent cohort as the starting population and compare predictions with empirical endpoints. We parametrically defined a cohort to reflect the Framingham Heart Study (FHS) Epoch 4 sample, using the marginal distributions reported in Satizabal et al. for age, sex, APOE4, and education. Education was available as a categorical variable which we mapped into GRAM as the maximum years of education implied by each category. Race/ethnicity, income, and medical burden distributions were not available, so default GRAM values (reflecting US general population) were used. Satizabal et al FHS sample included participants with MCI (only those with dementia at baseline were excluded) but did not report what proportion at baseline were healthy vs. had MCI. Thus we defined the starting mix of cognitive health states to approximate general population prevalence of MCI at the mean cohort age of 72 (15% [ref]). Satizabal et al. report 5-year cumulative incidence of dementia (i.e., proportion of baseline participants who develop dementia within 5 years). We then ran GRAM for 5 cycles (plus one initiation and one termination cycle) and calculated the cumulative incidence of dementia over those 5 years to compare to the 5-year cumulative incidence reported in Satizabal et al. While more recent clinical trial samples were available, clinical trial participants are selected based on Alzheimer's disease biomarker presence and thus are not representative of an average-risk population for which GRAM was calibrated. 
+
+Importantly, the FHS cohort is fundamentally different than both the US general population underlying the ACS (for which GRAM was calibrated) and the WHICAP sample (in which incidence was estimated). The FHS is a regional cohort with predominantly White and suburban participants, whereas the WHICAP is more diverse and urban population. Because of this, we expect our external validation run to produce poor absolute predictions due to differences in baseline hazards and unadjusted potential covariates.
+
+
+
+
+
+
+
+
+
+
+
+

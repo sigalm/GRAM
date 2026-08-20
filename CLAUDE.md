@@ -90,8 +90,10 @@ Two exceptions worth knowing:
 - `model/simulation.R` — main simulation engine (`f.run`, `f.initialize`)
 - `model/modules/MODULES.md` — module-level documentation
 - `calibration/run_calibration.R` — full factorial calibration grid search
-- `calibration/GRAM_calibration_validation_protocol.docx` — calibration and
-  validation protocol (the working copy; there is no Markdown twin)
+- `docs/01_natural_history_supplement.Rmd` — model structure, parameters and
+  their sources
+- `docs/02_calibration_validation_supplement.Rmd` — calibration and validation
+  protocol: targets, goodness-of-fit measure, acceptance criteria
 - `analyses/testing_strategies/` — active analysis (Paper 2: Testing Strategies)
 - `docs/ONBOARDING.md` — guide for country-specific adaptations
 - `archive/` — superseded files, kept for the record; nothing here is live

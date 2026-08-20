@@ -47,10 +47,9 @@ GRAM/
 │   ├── cogcon/               # Cognitive concern probabilities
 │   └── README.md             # Data provenance documentation
 │
-├── calibration/              # Calibration protocol, grid search, benchmarks
+├── calibration/              # Calibration grid search and benchmarks
 │   ├── run_calibration.R     # Full factorial calibration
-│   ├── benchmarking_helpers.R  # Benchmark targets and comparison functions
-│   └── GRAM_calibration_validation_protocol.docx
+│   └── benchmarking_helpers.R  # Benchmark targets and comparison functions
 │
 ├── analyses/                 # Analysis projects, one subfolder each
 │   ├── model_development/    # Model development and paper-1 figures
@@ -62,20 +61,22 @@ GRAM/
 ├── archive/                  # Superseded files, kept for the record only
 │
 └── docs/                     # Extended documentation
-    ├── methods_appendix.Rmd  # Parameter definitions, data sources, rationale
+    ├── 01_natural_history_supplement.Rmd    # Structure, parameters, data sources
+    ├── 02_calibration_validation_supplement.Rmd  # Calibration and validation
     ├── ONBOARDING.md         # Guide for country-specific adaptations
-    └── references.bib        # Bibliography for the methods appendix
+    ├── references.bib        # Bibliography for the supplements
+    └── american-medical-association.csl     # Citation style
 ```
 
 ## Key Documentation
 
 | Document | Purpose |
 |----------|---------|
-| `docs/methods_appendix.Rmd` | Detailed parameter definitions, data sources, and rationale |
+| `docs/01_natural_history_supplement.Rmd` | Model structure, parameter definitions, data sources, and rationale |
+| `docs/02_calibration_validation_supplement.Rmd` | Calibration parameters, targets, goodness-of-fit measure, and validation criteria |
 | `docs/ONBOARDING.md` | Orientation for new analysts and country-specific adaptations |
 | `model/modules/MODULES.md` | Function-level documentation for each simulation module |
 | `data/README.md` | Data sources and how each input file was generated |
-| `calibration/GRAM_calibration_validation_protocol.docx` | Calibration parameters, targets, goodness-of-fit measure, and validation criteria |
 | `analyses/testing_strategies/QUICKSTART_GUIDE.md` | Running and authoring testing-strategy scenarios |
 | `archive/README.md` | What each archived file was, and why it is no longer live |
 

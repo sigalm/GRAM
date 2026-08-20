@@ -301,7 +301,7 @@ l.inputs[["c.mil"]] <- 15000
 
 The calibration and validation approach used for the US model, including the targets,
 goodness-of-fit measure and acceptance criteria, is described in
-`calibration/GRAM_calibration_validation_protocol.docx`. Country adaptations that
+`docs/02_calibration_validation_supplement.Rmd`. Country adaptations that
 re-calibrate should follow the same structure; `calibration/run_calibration.R` is the
 reference implementation.
 
