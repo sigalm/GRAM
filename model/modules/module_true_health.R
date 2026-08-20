@@ -75,13 +75,12 @@ f.module_true_health <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   a.out[t,"CDRfast_sd1",alive] <- a.out[t-1,"CDRfast_sd1",alive]
   a.out[t,"CDRslow_sd1",alive] <- a.out[t-1,"CDRslow_sd1",alive]
   
-  # CDR progression rates. A single value is age-invariant; a vector is an age curve running from
-  # age 50 upwards, read at each individual's current age. See the methods appendix:
-  #   r_slow(age) = ((age - 50)/50)^param2a * param2b * r.CDRslow_mean
+  # CDR progression rates, read at each individual's current age. The fast rate is age-invariant;
+  # the slow rate follows the calibrated age curve built by f.CDRslow_curve() from param2a/param2b.
   # For a cohort that all starts at 50 the age index equals the cycle number, but for any other
   # cohort the two diverge, so the curve must be indexed by age rather than by t.
   r.CDRfast_mean <- f.age_rate(l.inputs[["r.CDRfast_mean"]], a.out[t,"AGE",alive])
-  r.CDRslow_mean <- f.age_rate(l.inputs[["r.CDRslow_mean"]], a.out[t,"AGE",alive])
+  r.CDRslow_mean <- f.age_rate(f.CDRslow_curve(l.inputs),   a.out[t,"AGE",alive])
   
   # CDR (true)
   a.out[t,"CDR",alive] <- f.update_CDR(

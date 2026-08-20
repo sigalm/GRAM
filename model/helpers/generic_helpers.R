@@ -30,6 +30,23 @@ f.age_rate <- function(rate, v.AGE, AGE_min = 50) {
   rate[f.age_index(v.AGE, length(rate), AGE_min)]
 }
 
+# f.CDRslow_curve builds one such curve: the mean annual CDR-SB progression rate for slow
+# progressors, rising with age from 0 at AGE_min to param2b * r.CDRslow_mean at the last
+# tabulated age, with param2a setting the curvature (see the calibration supplement):
+#
+#   r_slow(age) = ((age - AGE_min)/50)^param2a * param2b * r.CDRslow_mean
+#
+# param2a and param2b are calibrated; r.CDRslow_mean stays at its published value (0.6). The
+# curve is derived here, at the point of use, rather than being written back over
+# r.CDRslow_mean in l.inputs: that older arrangement destroyed the published value and was not
+# idempotent, so applying it twice silently squared the effect. n_age spans ages 50-100 to
+# match the MCI incidence table and f.age_index's default AGE_min.
+
+f.CDRslow_curve <- function(l.inputs, n_age = 51) {
+  (seq(0, 1, length.out = n_age)^l.inputs[["param2a"]]) *
+    (l.inputs[["param2b"]] * l.inputs[["r.CDRslow_mean"]])
+}
+
 ######################################## convert probability to different time
 
 # formula from https://doi.org/10.1007/s40273-020-00937-z

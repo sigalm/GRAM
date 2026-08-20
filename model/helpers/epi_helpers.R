@@ -7,8 +7,12 @@
 f.calc_MCIprob <- function(l.inputs, v.AGE, v.EDU.lag, v.SEX.lag, v.RACEETH.lag, v.APOE4.lag, v.MEDBUR.lag, v.INCOME.lag) {
   # As in the life table, hold the incidence lookup at the oldest tabulated age so that cohorts
   # which age beyond it (or start above 50) stay in bounds.
+  # param1 is the calibrated multiplier on the published age-specific incidence hazards. It is
+  # applied here, at the point of use, rather than being written back over m.hr_mci in l.inputs:
+  # that older arrangement destroyed the published values and was not idempotent, so applying it
+  # twice silently squared the multiplier.
   age_index <- f.age_index(v.AGE, nrow(l.inputs[["m.hr_mci"]]))
-  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = age_index, ncol = 1)]
+  hazards.age <- l.inputs[["m.hr_mci"]][matrix(data = age_index, ncol = 1)] * l.inputs[["param1"]]
   hazard <- hazards.age * exp(
     l.inputs[["log_EDU"]] * v.EDU.lag +
       l.inputs[["log_SEX"]] * (v.SEX.lag == 2) +
