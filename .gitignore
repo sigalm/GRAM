@@ -67,3 +67,11 @@ calibration/*.html
 
 # Interim calibration grid results (regenerable; commit a final set with `git add -f`)
 calibration/calibration_results_*.RDS
+
+# Knitted supplements (regenerable from the .Rmd; the values in them are read from the
+# model at knit time, so a working copy goes stale as soon as a parameter changes).
+# When a supplement is actually submitted or circulated, commit that exact version with
+# `git add -f` under a dated name, e.g. 01_natural_history_supplement_20260820.docx.
+docs/*.docx
+docs/*.pdf
+docs/*.html
