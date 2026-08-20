@@ -49,14 +49,11 @@ l.inputs1[["p.SYN_start"]] <- c(1, 0, 0)    # p for SYN == 0 (normal), 0.5 (TCI)
 l.inputs1[["p.MEMLOSS_start"]] <- c(0.91, 0.09)
 
 ## Mortality
-l.inputs1[["hr.mort_mci_age"]] <- c(1, 1, 1)
-l.inputs1[["hr.mort_mod_age"]] <- l.inputs[["hr.mort_sev_age"]] <- c(1, 1, 1)
-l.inputs1[["m.lifetable"]][nrow(l.inputs[["m.lifetable"]]), ] <- 1   # certain death at the oldest tabulated age
+# The age gradients are c(1,1,1) by default in setup.R, matching how the model was
+# calibrated, so they are no longer restated here.
+l.inputs1[["m.lifetable"]][nrow(l.inputs1[["m.lifetable"]]), ] <- 1   # certain death at the oldest tabulated age
 
-## Grab calibrated parameters
-l.inputs1[["r.CDRslow_mean"]] <-  
-  (seq(0, 1, length.out = 51)^1.9500) * (1.8997 * l.inputs[["r.CDRslow_mean"]])
-l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 1.6408
+# Calibrated parameters come from model/setup.R via model/config/calibrated_params.R.
 
 
 ######################################## RUN ########################################

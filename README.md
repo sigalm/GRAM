@@ -9,22 +9,23 @@ A microsimulation model for cognitive impairment progression and intervention ev
 #    Or manually: setwd("<path-to-GRAM>")
 
 # 2. Source core scripts (in order)
-source("model/setup.R")              # Loads l.inputs with parameters
-source("model/helpers/source_all.R") # Loads helpers, modules, and calibrate()
+source("model/setup.R")              # Loads l.inputs, already calibrated
+source("model/helpers/source_all.R") # Loads helpers and modules
 source("model/simulation.R")         # Loads simulation functions
 
-# 3. Apply the calibrated parameter values
-#    setup.R holds uncalibrated defaults; calibrate() overlays the values in
-#    model/config/calibrate_config.R and sets the cohort size and horizon.
-l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 10000)
+# 3. Set the cohort size and horizon for your analysis
+#    The calibrated parameters are applied by setup.R, which reads them from
+#    model/config/calibrated_params.R and prints which run they came from.
+l.inputs[["n.ind"]] <- 10000
 
 # 4. Run a simulation
 microdata <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
-results <- f.wrap_run(l.inputs_calibrated, microdata = microdata)
+results <- f.wrap_run(l.inputs, microdata = microdata)
 ```
 
-Skipping step 3 runs the model on uncalibrated defaults, which will not reproduce
-published results.
+Sourcing `setup.R` gives you a calibrated model — there is no separate step to
+remember. To run *un*calibrated, override `param1`, `param2a` and `param2b`
+afterwards; `setup.R` documents the uncalibrated baseline values inline.
 
 ## Directory Structure
 
@@ -38,7 +39,7 @@ GRAM/
 │   ├── helpers/              # Utility functions (e.g., formatting, plotting)
 │   │   └── source_all.R      # Sources all modules, helpers, and configs
 │   └── config/
-│       └── calibrate_config.R  # calibrate(): the calibrated parameter values
+│       └── calibrated_params.R # GENERATED: calibrated values + provenance
 │
 ├── data/                     # Input data files
 │   ├── acs_data/             # Population microdata (ACS-based)

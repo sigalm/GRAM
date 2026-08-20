@@ -14,12 +14,13 @@ source("model/setup.R")              # Load l.inputs (all parameters)
 source("model/helpers/source_all.R") # Load helpers, modules & configs
 source("model/simulation.R")         # Load simulation functions
 
-# setup.R holds UNCALIBRATED defaults. calibrate() overlays the calibrated
-# values from model/config/calibrate_config.R and sets n.ind / n.cycle.
-l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 10000)
+# setup.R already applies the calibrated parameters, read from
+# model/config/calibrated_params.R. There is nothing to call: l.inputs is
+# calibrated as sourced. Set n.ind / n.cycle for the analysis at hand.
+l.inputs[["n.ind"]] <- 10000
 
 microdata <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
-results <- f.wrap_run(l.inputs_calibrated, microdata = microdata)
+results <- f.wrap_run(l.inputs, microdata = microdata)
 ```
 
 There is no automated test suite. Calibration is run via `calibration/run_calibration.R`, and validation via analysis-specific scripts.
@@ -84,12 +85,17 @@ Two exceptions worth knowing:
 
 ## Key Files
 
-- `model/setup.R` — all model parameters (`l.inputs`), uncalibrated defaults
-- `model/config/calibrate_config.R` — `calibrate()` and the calibrated parameter
-  values; the single source of truth for these, never restate them in docs
+- `model/setup.R` — all model parameters (`l.inputs`); sources the calibrated
+  values at the end, so `l.inputs` is calibrated as sourced
+- `model/config/calibrated_params.R` — GENERATED. The calibrated parameter values
+  and their provenance; the single source of truth for these, never restate them
+  in docs or analysis scripts. Regenerate it, don't edit it
 - `model/simulation.R` — main simulation engine (`f.run`, `f.initialize`)
 - `model/modules/MODULES.md` — module-level documentation
-- `calibration/run_calibration.R` — full factorial calibration grid search
+- `calibration/run_calibration.R` — full factorial calibration grid search;
+  rewrites `calibrated_params.R` with the pass-2 best fit when it finishes
+- `calibration/write_calibrated_params.R` — `f.write_calibrated_params()`, which
+  promotes a saved results file into `calibrated_params.R`
 - `docs/01_natural_history_supplement.Rmd` — model structure, parameters and
   their sources
 - `docs/02_calibration_validation_supplement.Rmd` — calibration and validation

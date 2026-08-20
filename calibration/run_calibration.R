@@ -4,14 +4,15 @@
 # factorial analysis.
 #
 # Output:
-#   - calibration/calibration_results.RDS  (full grid results)
-#   - Console output: best params to copy into calibrate_config.R
+#   - calibration/calibration_results_<run_id>_pass{1,2}.RDS  (full grid results, the archive)
+#   - model/config/calibrated_params.R  (pass-2 best fit, rewritten in place; the model reads this)
 
 library(tidyverse)
 library(parallel)
-source("model/setup.R")               # defines l.inputs
+source("model/setup.R")               # defines l.inputs (already carries the current calibrated params)
 source("model/helpers/source_all.R")  # loads all helper/module functions
 source("model/simulation.R")          # loads f.run(), f.initialize()
+source("calibration/write_calibrated_params.R")  # f.write_calibrated_params(), used in section 8
 
 # ---- 1. SETUP ----------------------------------------
 
@@ -155,21 +156,13 @@ run_one <- function(row, l.inputs, microdata, bench_prev, bench_lifetable, n_cal
   inputs_local[["n.ind"]]   <- n_calib
   inputs_local[["n.cycle"]] <- 51
 
-  # Calibration-specific base settings (mirrors calibrate_config.R)
-  inputs_local[["p.HCARE_start"]]   <- c(0.25, 0.75)
-  inputs_local[["hr.mort_mci_age"]] <- c(1, 1, 1)
-  inputs_local[["hr.mort_mod_age"]] <- c(1, 1, 1)
-  inputs_local[["hr.mort_sev_age"]] <- c(1, 1, 1)
-  inputs_local[["seed_stochastic"]] <- 20250624
-
-  # Apply search parameters
-  r.CDRslow_base <- l.inputs[["r.CDRslow_mean"]]  # base value (0.6) from setup.R
-  inputs_local[["param1"]]         <- row[["param1"]]
-  inputs_local[["param2a"]]        <- row[["param2a"]]
-  inputs_local[["param2b"]]        <- row[["param2b"]]
-  inputs_local[["m.hr_mci"]]       <- l.inputs[["m.hr_mci"]] * row[["param1"]]
-  inputs_local[["r.CDRslow_mean"]] <- (seq(0, 1, length.out = 51)^row[["param2a"]]) *
-                                        (row[["param2b"]] * r.CDRslow_base)
+  # Apply search parameters. These are plain scalar inputs: the model derives the incidence
+  # multiplier and the CDR progression age curve from them at the point of use, so there is
+  # no need to transform m.hr_mci / r.CDRslow_mean here or to keep a copy of their base
+  # values. setup.R's calibrated defaults are simply overwritten for each grid point.
+  inputs_local[["param1"]]  <- row[["param1"]]
+  inputs_local[["param2a"]] <- row[["param2a"]]
+  inputs_local[["param2b"]] <- row[["param2b"]]
 
   # Run simulation (f.run directly; skip figure generation). f.out_aggregate() is not called:
   # every GOF target is computed from the raw a.out array, so aggregating would build 181 list
@@ -277,8 +270,9 @@ run_calibration_grid <- function(grid, n_calib, n_steps,
 
   tryCatch({
     # Provenance travels with the file two ways: as an attribute on the object
-    # (survives readRDS(), so calibrate_config.R can print what it loaded) and
-    # as console output at save time (so a run isn't a black box while it happens).
+    # (survives readRDS(), so f.write_calibrated_params() can copy it into the
+    # generated params file) and as console output at save time (so a run isn't
+    # a black box while it happens).
     provenance <- list(
       run_id      = run_id,
       saved_at    = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
@@ -387,15 +381,18 @@ calib_2 <- run_calibration_grid(grid, n_calib, n_steps,
 results <- calib_2$results
 best    <- calib_2$best
 
-# ---- 8. COPY-PASTE OUTPUT FOR calibrate_config.R --------------------------
+# ---- 8. PROMOTE PASS-2 BEST FIT INTO THE MODEL -----------------------------
+# Writes model/config/calibrated_params.R, which setup.R reads. This replaces the
+# copy-paste step that used to hand the values to calibrate_config.R: the values
+# now reach the model without passing through a person, so they cannot be
+# mistyped, half-updated, or left stale in one of several places.
+#
+# Review the resulting diff before committing -- it is the record of what changed.
 
-cat("\n=== UPDATE calibrate_config.R WITH: ===\n")
-cat(sprintf('  inputs[["param1"]]  <- %.4f\n', best$param1))
-cat(sprintf('  inputs[["param2a"]] <- %.4f\n', best$param2a))
-cat(sprintf('  inputs[["param2b"]] <- %.4f\n', best$param2b))
-cat(sprintf("\nSource: %s (run_id %s, git commit %s)\n",
-            attr(results, "provenance")$saved_at, run_id, git_commit))
-cat(sprintf("Pass 2 results file: calibration/calibration_results_%s_pass2.RDS\n", run_id))
+f.write_calibrated_params(
+  results,
+  results_file = sprintf("calibration/calibration_results_%s_pass2.RDS", run_id)
+)
 
 
 # ---- 9. GOF SURFACE PLOTS --------------------------------------------------

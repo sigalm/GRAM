@@ -10,8 +10,10 @@ library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
-# Calibration
-l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
+# Calibrated parameters are applied by model/setup.R, so only the cohort size for this
+# analysis is set here. The name is kept for the downstream code that refers to it.
+l.inputs_calibrated <- l.inputs
+l.inputs_calibrated[["n.ind"]] <- 100000
 
 # Analysis plan:
 # Strategies analyzed will follow the GRAM-ish one-time testing paper

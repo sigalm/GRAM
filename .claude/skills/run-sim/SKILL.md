@@ -26,23 +26,24 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
 
 3. **Run the simulation**:
 
+   `l.inputs` is already calibrated when `setup.R` is sourced in step 1 — the values come
+   from `model/config/calibrated_params.R`. There is no `calibrate()` call; only the cohort
+   size needs setting. `load_scenario()` comes from `source_all.R` in step 1.
+
    - **If a scenario config file is provided** (`$ARGUMENTS`):
-     Source the test performance helpers, apply the calibrated parameters, then load and run
-     the scenario. `calibrate()` and `load_scenario()` both come from `source_all.R` in
-     step 1 — `calibrate()` is defined in `model/config/calibrate_config.R`, not in
-     `calibration/benchmarking_helpers.R`:
+     Source the test performance helpers, set the cohort size, then load and run the scenario:
      ```r
      source("analyses/testing_strategies/test_performance_helpers.R")
-     l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
-     config <- load_scenario("$ARGUMENTS", l.inputs_calibrated)
+     l.inputs[["n.ind"]] <- 100000
+     config <- load_scenario("$ARGUMENTS", l.inputs)
      result <- f.wrap_run(config, microdata = sample1)
      ```
      Save output to `analyses/testing_strategies/sim_results/` with a datetime suffix.
 
    - **If no argument is provided**:
-     Run the base model. Note that `l.inputs` alone is **uncalibrated**; pass
-     `calibrate(inputs = l.inputs, n = <n>)` instead to reproduce published results:
+     Run the base model:
      ```r
+     l.inputs[["n.ind"]] <- 100000
      result <- f.wrap_run(l.inputs, microdata = sample1)
      ```
 

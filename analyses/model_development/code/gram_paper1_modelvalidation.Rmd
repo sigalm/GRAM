@@ -1,5 +1,5 @@
 ---
-title: "GRAM PAPER 1: GRAM MODEL VALIDATION AND CALIBRATION"
+title: "GRAM PAPER 1: GRAM MODEL CALIBRATION, VALIDATION, AND APPLICATION"
 output: html_notebook
 ---
 
@@ -19,21 +19,11 @@ sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 ```
 
 ```{r inputs}
+# Calibrated parameters, the mortality age gradients and the seed all come from
+# model/setup.R now, so this chunk only states the cohort size and horizon.
 l.inputs1 <- l.inputs
-l.inputs1[["n.cycle"]] <- 51
+l.inputs1[["n.cycle"]] <- 50
 l.inputs1[["n.ind"]] <- 10000
-l.inputs1[["p.HCARE_start"]] <- c(0.25,0.75)
-l.inputs1[["hr.mort_mci_age"]] <- c(1, 1, 1)
-l.inputs1[["hr.mort_mod_age"]] <- l.inputs1[["hr.mort_sev_age"]] <- c(1, 1, 1)
-
-l.inputs1[["seed_stochastic"]] <- 20250624
-
-l.inputs1[["r.CDRslow_mean"]] <-  
-  (seq(0, 1, length.out = 51)^1.8660) * (1.8515 * l.inputs[["r.CDRslow_mean"]])
-l.inputs1[["m.hr_mci"]] <- l.inputs[["m.hr_mci"]] * 1.9869
-
-l.inputs1[["r.CDRfast_mean"]] <- 1.6
-
 
 ```
 
@@ -94,8 +84,6 @@ figure3_dat <- compare_reside_time(sim_calib$sim, description = "", n = l.inputs
 figure3_fig <- figure3_dat$fig_reside_time + labs(title = NULL, subtitle = NULL)
 figure3_fig
 
-figure3_fig_60plus <- figure3_fig + scale_x_discrete(limits = setdiff(levels(figure3_dat$dat$age_group), c("50-54", "55-59", "Overall_adj")))
-
 ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus, 
        width = 10, height = 6, dpi = 300)
 ```
@@ -143,12 +131,12 @@ prev_CI_85
 # mean age of onset
 sim_calib$age_onset$dat
 
-benchmark_prevalence <- benchmark_prev_by_age %>%
+benchmark_prevalence_dem <- benchmark_prev_by_age %>%
   filter(condition == "dem", source == "Manly") %>%
   rename(prev_benchmark = prev)
 
 # avg absolute difference for prevalence between model vs benchmark at benchmark ages
-deviation_prevalence <- sim_calib$prev$dat %>%
+deviation_prevalence_dem <- sim_calib$prev$dat %>%
   filter(condition == "dem") %>%
   rename(prev_model = prev) %>%
   inner_join(benchmark_prevalence, by = c("age")) %>%
@@ -158,6 +146,21 @@ deviation_prevalence <- sim_calib$prev$dat %>%
 
 avg_abs_difference_prevalence <- mean(abs(deviation_prevalence$difference_abs))
 avg_abs_difference_prevalence
+
+benchmark_prevalence_mci <- benchmark_prev_by_age %>%
+  filter(condition == "mci") %>%
+  rename(prev_benchmark = prev)
+
+deviation_prevalence_mci <- sim_calib$prev$dat %>%
+  filter(condition == "mci") %>%
+  rename(prev_model = prev) %>%
+  inner_join(benchmark_prevalence, by = c("age")) %>%
+  select(age, raceeth, prev_model, prev_benchmark) %>%
+  mutate(difference_abs = prev_model - prev_benchmark,
+         difference_pct = (prev_model - prev_benchmark) / prev_benchmark)
+
+avg_abs_difference_prevalence_mci <- mean(abs(deviation_prevalence_mci$difference_abs))
+avg_abs_difference_prevalence_mci
 
 ```
 

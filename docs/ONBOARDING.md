@@ -184,9 +184,14 @@ results$fig.progression
   - `## Cognitive test performance`: test sensitivity and specificity
   - `## Health state utilities`: quality of life weights
   - `## Costs`: country-specific healthcare costs
-- Note that `setup.R` holds **uncalibrated** defaults. `calibrate()`, in
-  `model/config/calibrate_config.R`, overlays the calibrated values and is what analyses
-  actually run with.
+- Note that `setup.R` sets uncalibrated baselines for `param1`, `param2a` and `param2b`,
+  then overrides them at the end of the script with the calibrated values from
+  `model/config/calibrated_params.R`. Sourcing `setup.R` therefore gives you a calibrated
+  model, and prints which calibration run it came from. Nothing needs to be called.
+- `calibrated_params.R` is **generated** by the calibration and should not be hand-edited.
+  A country adaptation that recalibrates gets a new one from `calibration/run_calibration.R`;
+  one that does not recalibrate inherits the US values, which is worth stating explicitly
+  in the adaptation's write-up.
 
 #### GitHub Workflow Practice (15 min)
 - **Goal**: Comfortable with branching and committing

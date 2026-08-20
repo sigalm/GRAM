@@ -56,21 +56,25 @@ Open `gram_paper2_testingstrategies.R` in RStudio.
 # Load required libraries and scripts
 source("model/setup.R")
 source("model/simulation.R")
-source("model/helpers/source_all.R")   # also loads calibrate() from model/config/
+source("model/helpers/source_all.R")
 library(tableone)
 
 # Load microdata
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
-# Apply the calibrated parameter values and set the cohort size
-l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
+# Set the cohort size (the calibrated parameters are already applied)
+l.inputs_calibrated <- l.inputs
+l.inputs_calibrated[["n.ind"]] <- 100000
 ```
 
-`calibrate()` is defined in `model/config/calibrate_config.R` and loaded by
-`source_all.R` — it does not come from `calibration/benchmarking_helpers.R`, which only
-supplies benchmark targets and comparison functions. It applies the calibrated `param1`,
-`param2a` and `param2b`, and sets `n.ind` to `n` and `n.cycle` to 51; it does not re-run
-the calibration search (that is `calibration/run_calibration.R`), so it returns quickly.
+`setup.R` applies the calibrated `param1`, `param2a` and `param2b` itself, reading them
+from `model/config/calibrated_params.R`, and prints which calibration run they came from.
+There is no `calibrate()` call to remember — `l.inputs` is calibrated as sourced, so the
+only thing left to set is the cohort size. (The `l.inputs_calibrated` name is kept because
+the rest of this guide and the analysis scripts refer to it.)
+
+Re-running the calibration *search* is a separate, several-hour job:
+`calibration/run_calibration.R`.
 
 ### Step 3: Select Scenarios to Run
 
@@ -371,7 +375,7 @@ plot_cumulative_count(
 
 ### Simulation Takes Too Long
 
-- Reduce sample size in calibration: `calibrate(inputs = l.inputs, n = 50000)`
+- Reduce the cohort size: `l.inputs_calibrated[["n.ind"]] <- 50000`
 - Run fewer scenarios at once
 - Use a smaller age range in plotting functions
 - Avoid re-running the same scenario to save time. You can load the results from the `sim_results/` directory then use `post_processing_outputs()` to calculate test performance metrics. For large simulations (e.g., 100,000 individuals), post-processing can also take a long time. Post-processed outputs can be saved to the `test_perf_results/` directory and re-loaded for plotting and analysis.
@@ -400,7 +404,7 @@ Check that:
 Here's a complete workflow for comparing two testing strategies:
 
 ```r
-# 1. Setup -- source_all.R is required: it defines calibrate() and load_scenario()
+# 1. Setup -- source_all.R is required: it defines load_scenario()
 source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
@@ -410,8 +414,9 @@ library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
-# 2. Apply calibrated parameters
-l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)  # you only need to run this once
+# 2. Set the cohort size (calibrated parameters are already applied by setup.R)
+l.inputs_calibrated <- l.inputs
+l.inputs_calibrated[["n.ind"]] <- 100000
 
 # 3. Define scenarios
 scenario_list <- list(
