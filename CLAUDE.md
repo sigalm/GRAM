@@ -92,7 +92,7 @@ Two exceptions worth knowing:
 - `calibration/run_calibration.R` — full factorial calibration grid search
 - `calibration/GRAM_calibration_validation_protocol.docx` — calibration and
   validation protocol (the working copy; there is no Markdown twin)
-- `analyses/paper2_testing_strategies/` — active analysis (Paper 2: Testing Strategies)
+- `analyses/testing_strategies/` — active analysis (Paper 2: Testing Strategies)
 - `docs/ONBOARDING.md` — guide for country-specific adaptations
 - `archive/` — superseded files, kept for the record; nothing here is live
 

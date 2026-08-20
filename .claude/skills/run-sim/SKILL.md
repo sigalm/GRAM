@@ -32,12 +32,12 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
      step 1 — `calibrate()` is defined in `model/config/calibrate_config.R`, not in
      `calibration/benchmarking_helpers.R`:
      ```r
-     source("analyses/paper2_testing_strategies/test_performance_helpers.R")
+     source("analyses/testing_strategies/test_performance_helpers.R")
      l.inputs_calibrated <- calibrate(inputs = l.inputs, n = 100000)
      config <- load_scenario("$ARGUMENTS", l.inputs_calibrated)
      result <- f.wrap_run(config, microdata = sample1)
      ```
-     Save output to `analyses/paper2_testing_strategies/sim_results/` with a datetime suffix.
+     Save output to `analyses/testing_strategies/sim_results/` with a datetime suffix.
 
    - **If no argument is provided**:
      Run the base model. Note that `l.inputs` alone is **uncalibrated**; pass
@@ -53,6 +53,6 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
 ## Notes
 
 - The working directory must be the GRAM project root (where `GRAM.Rproj` lives).
-- Scenario config files are typically located in `analyses/paper2_testing_strategies/bha_scenarios/`.
+- Scenario config files are typically located in `analyses/testing_strategies/bha_scenarios/`.
 - Simulations with 100,000 individuals can take several minutes.
-- If the user provides just a scenario name (e.g., `r1bhapos`, `u3bhapos_rand50`, `s1bhapos_emr`), look for the matching config file in `analyses/paper2_testing_strategies/bha_scenarios/` with the pattern `scenario_<name>_config.R`. Scenario names carry suffixes such as `_rand50`, `_nonrand`, `_emr` and `_question`, so list the directory rather than assuming a bare name resolves.
+- If the user provides just a scenario name (e.g., `r1bhapos`, `u3bhapos_rand50`, `s1bhapos_emr`), look for the matching config file in `analyses/testing_strategies/bha_scenarios/` with the pattern `scenario_<name>_config.R`. Scenario names carry suffixes such as `_rand50`, `_nonrand`, `_emr` and `_question`, so list the directory rather than assuming a bare name resolves.

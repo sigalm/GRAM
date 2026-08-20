@@ -52,8 +52,12 @@ GRAM/
 │   ├── benchmarking_helpers.R  # Benchmark targets and comparison functions
 │   └── GRAM_calibration_validation_protocol.docx
 │
-├── analyses/                 # Analysis projects (by paper/presentation)
-│   └── ...                   # Subfolders for each project
+├── analyses/                 # Analysis projects, one subfolder each
+│   ├── model_development/    # Model development and paper-1 figures
+│   ├── testing_strategies/   # Cognitive testing strategies (active)
+│   └── ...
+│
+├── validation/               # Internal and external validation against cohorts
 │
 ├── archive/                  # Superseded files, kept for the record only
 │
@@ -72,7 +76,7 @@ GRAM/
 | `model/modules/MODULES.md` | Function-level documentation for each simulation module |
 | `data/README.md` | Data sources and how each input file was generated |
 | `calibration/GRAM_calibration_validation_protocol.docx` | Calibration parameters, targets, goodness-of-fit measure, and validation criteria |
-| `analyses/paper2_testing_strategies/QUICKSTART_GUIDE.md` | Running and authoring testing-strategy scenarios |
+| `analyses/testing_strategies/QUICKSTART_GUIDE.md` | Running and authoring testing-strategy scenarios |
 | `archive/README.md` | What each archived file was, and why it is no longer live |
 
 ## Model Overview

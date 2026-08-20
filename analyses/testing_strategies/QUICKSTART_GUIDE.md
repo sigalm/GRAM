@@ -18,7 +18,7 @@ Each strategy can be configured with different testing frequencies and follow-up
 ## File Structure
 
 ```
-analyses/paper2_testing_strategies/
+analyses/testing_strategies/
 ├── gram_paper2_testingstrategies.R     # Main analysis script
 ├── gram_paper2_testing_pcp_fu.R        # PCP follow-up analysis
 ├── gram_evolution_charts.R             # Helper functions for early diagnosis analysis
@@ -39,7 +39,7 @@ analyses/paper2_testing_strategies/
 └── plots/                              # Generated figures
 ```
 
-Run `list.files("analyses/paper2_testing_strategies/bha_scenarios")` for the current set —
+Run `list.files("analyses/testing_strategies/bha_scenarios")` for the current set —
 scenarios are added and retired often enough that this listing goes out of date.
 
 ---
@@ -111,14 +111,14 @@ After simulations complete, run the evolution charts section:
 for (scen in names(scenario_list[1:3])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds")))
+  saveRDS(test_data, file = file.path("analyses/testing_strategies/test_perf_results", paste0(scen, ".rds")))
 }
 
 # Combine and plot results
 test_data_combined <- data.frame()
 for (i in seq_along(names(scenario_list[1:3]))) {
   scen <- names(scenario_list)[i]
-  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
+  test_data <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, ".rds"))) %>%
     mutate(scenario = scen)
   test_data_combined <- rbind(test_data_combined, test_data)
 }
@@ -134,7 +134,7 @@ plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE,
 
 plot_testers(test_data_combined, ages = 65:80, scenario_names = subtitles)
 
-ggsave("analyses/paper2_testing_strategies/plots/no-early-positives.jpeg", height = 10, width = 8)
+ggsave("analyses/testing_strategies/plots/no-early-positives.jpeg", height = 10, width = 8)
 ```
 
 ---
@@ -405,7 +405,7 @@ source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
-source("analyses/paper2_testing_strategies/test_performance_helpers.R")
+source("analyses/testing_strategies/test_performance_helpers.R")
 library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
@@ -421,12 +421,12 @@ scenario_list <- list(
 
 # 4. Run simulations
 for (scen in names(scenario_list)) {
-  config_file <- file.path("analyses/paper2_testing_strategies/bha_scenarios", 
+  config_file <- file.path("analyses/testing_strategies/bha_scenarios", 
                            scenario_list[[scen]])
   config <- load_scenario(config_file, l.inputs_calibrated)
   result <- f.wrap_run(config, microdata = sample1)
   datetime_suffix <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  saveRDS(result, file = file.path("analyses/paper2_testing_strategies/sim_results", 
+  saveRDS(result, file = file.path("analyses/testing_strategies/sim_results", 
                                    paste0("scenario_", scen, "_sim_", datetime_suffix, ".rds")))
   rm(config, result)
   invisible(gc())
@@ -436,14 +436,14 @@ for (scen in names(scenario_list)) {
 for (scen in names(scenario_list)) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", 
+  saveRDS(test_data, file = file.path("analyses/testing_strategies/test_perf_results", 
                                       paste0(scen, ".rds")))
 }
 
 # 6. Generate plots
 test_data_combined <- data.frame()
 for (scen in names(scenario_list)) {
-  test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", 
+  test_data <- readRDS(file.path("analyses/testing_strategies/test_perf_results", 
                                  paste0(scen, ".rds"))) %>%
     mutate(scenario = scen)
   test_data_combined <- rbind(test_data_combined, test_data)
@@ -454,7 +454,7 @@ names(subtitles) <- names(scenario_list)
 
 plot_test_results(test_data_combined, ages = 65:80, show_early_pos = FALSE,
                   scenario_names = subtitles, y_max = 75000)
-ggsave("analyses/paper2_testing_strategies/plots/my_comparison.jpeg", 
+ggsave("analyses/testing_strategies/plots/my_comparison.jpeg", 
        height = 10, width = 8)
 ```
 

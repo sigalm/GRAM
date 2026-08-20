@@ -5,7 +5,7 @@ source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
-source("analyses/paper2_testing_strategies/test_performance_helpers.R")
+source("analyses/testing_strategies/test_performance_helpers.R")
 library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
@@ -39,8 +39,8 @@ scenario_list <- list(
   )
 
 # Directory paths
-config_dir <- "analyses/paper2_testing_strategies/bha_scenarios"
-output_dir <- "analyses/paper2_testing_strategies/sim_results"
+config_dir <- "analyses/testing_strategies/bha_scenarios"
+output_dir <- "analyses/testing_strategies/sim_results"
 
 
 ## Run scenarios ####
@@ -64,14 +64,14 @@ for (scen in names(scenario_list)) {
 for (scen in names(scenario_list)) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260505.rds")))
+  saveRDS(test_data, file = file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "260505.rds")))
 }
 
 # Step 2: generate plots
 main_test_data <- data.frame()
 for (i in seq_along(names(scenario_list))) {
   scen <- names(scenario_list)[i]
-  temp_test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "260505.rds"))) %>%
+  temp_test_data <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "260505.rds"))) %>%
     mutate(scenario = scen)
   main_test_data <- rbind(main_test_data, temp_test_data)
 }
@@ -91,7 +91,7 @@ plot_testers(main_test_data,
              ages = 65:80,
              scenario_names = subtitles)
 
-# ggsave("analyses/paper2_testing_strategies/plots/WITH-PCP-no-early-positives2.jpeg", plot = p1, height = 10, width = 8)
+# ggsave("analyses/testing_strategies/plots/WITH-PCP-no-early-positives2.jpeg", plot = p1, height = 10, width = 8)
 
 
 

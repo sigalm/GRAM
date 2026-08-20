@@ -153,7 +153,7 @@ post_processing_outputs <- function(output_array) {
   
   # create data frame
   plot_data <- data.frame(
-    age = 50:100,
+    age = 50:(50 + dim(output_array)[1] - 1),
     tp = rowSums(tp_direct, na.rm = TRUE),
     fp = rowSums(real_fp, na.rm = TRUE),
     early_pos = rowSums(early_pos, na.rm = TRUE),

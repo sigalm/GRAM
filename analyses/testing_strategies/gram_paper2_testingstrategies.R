@@ -5,7 +5,7 @@ source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
-source("analyses/paper2_testing_strategies/test_performance_helpers.R")
+source("analyses/testing_strategies/test_performance_helpers.R")
 library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
@@ -44,9 +44,10 @@ scenario_list <- list(
 
 
 # Directory paths
-config_dir <- "analyses/paper2_testing_strategies/bha_scenarios"
-output_dir <- "analyses/paper2_testing_strategies/sim_results"
+config_dir <- "analyses/testing_strategies/bha_scenarios"
+output_dir <- "analyses/testing_strategies/sim_results"
 
+datetime_suffix <- format(Sys.time(), "%Y%m%d_%H%M%S")
 
 ## Run scenarios ####
 for (scen in names(scenario_list[1:5])) {
@@ -55,7 +56,6 @@ for (scen in names(scenario_list[1:5])) {
     cat("Running scenario:", scen, "\n")
     config <- load_scenario(config_file, l.inputs_calibrated)
     result <- f.wrap_run(config, microdata = sample1)
-    datetime_suffix <- format(Sys.time(), "%Y%m%d_%H%M%S")
     saveRDS(result, file = file.path(output_dir, paste0("scenario_", scen, "_sim_", datetime_suffix, ".rds")))
     
     rm(config, result)
@@ -69,14 +69,14 @@ for (scen in names(scenario_list[1:5])) {
 for (scen in names(scenario_list[1:5])) {
   output <- latest_rds(scen)$output
   test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds")))
+  saveRDS(test_data, file = file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "20260815.rds")))
 }
 
 # Step 2: generate plots
 main_test_data <- data.frame()
 for (i in seq_along(names(scenario_list[1:3]))) {
   scen <- names(scenario_list)[i]
-  temp_test_data <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
+  temp_test_data <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "20260815.rds"))) %>%
     mutate(scenario = scen)
   main_test_data <- rbind(main_test_data, temp_test_data)
 }
@@ -101,7 +101,7 @@ p1 <- p1 + theme(
   legend.key.size = unit(1.2, "cm")
 )
 
-ggsave("analyses/paper2_testing_strategies/plots/no-early-positives_reordered.jpeg",
+ggsave("analyses/testing_strategies/plots/no-early-positives_reordered.jpeg",
        plot = p1,
        height = 10, width = 14,   # wider to give 3 panels more breathing room
        dpi = 300)
@@ -110,12 +110,12 @@ plot_testers(main_test_data,
              ages = 65:80, 
              scenario_names = subtitles) 
 
-ggsave("analyses/paper2_testing_strategies/plots/no-early-positives_reordered.jpeg", plot = p1, height = 10, width = 8) 
+ggsave("analyses/testing_strategies/plots/no-early-positives_reordered.jpeg", plot = p1, height = 10, width = 8) 
 
 ## Sensitivity analyses ####
 ### Question-based selective strategy
 scen <- names(scenario_list)[4]
-test_data_question_selective <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
+test_data_question_selective <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
   mutate(scenario = scen)
 test_data_selective <- rbind(main_test_data, test_data_question_selective) %>%
   filter(scenario %in% names(scenario_list[c(2,4)]))
@@ -123,7 +123,7 @@ plot_test_results(test_data_selective, ages = 65:80, show_early_pos = FALSE, y_m
 
 ### Non-random inclusive
 scen <- names(scenario_list)[5]
-test_data_nonrand_inclusive <- readRDS(file.path("analyses/paper2_testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
+test_data_nonrand_inclusive <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
   mutate(scenario = scen)
 test_data_inclusive <- rbind(main_test_data, test_data_nonrand_inclusive) %>%
   filter(scenario %in% names(scenario_list[c(1,5)]))
