@@ -9,6 +9,16 @@ bibliography: references.bib
 csl: american-medical-association.csl
 ---
 
+```{r model-params, include=FALSE}
+# Parameter values quoted below are read from the model, not typed in. See
+# docs/_load_model_params.R.
+source(if (file.exists("docs/_load_model_params.R")) "docs/_load_model_params.R"
+       else "_load_model_params.R")
+inp      <- gram_inputs()
+prov     <- gram_provenance()
+cdrslow  <- gram_CDRslow_curve(inp)
+```
+
 The Global Brain Health Institute (GBHI) Resource Allocation Model (GRAM) is a microsimulation model that simulates individual trajectories through cognitive health states from age 50 onwards. The model portrays the natural progression of dementia, incorporating individual-level heterogeneity in demographic characteristics, genetic risk factors, and disease progression rates. GRAM supports evaluation of screening interventions, disease-modifying treatments, and cost-effectiveness analyses. The model is adapted from IPECAD 1.2 [@green2019] and implemented in R [@rcoreteam2022].
 
 # Model Structure
@@ -167,14 +177,14 @@ Individuals are assigned to one of two progression groups (fast or slow) based o
 
 | **Progression Group** | **Parameter** | **Mean Annual Change** | **Standard Error** |
 |------------------|------------------|-------------------|------------------|
-| Fast progressors | `r.CDRfast_mean` | 1.6 points/year | `r.CDRfast_sd1` = 0.087 |
-| Slow progressors | `r.CDRslow_mean` | 0.6 points/year (uncalibrated scale input; see calibrated age-curve below) | `r.CDRslow_sd1` = 0.063 |
+| Fast progressors | `r.CDRfast_mean` | `r fmt(inp$r.CDRfast_mean, 1)` points/year | `r.CDRfast_sd1` = `r fmt(inp$r.CDRfast_sd1, 3)` |
+| Slow progressors | `r.CDRslow_mean` | `r fmt(inp$r.CDRslow_mean, 1)` points/year (uncalibrated scale input; see calibrated age-curve below) | `r.CDRslow_sd1` = `r fmt(inp$r.CDRslow_sd1, 3)` |
 
 Slow progression rates are modeled as age-dependent. The rate at each age follows
 
 $r_{slow}(age) = \left(\frac{age - 50}{50}\right)^{param2a} \times param2b \times r.CDRslow\_mean$
 
-where `param2a` controls the curvature of the increase and `param2b` scales the maximum rate. Under the calibrated values (`param2a` = 1.95, `param2b` = 1.90; see `model/config/calibrated_params.R`), the curve is convex (i.e., CDR-SB accumulates increasingly quickly with age) rising from 0 at age 50 to approximately 1.14 CDR-SB points/year at age 100, averaging approximately 0.39 points/year across ages 50–100 (unweighted). Note this is lower than the 0.6 points/year scale input above: because the curve is convex rather than linear, the age-range average no longer equals the input scale once calibration reshapes the curve. These values reflect the calibration run result as of this writing; see `model/config/calibrated_params.R` for the current parameter values, and the provenance block in that file for the run they came from, if this appendix is read against a later model version. Individual-level variation is incorporated by sampling from a normal distribution with the group-specific mean and standard error.
+where `param2a` controls the curvature of the increase and `param2b` scales the maximum rate. Under the calibrated values (`param2a` = `r fmt(inp$param2a)`, `param2b` = `r fmt(inp$param2b)`), the curve is convex (i.e., CDR-SB accumulates increasingly quickly with age) rising from `r fmt(min(cdrslow), 1)` at age 50 to approximately `r fmt(max(cdrslow))` CDR-SB points/year at age 100, averaging approximately `r fmt(mean(cdrslow))` points/year across ages 50–100 (unweighted). Note this is lower than the `r fmt(inp$r.CDRslow_mean, 1)` points/year scale input above: because the curve is convex rather than linear, the age-range average no longer equals the input scale once calibration reshapes the curve. The values in this paragraph are read from `model/config/calibrated_params.R` when this document is knitted, and reflect calibration run `r prov$run_id` (git commit `r prov$git_commit`). Individual-level variation is incorporated by sampling from a normal distribution with the group-specific mean and standard error.
 
 ### Severity Classification
 
