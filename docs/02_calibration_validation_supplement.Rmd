@@ -1,6 +1,6 @@
 ---
 title: "GRAM Calibration and Validation Supplement"
-date: "2026-08-14"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output:
   word_document: default
   html_document: default
@@ -10,12 +10,16 @@ csl: american-medical-association.csl
 ---
 
 ```{r model-params, include=FALSE}
-# Calibrated values and their provenance are read from the model, not typed in.
-# See docs/_load_model_params.R.
+# Calibrated values are read from the model, not typed in. See docs/_load_model_params.R.
+#
+# This document is public-facing, so the calibration run id / git commit are
+# deliberately kept OUT of the prose. gram_announce_provenance() prints them to the
+# console at knit time instead. Inspect `prov` after running this chunk for the full record.
 source(if (file.exists("docs/_load_model_params.R")) "docs/_load_model_params.R"
        else "_load_model_params.R")
 inp  <- gram_inputs()
 prov <- gram_provenance()
+gram_announce_provenance(prov)
 ```
 
 ## 1. Overview
@@ -73,7 +77,7 @@ The parameter combination yielding the lowest total GOF was selected as the cali
 All combinations of parameter values across their ranges were evaluated. Initial calibration used a coarse grid with 6 steps per parameter (216 total combinations), parallelized across available CPU cores. This run successfully found an interior solution; however the optimum parameter values yielded model estimates outside of published confidence intervals (for prevalence) or more than 10-percentage points away (for mortality). We thus did a second pass with a higher grid resolution (10 steps per parameters, `r format(prov$n_grid, big.mark = ",")` total combinations) and narrower range (+/- 25% of the initial optimum). Each calibration run used N = `r format(prov$n_calib, big.mark = ",")` individuals to balance run time with maintaining stable model estimates.
 
 ### 2.5 Calibration Results
-The full factorial search converged on `param1` = `r fmt(inp$param1, 4)`, `param2a` = `r fmt(inp$param2a, 4)`, `param2b` = `r fmt(inp$param2b, 4)` (calibration run `r prov$run_id`, git commit `r prov$git_commit`). Under this parameter set, modeled prevalence tracked the published benchmarks at all nine calibration ages: mean absolute deviation was 6.9 percentage points for MCI prevalence [@bai2022] and 2.4 percentage points for dementia prevalence [@manly2022] at benchmark ages, with the model estimate falling within the reported 95% CI at every age for both targets (Figure S1).
+The full factorial search converged on `param1` = `r fmt(inp$param1, 4)`, `param2a` = `r fmt(inp$param2a, 4)`, `param2b` = `r fmt(inp$param2b, 4)`. Under this parameter set, modeled prevalence tracked the published benchmarks at all nine calibration ages: mean absolute deviation was 6.9 percentage points for MCI prevalence [@bai2022] and 2.4 percentage points for dementia prevalence [@manly2022] at benchmark ages, with the model estimate falling within the reported 95% CI at every age for both targets (Figure S1).
 
 << figure s1 here >>
 

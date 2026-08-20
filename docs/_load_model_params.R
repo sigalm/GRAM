@@ -63,3 +63,23 @@ gram_CDRslow_curve <- function(inp) {
 # Fixed-decimal formatter for inline use; avoids scientific notation and stray
 # trailing digits in prose.
 fmt <- function(x, digits = 2) formatC(x, format = "f", digits = digits)
+
+# Prints which calibration the document was built from, for whoever is knitting it.
+#
+# These supplements are public-facing, so run ids and git commits do not belong in the
+# rendered output -- but they are exactly what you want when checking internally that a
+# doc was built against the calibration you think it was. stderr is the one channel that
+# achieves both: knitr captures a chunk's stdout (discarded by results='hide') and its
+# messages (discarded by message=FALSE, both implied by include=FALSE), but writes stderr
+# straight through to the console. Verified: nothing below reaches the knitted file.
+gram_announce_provenance <- function(prov = gram_provenance()) {
+  cat(sep = "", file = stderr(),
+      "\n--- GRAM calibration provenance (console only; not in the rendered document) ---\n",
+      "  run_id      : ", prov$run_id,        "\n",
+      "  git commit  : ", prov$git_commit,    "\n",
+      "  calibrated  : ", prov$calibrated_at, "\n",
+      "  GOF         : ", prov$gof,           "\n",
+      "  results file: ", prov$results_file,  "\n",
+      "-------------------------------------------------------------------------------\n\n")
+  invisible(prov)
+}
