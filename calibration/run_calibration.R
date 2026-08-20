@@ -9,13 +9,22 @@
 
 library(tidyverse)
 library(parallel)
-
-
-# ---- 1. SOURCE MODEL AND LOAD DATA ----------------------------------------
-
 source("model/setup.R")               # defines l.inputs
 source("model/helpers/source_all.R")  # loads all helper/module functions
 source("model/simulation.R")          # loads f.run(), f.initialize()
+
+# ---- 1. SETUP ----------------------------------------
+
+# Single timestamp for this script invocation, reused for every results file it
+# writes (pass 1 and pass 2), so a rerun never collides with a previous run's
+# output and the two passes are visibly tied together by filename.
+run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+git_commit <- tryCatch(
+  system("git rev-parse --short HEAD", intern = TRUE, ignore.stderr = TRUE),
+  error = function(e) NA_character_
+)
+if (length(git_commit) == 0) git_commit <- NA_character_
+cat(sprintf("Run ID: %s | git commit: %s\n", run_id, git_commit))
 
 # Load benchmark targets (benchmarking_helpers.R uses <<- to assign globals)
 source("calibration/benchmarking_helpers.R")
@@ -41,8 +50,8 @@ cat(sprintf("Grid: %d combinations | n = %d per run\n", nrow(grid), n_calib))
 
 
 # ---- 3. GOF FUNCTION -------------------------------------------------------
-# Computes normalized WSSD (per protocol sec. 2.3), over three equally weighted targets:
-#   Total GOF = WSSD_prev_mci / n_prev_mci + WSSD_prev_dem / n_prev_dem + WSSD_mort / n_mort
+# Computes normalized WSSD (per protocol sec. 2.3):
+#   Total GOF = WSSD_prev / n_prev + WSSD_mort / n_mort
 
 compute_gof <- function(sim_output, bench_prev, bench_lifetable) {
 
@@ -91,10 +100,14 @@ compute_gof <- function(sim_output, bench_prev, bench_lifetable) {
   # scale conversion is needed on either side.
   #
   # Computed per individual, pairing each person's age at the start of a cycle with whether
-  # they died during it, the same way compare_mortality() does, then joined to the benchmark
-  # on age. The join must be on age rather than on cycle position: a death recorded at cycle
-  # t is drawn using AGE at t-1 (see f.update_ALIVE), and cycle number equals age only for a
-  # cohort that starts at exactly the life table's first age with no spread.
+  # they died during it, the same way compare_mortality() does. The earlier version derived
+  # the model side from the cycle-indexed state trace and lined it up against the life table
+  # by position, which (a) assumed cycle number == age and (b) was off by one year: a death
+  # recorded at cycle t is drawn using AGE at t-1 (see f.update_ALIVE), so the model's age-50
+  # probability was being scored against the benchmark's age-51 rate. Because qx rises with
+  # age, that made the model look like it under-predicted mortality at 45 of 50 ages and
+  # pulled param1 (the m.hr_mci multiplier) upward to compensate. Joining on age instead of
+  # position removes both problems.
   n_cycle <- dim(sim_output)[1]
   alive   <- sim_output[, "ALIVE", ]
 
@@ -112,9 +125,9 @@ compute_gof <- function(sim_output, bench_prev, bench_lifetable) {
 
   # The life table's last age carries qx = 1 (death is absorbing where the table ends), an
   # artifact of the table rather than a model target, so it is dropped explicitly instead of
-  # being swallowed by na.rm while still counting toward n_mort. The n_at_risk floor guards
-  # against ages thin enough that model_prob is mostly noise, which a high-mortality
-  # parameter set can produce at the oldest ages.
+  # being swallowed by na.rm while still counting toward n_mort. min_at_risk guards against
+  # ages thin enough that model_prob is mostly noise, which a high-mortality parameter set
+  # can produce at the oldest ages.
   mort_compare <- bench_lifetable %>%
     filter(qx < 1) %>%
     inner_join(model_mort, by = "age") %>%
@@ -211,7 +224,7 @@ run_calibration_grid <- function(grid, n_calib, n_steps,
 
   # -- Parallel execution --
   n_cores <- max(1, detectCores() - 1)
-  cat(sprintf("Starting cluster: %d cores\n", n_cores))
+  cat(sprintf("[%s] Starting cluster: %d cores\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), n_cores))
   cl <- makeCluster(n_cores)
   on.exit(stopCluster(cl), add = TRUE)   # clean up even if function errors
 
@@ -255,8 +268,54 @@ run_calibration_grid <- function(grid, n_calib, n_steps,
 
   # -- Collect and save results --
   results <- bind_rows(lapply(results_list, as_tibble))
-  saveRDS(results, results_file)
-  cat(sprintf("Results saved to %s\n", results_file))
+
+  # Stash immediately, before anything that touches results_file/run_id/disk. If
+  # any of that fails (bad path, undefined run_id, disk full, existing-file guard),
+  # the parallel run above — the expensive part — is not lost with it.
+  assign(".last_calibration_results", results, envir = .GlobalEnv)
+  cat("Results stashed in .GlobalEnv as `.last_calibration_results` (recoverable even if the save below fails).\n")
+
+  tryCatch({
+    # Provenance travels with the file two ways: as an attribute on the object
+    # (survives readRDS(), so calibrate_config.R can print what it loaded) and
+    # as console output at save time (so a run isn't a black box while it happens).
+    provenance <- list(
+      run_id      = run_id,
+      saved_at    = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      git_commit  = git_commit,
+      n_calib     = n_calib,
+      n_grid      = nrow(grid),
+      param_range = list(
+        param1  = range(grid$param1),
+        param2a = range(grid$param2a),
+        param2b = range(grid$param2b)
+      )
+    )
+    attr(results, "provenance") <- provenance
+
+    if (file.exists(results_file)) {
+      stop(sprintf(
+        "Refusing to overwrite existing file: %s\nMove or delete it first, or fix run_id collision.",
+        results_file
+      ))
+    }
+    saveRDS(results, results_file)
+    assign(".last_calibration_results", results, envir = .GlobalEnv)  # re-stash with provenance attached
+
+    cat(sprintf("\n=== SAVED: %s ===\n", results_file))
+    cat(sprintf("  run_id     = %s\n", provenance$run_id))
+    cat(sprintf("  saved_at   = %s\n", provenance$saved_at))
+    cat(sprintf("  git_commit = %s\n", provenance$git_commit))
+    cat(sprintf("  n_calib    = %d | n_grid = %d\n", provenance$n_calib, provenance$n_grid))
+  }, error = function(e) {
+    cat("\n*** SAVE FAILED — results were NOT written to disk. ***\n")
+    cat(sprintf("Reason: %s\n", conditionMessage(e)))
+    cat("Nothing is lost: the results are still in this session as `.last_calibration_results`.\n")
+    cat("Fix the problem, then save manually, e.g.:\n")
+    cat('  saveRDS(.last_calibration_results, "calibration/calibration_results_<name>.RDS")\n')
+  })
+  # Deliberately not re-thrown: a failed save should not discard best-param /
+  # boundary-check output below, or abort a pass-1 -> pass-2 script.
 
   n_errors <- sum(results$error, na.rm = TRUE)
   if (n_errors > 0) {
@@ -309,25 +368,24 @@ run_calibration_grid <- function(grid, n_calib, n_steps,
 
 # ---- Run pass 1 (coarse grid) ----------------------------------------------
 
-calib_1  <- run_calibration_grid(grid, n_calib, n_steps, 
-                                 results_file = "calibration/calibration_results_20260728.RDS")
+calib_1  <- run_calibration_grid(grid, n_calib, n_steps,
+                                 results_file = sprintf("calibration/calibration_results_%s_pass1.RDS", run_id))
 results  <- calib_1$results
 best     <- calib_1$best
 
 # ---- Run pass 2 (finer grid) -----------------------------------------------
 n_steps <- 10
 grid <- expand.grid(
-  param1  = seq(best$param1*(1-0.33), best$param1*(1+0.33), length.out = n_steps),
-  param2a = seq(best$param2a*(1-0.33), best$param2a*(1+0.33), length.out = n_steps),
-  param2b = seq(best$param2b*(1-0.33), best$param2b*(1+0.33), length.out = n_steps)
+  param1  = seq(best$param1*(1-0.25), best$param1*(1+0.25), length.out = n_steps),
+  param2a = seq(best$param2a*(1-0.25), best$param2a*(1+0.25), length.out = n_steps),
+  param2b = seq(best$param2b*(1-0.25), best$param2b*(1+0.25), length.out = n_steps)
 )
 n_calib <- 10000
 
 calib_2 <- run_calibration_grid(grid, n_calib, n_steps,
-                                results_file = "calibration/calibration_results_20260728_pass2.RDS")
+                                results_file = sprintf("calibration/calibration_results_%s_pass2.RDS", run_id))
 results <- calib_2$results
 best    <- calib_2$best
-
 
 # ---- 8. COPY-PASTE OUTPUT FOR calibrate_config.R --------------------------
 
@@ -335,6 +393,9 @@ cat("\n=== UPDATE calibrate_config.R WITH: ===\n")
 cat(sprintf('  inputs[["param1"]]  <- %.4f\n', best$param1))
 cat(sprintf('  inputs[["param2a"]] <- %.4f\n', best$param2a))
 cat(sprintf('  inputs[["param2b"]] <- %.4f\n', best$param2b))
+cat(sprintf("\nSource: %s (run_id %s, git commit %s)\n",
+            attr(results, "provenance")$saved_at, run_id, git_commit))
+cat(sprintf("Pass 2 results file: calibration/calibration_results_%s_pass2.RDS\n", run_id))
 
 
 # ---- 9. GOF SURFACE PLOTS --------------------------------------------------
