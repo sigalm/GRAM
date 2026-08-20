@@ -53,7 +53,7 @@ l.inputs[["v.LTC_val"]]  <- c(0,1)      # 0 = not institutionalized / not in lon
 
 l.inputs[["n.ind"]] <- 10000                               # number of individuals to simulate
 l.inputs[["n.cycle"]] <- 50                                # number of cycles to simulate
-l.inputs[["seed_stochastic"]] <- 20240202                  # seed for generating random values that drive stochastic parameters
+l.inputs[["seed_stochastic"]] <- 20250624                  # seed for generating random values that drive stochastic parameters
 l.inputs[["strategy"]] <- NA                               # empty parameter to be filled in as part of the strategies
 l.inputs[["strategy_strat1"]] <- "control"
 l.inputs[["strategy_strat2"]] <- "intervention_dmt"
@@ -127,8 +127,8 @@ l.inputs[["hr.mort_sev"]] <- 9.52
 
 l.inputs[["hr.mort_mci_age"]] <- c(1,1,1)
 l.inputs[["hr.mort_mil_age"]] <- c(1,1,1)
-l.inputs[["hr.mort_mod_age"]] <- c(1,0.6,0.3)
-l.inputs[["hr.mort_sev_age"]] <- c(1,0.6,0.3)
+l.inputs[["hr.mort_mod_age"]] <- c(1,1,1)
+l.inputs[["hr.mort_sev_age"]] <- c(1,1,1)
 
 
 l.inputs[["m.lifetable"]] <- as.matrix(readRDS("data/mortality/non_dementia_mortality_prob_bysex_byage.RDS")[ , c("m_prob_non_dementia", "f_prob_non_dementia")])
