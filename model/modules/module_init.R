@@ -53,6 +53,7 @@ f.initialize <- function(l.inputs, microdata) {
     
     if (!is.null(l.inputs[["EDU_start_mean"]])) {
       a.out[1,"EDU",] <- round(qnorm(p = a.random[1,"EDU",], mean = l.inputs[["EDU_start_mean"]], sd = l.inputs[["EDU_start_sd"]]),0)
+      a.out[1,"EDU",] <- pmin(pmax(a.out[1,"EDU",], 0), 26)
     } else if (!is.null(l.inputs[["p.EDU_start"]])) {
       a.out[1,"EDU",]     <- f.qcat(p_rand = a.random[1,"EDU",], p_cat = l.inputs[["p.EDU_start"]], values = l.inputs[["v.EDU_val"]])
     } else {
