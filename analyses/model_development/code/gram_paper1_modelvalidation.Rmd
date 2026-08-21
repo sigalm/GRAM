@@ -20,10 +20,10 @@ sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
 ```{r inputs}
 # Calibrated parameters, the mortality age gradients and the seed all come from
-# model/setup.R now, so this chunk only states the cohort size and horizon.
+# model/setup.R now, so this chunk only prints the cohort size and horizon.
 l.inputs1 <- l.inputs
-l.inputs1[["n.cycle"]] <- 50
-l.inputs1[["n.ind"]] <- 10000
+l.inputs1[["n.cycle"]]
+l.inputs1[["n.ind"]]
 
 ```
 
@@ -31,7 +31,7 @@ l.inputs1[["n.ind"]] <- 10000
 sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 
 setwd(dirname(dirname(dirname(getwd()))))
-saveRDS(sim_calib, "analyses/paper1_model_development/code/sim_calib_20250929_164200x.RDS")
+saveRDS(sim_calib, "analyses/model_development/code/sim_calib_20260820.RDS")
 
 ```
 
@@ -62,8 +62,8 @@ table2
 figure1 <- sim_calib$sim$fig.progression
 figure1 <- figure1 + labs(title = NULL, subtitle = NULL)
 figure1
-ggsave("../Figures/figure1_20250929.pdf", plot = figure1, 
-       width = 10, height = 6, dpi = 300)
+#ggsave("../Figures/figure1_20250929.pdf", plot = figure1, 
+#       width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 2: Predicted prevalence of MCI and dementia
@@ -74,8 +74,8 @@ figure2 <- figure2$fig_prev_by_age +
   xlim(NA,95) + 
   ylim(NA, .5)
 figure2
-ggsave("../Figures/figure2_20250929.pdf", plot = figure2, 
-       width = 10, height = 6, dpi = 300)
+# ggsave("../Figures/figure2_20250929.pdf", plot = figure2, 
+#        width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 3: Reside time by age of onset
@@ -84,8 +84,8 @@ figure3_dat <- compare_reside_time(sim_calib$sim, description = "", n = l.inputs
 figure3_fig <- figure3_dat$fig_reside_time + labs(title = NULL, subtitle = NULL)
 figure3_fig
 
-ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus, 
-       width = 10, height = 6, dpi = 300)
+#ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus, 
+#       width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 4: Predictive cumulative mortality
@@ -93,8 +93,8 @@ ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus,
 figure4 <- compare_mortality(sim_calib$sim, description = "", n = l.inputs1["n.ind"])
 figure4 <- figure4$cumulative_mort[[1]] + labs(title = NULL, subtitle = NULL)
 figure4
-ggsave("../Figures/figure4_20250929.pdf", plot = figure4, 
-       width = 10, height = 6, dpi = 300)
+# ggsave("../Figures/figure4_20250929.pdf", plot = figure4, 
+#        width = 10, height = 6, dpi = 300)
 ```
 
 
@@ -139,12 +139,12 @@ benchmark_prevalence_dem <- benchmark_prev_by_age %>%
 deviation_prevalence_dem <- sim_calib$prev$dat %>%
   filter(condition == "dem") %>%
   rename(prev_model = prev) %>%
-  inner_join(benchmark_prevalence, by = c("age")) %>%
+  inner_join(benchmark_prevalence_dem, by = c("age")) %>%
   select(age, raceeth, prev_model, prev_benchmark) %>%
   mutate(difference_abs = prev_model - prev_benchmark,
          difference_pct = (prev_model - prev_benchmark) / prev_benchmark)
 
-avg_abs_difference_prevalence <- mean(abs(deviation_prevalence$difference_abs))
+avg_abs_difference_prevalence <- mean(abs(deviation_prevalence_dem$difference_abs))
 avg_abs_difference_prevalence
 
 benchmark_prevalence_mci <- benchmark_prev_by_age %>%
@@ -154,7 +154,7 @@ benchmark_prevalence_mci <- benchmark_prev_by_age %>%
 deviation_prevalence_mci <- sim_calib$prev$dat %>%
   filter(condition == "mci") %>%
   rename(prev_model = prev) %>%
-  inner_join(benchmark_prevalence, by = c("age")) %>%
+  inner_join(benchmark_prevalence_mci, by = c("age")) %>%
   select(age, raceeth, prev_model, prev_benchmark) %>%
   mutate(difference_abs = prev_model - prev_benchmark,
          difference_pct = (prev_model - prev_benchmark) / prev_benchmark)
