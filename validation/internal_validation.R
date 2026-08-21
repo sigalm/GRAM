@@ -21,9 +21,9 @@ library(easystats)
 
 ## Model settings
 l.inputs1 <- l.inputs
-l.inputs1[["n.ind"]] <- 2000                         # number of individuals to simulate
-l.inputs1[["n.cycle"]] <- 12                          # number of cycles to simulate (2 more than Framingham because last cycle of model is flat and 1st cycle is baseline)
-l.inputs1[["seed_stochastic"]] <- 20250624
+l.inputs1[["n.ind"]] <- 10000                         # number of individuals to simulate
+l.inputs1[["n.cycle"]] <- 13                          # number of cycles to simulate (1 initation, 2 to allow MCI to develop from tunnel TCI, 8 follow up cycles, and 2 termination)
+
 
 ## Demographics of the WHICAP cohort
 l.inputs1[["AGE_start_mean"]] <- 73                  
@@ -64,7 +64,11 @@ sim_int_val <- f.run(l.inputs1, microdata = NULL, printLevel = 0)
 calculate_mci_incidence <- function(a.out) {
   new_cases <- 0
   person_years <- 0
-  for (t in 4:(dim(a.out)[1]-1)) {  # 1 less than cycle count because last two cycles are flat
+  # Stop 2 cycles short of the last on record. f.module_true_health() only calls f.update_SYN()
+  # while t <= n.cycle - 2 (it needs a.random[t+2] and AGE+2 as lookahead); beyond that SYN is
+  # just carried forward, so those cycles can contribute person-time but never an incident case.
+  # Including them adds a denominator with no possible numerator and deflates the rate.
+  for (t in 4:(dim(a.out)[1]-2)) {
     # Select individuals in the age group who were healthy at the start of the cycle
     at_risk <- which(a.out[t - 1, "SYN", ] != 1)
     
@@ -88,6 +92,11 @@ calculate_mci_incidence <- function(a.out) {
 }
 
 int_val_incidence <- calculate_mci_incidence(sim_int_val)
+int_val_incidence$incident_cases
+int_val_incidence$person_years
+int_val_incidence$incidence_rate
+
+
 
 # Angevaare et al. reported ~3 fewer years of follow-up, on average, for participants who did
 # not develop incident MCI compared to those who did. This reflects non-mortality loss to
@@ -97,7 +106,7 @@ int_val_incidence <- calculate_mci_incidence(sim_int_val)
 # GRAM's own mortality module, so the correction is restricted to non-cases who survived the
 # full 8-cycle follow-up window; subtracting 3 more years from someone whose time was already
 # cut short by simulated death would double-count censoring.
-last_cycle_followup <- dim(sim_int_val)[1] - 1  # cycle 11: last of the 8 follow-up cycles
+last_cycle_followup <- dim(sim_int_val)[1] - 2  # cycle 11: last of the 8 follow-up cycles
 ever_mci <- apply(sim_int_val[4:last_cycle_followup, "SEV", ] == 0, 2, any, na.rm = TRUE)
 cases <- which(ever_mci)
 
@@ -112,13 +121,24 @@ incidence_rate_adj <- int_val_incidence$incident_cases / person_years_adj
 incidence_rate_adj * 1000 # per 1,000 person-years
 poisson.test(int_val_incidence$incident_cases, person_years_adj)$conf.int * 1000
 
-# 50.13 (95% CI 45.55 - 55.05) in GRAM, compared to Angevaare et al.'s 56 (95% CI: 52 - 60), per 1,000 person years.
+# 56.6 (95% CI 54.4 - 58.8) in GRAM, against Angevaare et al.'s 56 (95% CI: 52 - 60) per 1,000
+# person-years. 2,548 incident cases in 59,331 unadjusted person-years (42.9 per 1,000); 4,763
+# of 6,938 non-cases survive the full window and get the correction.
+#
+# Sensitivity around the person-year correction, reported as Table S1 of the calibration and
+# validation supplement. The range brackets the observed rate; 3 years -- the gap Angevaare
+# et al. actually report -- is what reproduces it:
+#   2 yr: 49,805 PY -> 51.2 (49.2 - 53.2)
+#   3 yr: 45,042 PY -> 56.6 (54.4 - 58.8)   <- base case
+#   4 yr: 40,279 PY -> 63.3 (60.8 - 65.8)
 
-
-baseline_incident_mci <- as.data.frame(t(sim_int_val[3, , cases]))
-mean(baseline_incident_mci$AGE)
-prop.table(table(baseline_incident_mci$RACEETH))
-mean(baseline_incident_mci$MEDBUR)
-prop.table(table(baseline_incident_mci$INCOME))
 sum(sim_int_val[3,"ALIVE",]==1) # alive at baseline (cycle 3)
+n_non_cases <- length(alive_baseline) - length(cases)
+
+baseline_cases <- as.data.frame(t(sim_int_val[3, , cases]))
+mean(baseline_cases$AGE)
+prop.table(table(baseline_cases$RACEETH))
+mean(baseline_cases$MEDBUR)
+prop.table(table(baseline_cases$INCOME))
+
 
