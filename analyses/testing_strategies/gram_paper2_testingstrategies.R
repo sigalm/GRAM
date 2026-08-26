@@ -90,6 +90,7 @@ run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
 
 sim_file  <- function(key, id = run_id) file.path(output_dir, paste0("scenario_", key, "_sim_", id, ".rds"))
 perf_file <- function(key, id = run_id) file.path(perf_dir, paste0(key, "_", id, ".rds"))
+stats_file <- function(id = run_id) file.path(perf_dir, paste0("strategy_stats_", id, ".rds"))
 plot_file <- function(name, id = run_id) file.path(plot_dir, paste0(name, "_", id, ".jpeg"))
 
 
@@ -109,14 +110,87 @@ for (scen in scenarios_to_run) {
 
 
 ## Test performance data ####
-for (scen in scenarios_to_run) {
-  local({
+# One pass per scenario produces every derived product that needs the raw array:
+# the per-cycle counts the figures and tables run on, the programme size quoted
+# in the figure strips, and the yield counts behind the NNT table.
+#
+#   n_eligible    individuals eligible at ANY point in the window: alive, with a
+#                 provider, and no diagnosis as of the previous cycle. The
+#                 denominator for programme reach.
+#   n_people      individuals tested at least once in the window. The denominator
+#                 of the composition row of the counts-and-shares figure. Scoped
+#                 to the window rather than the whole run, which is the same thing
+#                 only while every config's age_first_test / age_stop_test match
+#                 testing_window -- they do today, and no test fires outside it.
+#   n_tests       test events in the window. Much the larger number wherever a
+#                 strategy re-tests annually.
+#   n_identified  individuals who at some point in the window hold a positive
+#                 verdict WHILE impaired -- i.e. the strategy got them right.
+#                 Distinct people, not the end-of-window TP stock, which loses
+#                 people to death and would flatter NNT the later you read it.
+#   n_at_mci /    the same people, split on SEV at the cycle they were FIRST
+#   n_at_dem      correctly identified: caught at MCI vs caught at dementia.
+#   n_early_catch of those, the ones already flagged positive BEFORE they were
+#                 impaired. See the NNT table for why this one needs care.
+#
+# Cached, but only reused if the cache carries every column -- otherwise adding a
+# statistic here would silently serve stale results.
+stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests",
+                "n_identified", "n_at_mci", "n_at_dem", "n_early_catch")
+
+strategy_stats <- if (file.exists(stats_file()) &&
+                      all(stats_cols %in% names(readRDS(stats_file())))) {
+  readRDS(stats_file())
+} else {
+  cyc <- testing_window - 50 + 1
+
+  out <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
     output <- readRDS(sim_file(scen))$output
     saveRDS(post_processing_outputs(output), file = perf_file(scen))
 
-    rm(output)
+    bha <- output[, "BHA", ]; pcp <- output[, "PCP", ]
+    syn <- output[, "SYN", ]; sev <- output[, "SEV", ]
+    res <- ifelse(!is.na(pcp) & pcp >= 0, pcp, bha)
+    dxr <- apply(res, 2, cummax)          # standing verdict, carried forward
+
+    # Eligible at any point in the window. DX is lagged to match f.update_BHA:
+    # modules run BHA before DX, so the testing decision sees last cycle's
+    # diagnosis. HCARE is current, which also matches the gate.
+    elig <- (output[cyc,     "ALIVE", ] == 1) &
+            (output[cyc - 1, "DX", ]    == 0) &
+            (output[cyc,     "HCARE", ] == 1)
+
+    bha_w <- bha[cyc, ]
+    tp_w  <- ((dxr == 1) & (syn == 1))[cyc, ]   # right about an impaired person
+    pos_w <- (dxr == 1)[cyc, ]                  # positive, whatever the truth
+
+    first_tp  <- apply(tp_w,  2, function(x) which(x)[1])
+    first_pos <- apply(pos_w, 2, function(x) which(x)[1])
+    got    <- which(!is.na(first_tp))
+    sev_at <- sev[cyc, ][cbind(first_tp[got], got)]
+
+    res_row <- data.frame(
+      scenario      = scen,
+      n_eligible    = sum(apply(elig, 2, any, na.rm = TRUE)),
+      n_people      = sum(apply(bha_w >= 0, 2, any, na.rm = TRUE)),
+      n_tests       = sum(bha_w >= 0, na.rm = TRUE),
+      n_identified  = length(got),
+      n_at_mci      = sum(sev_at == 0),
+      n_at_dem      = sum(sev_at >= 1),
+      n_early_catch = sum(first_pos[got] < first_tp[got]))
+
+    rm(output, bha, pcp, syn, sev, res, dxr, elig)
     invisible(gc())
-  })
+    res_row
+  }))
+
+  # Ratios are derived, so they always agree with the counts printed beside them.
+  out$per_person   <- out$n_tests / out$n_people
+  out$nnt10_any    <- 10 * out$n_tests / out$n_identified
+  out$nnt10_at_mci <- 10 * out$n_tests / out$n_at_mci
+  out$nnt10_at_dem <- 10 * out$n_tests / out$n_at_dem
+  saveRDS(out, stats_file())
+  out
 }
 
 all_test_data <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
@@ -148,20 +222,6 @@ undx_pool <- function(scenario_array, age) {
                   SEV   = scenario_array[cycle,     "SEV", ]) %>%
     filter(ALIVE == 1, DX == 0)
   status_mix(d$SYN, d$SEV)
-}
-
-# Number of individuals eligible at ANY point in the testing window: alive, no prior
-# diagnosis, and with a healthcare provider.
-ever_eligible <- function(scenario_array, ages = testing_window) {
-  cycles <- ages - 50 + 1
-  elig <- (scenario_array[cycles,     "ALIVE", ] == 1) &
-          (scenario_array[cycles - 1, "DX", ]    == 0) &
-          (scenario_array[cycles,     "HCARE", ] == 1)
-  sum(apply(elig, 2, function(x) any(x, na.rm = TRUE)))
-}
-
-ever_tested <- function(scenario_array) {
-  sum(apply(scenario_array[, "BHA", ], 2, function(x) any(x >= 0, na.rm = TRUE)))
 }
 
 # Performance at a per-person anchor rather than a common calendar age, so a staggered
@@ -249,7 +309,13 @@ theme_paper2 <- theme(
   legend.key.size = unit(1.2, "cm")
 )
 
+# main_keys follows registry order (Inclusive first); the counts+shares figure
+# reads least to most intensive, so it takes its own explicit ordering.
+main_keys_by_intensity <- c("r1bhapos", "s1bhapos_emr", "u3bhapos_rand50")
+
 figure_specs <- list(
+  list(name = "counts-and-shares",           keys = main_keys_by_intensity,
+                                                                 type = "combined", width = 17, height = 12.5),
   list(name = "no-early-positives",          keys = main_keys,           type = "results", width = 14),
   list(name = "testers",                     keys = main_keys,           type = "testers", width = 14),
   list(name = "sens-selective",              keys = sens_selective_keys, type = "results", width = 11),
@@ -264,17 +330,24 @@ figures <- setNames(lapply(figure_specs, function(spec) {
   d    <- test_data_for(spec$keys)
   labs <- labels_for(spec$keys)
 
-  p <- if (spec$type == "results") {
-    plot_test_results(d, ages = plot_ages, show_early_pos = FALSE,
-                      scenario_names = labs, y_max = plot_y_max)
-  } else {
-    plot_testers(d, ages = plot_ages, scenario_names = labs)
-  }
+  p <- switch(spec$type,
+    results  = plot_test_results(d, ages = plot_ages, show_early_pos = FALSE,
+                                 scenario_names = labs, y_max = plot_y_max),
+    testers  = plot_testers(d, ages = plot_ages, scenario_names = labs),
+    combined = plot_counts_and_shares(d, scenario_names = labs, ages = plot_ages,
+                                      strategy_stats = strategy_stats[strategy_stats$scenario %in% spec$keys, ],
+                                      base_size = 20, label_size = 4.6))
 
-  ggsave(plot_file(spec$name), plot = p + theme_paper2, height = 10, width = spec$width, dpi = 300)
+  # plot_counts_and_shares carries its own theme, sized via base_size. Adding
+  # theme_paper2 on top would override the bottom row's small grey stats strip.
+  themed <- if (spec$type == "combined") p else p + theme_paper2
+
+  ggsave(plot_file(spec$name), plot = themed,
+         height = spec$height %||% 10, width = spec$width, dpi = 300)
   p
 }), vapply(figure_specs, `[[`, character(1), "name"))
 
+figures[["counts-and-shares"]]
 figures[["no-early-positives"]]
 names(figures)
 figures[["testers"]] + ylim(NA, 75000)
@@ -315,10 +388,8 @@ prev_in_undx
 scenario_reports <- setNames(lapply(scenarios_to_run, function(scen) {
   arr <- readRDS(sim_file(scen))$output
   out <- list(
-    n_ever_eligible = ever_eligible(arr),
-    n_ever_tested   = ever_tested(arr),
-    first_visit     = first_visit_performance(arr),   # reported
-    first_test      = first_test_performance(arr)     # alternative, if asked for
+    first_visit = first_visit_performance(arr),   # reported
+    first_test  = first_test_performance(arr)     # alternative, if asked for
   )
   rm(arr); invisible(gc())
   out
@@ -328,14 +399,15 @@ scenario_reports <- setNames(lapply(scenarios_to_run, function(scen) {
 coverage_summary <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
   r  <- scenario_reports[[scen]]
   fv <- r$first_visit
+  st <- strategy_stats[match(scen, strategy_stats$scenario), ]
   data.frame(
     scenario        = scen,
     strategy        = reg_row(scen)$label,
-    n_ever_eligible = r$n_ever_eligible,
+    n_ever_eligible = st$n_eligible,
     # Both terms span the whole testing window: of everyone the programme could have
     # reached, what share ever received a test
-    n_ever_tested       = r$n_ever_tested,
-    pct_eligible_tested = r$n_ever_tested / r$n_ever_eligible,
+    n_ever_tested       = st$n_people,
+    pct_eligible_tested = st$n_people / st$n_eligible,
     # The first round only
     n_visited           = fv$perf$n_visited,
     n_tested_first      = fv$perf$n_tested,
@@ -418,6 +490,48 @@ results_table_for <- function(keys, at_year10 = year10_age,
 
   rbind(first, later)
 }
+
+# Number needed to test: how many BHAs a strategy runs per 10 people it correctly
+# identifies. All three NNT columns keep the SAME numerator -- every test the
+# strategy runs -- because no test can be aimed at MCI alone; only the denominator
+# changes. So the MCI and dementia columns read as "tests needed to find 10 people
+# at that stage", and they do not average to the overall column.
+#
+# "Correctly identified" is the first cycle a person holds a positive verdict
+# while impaired, and the MCI/dementia split is their SEV at that cycle -- caught
+# at MCI, not has MCI now.
+#
+# UNRESOLVED, for the team: the last column. Anyone flagged positive before they
+# were impaired necessarily enters the identified state at the moment they
+# convert, which is by definition MCI -- so an early catch can ONLY ever land in
+# the MCI column, never in dementia. That is 5% of Reactive's MCI count, 13% of
+# Selective's, and 42% of Inclusive's. Whether those belong in "caught at MCI",
+# in a column of their own, or outside the NNT denominator altogether is a
+# judgement about what the paper is claiming, not a coding question. Shown as a
+# separate count for now so the choice is visible rather than buried.
+nnt_table_for <- function(keys) {
+  d <- strategy_stats[match(keys, strategy_stats$scenario), ]
+  data.frame(
+    Strategy                    = reg_row(keys)$label,
+    Tests                       = d$n_tests,
+    `Correctly identified`      = d$n_identified,
+    `Tests per 10 identified`   = round(d$nnt10_any, 1),
+    `Caught at MCI`             = d$n_at_mci,
+    `Tests per 10 at MCI`       = round(d$nnt10_at_mci, 1),
+    `Caught at dementia`        = d$n_at_dem,
+    `Tests per 10 at dementia`  = round(d$nnt10_at_dem, 1),
+    `of MCI: flagged pre-onset` = d$n_early_catch,
+    check.names = FALSE)
+}
+
+nnt_table <- nnt_table_for(main_keys)
+flextable(nnt_table)
+
+# Same table for the other groups, if the call runs long
+nnt_table_sens_selective <- nnt_table_for(sens_selective_keys)
+nnt_table_sens_inclusive <- nnt_table_for(sens_inclusive_keys)
+nnt_table_pcp            <- nnt_table_for(pcp_keys)
+
 
 results_table <- results_table_for(main_keys)
 flextable(results_table)

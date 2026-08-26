@@ -1,6 +1,9 @@
 ######################################## GRAM HELPER FUNCTIONS: TEST PERFORMANCE ANALYSES ########################################
 require(ggplot2)
 require(tidyr)
+require(dplyr)
+require(scales)
+require(patchwork)
 require(abind)
 
 
@@ -155,7 +158,7 @@ post_processing_outputs <- function(output_array) {
   
   clinical_dx <- output_array[,"DX",]  # DX is carried over in the base model, no need for cummax
   has_hcare <- output_array[,"HCARE",]
-
+  
   # Eligibility uses LAGGED DX, matching f.update_BHA: within a cycle the modules run
   # BHA before DX, so the testing decision is made against last cycle's diagnosis. Using
   # the current cycle would drop people from the denominator in the same year they were
@@ -284,8 +287,8 @@ plot_test_results <- function(plot_data,
     "notest_tn",    "Healthy",     "No Test",
     "notest_fn",    "Impaired",    "No Test",
     "death",        "Deaths",      NA)
-    
-    
+  
+  
   plot_data <- plot_data %>%
     select(-clinical_dx) %>%
     filter(age %in% ages) %>%
@@ -315,7 +318,7 @@ plot_test_results <- function(plot_data,
   
   
   # markers (shape) for test result (21 (filled) for positive, 1 (empty) for negative)
-   my_fills <- c(
+  my_fills <- c(
     "Positive" = "firebrick",      
     "Negative" = "deepskyblue",
     "No Test" = NA)    
@@ -454,8 +457,209 @@ plot_testers <- function(plot_data,
           strip.text = element_text(size = 10)) 
   
   return(p)
-    
   
   
   
+  
+}
+
+######################################## COUNTS + COMPOSITION FIGURE ########################################
+#
+# plot_counts_and_shares() draws the two-row main figure: counts per cell above,
+# composition of the tested population below, on one aligned panel grid.
+#
+# Encoding notes, since this deliberately departs from plot_test_results():
+#   - One colour per OUTCOME, not one for status and another for test result.
+#     The old scheme put true status in the line colour and test result in the
+#     point colour, so a false positive (healthy line, positive points) and a
+#     false negative (impaired line, negative points) drew as the same red-and-
+#     blue object and whichever came last won. Hue still carries status (warm =
+#     impaired, cool = healthy) and shade carries whether the test was right.
+#   - Square-root y-axis on the counts row. Reactive is an order of magnitude
+#     smaller than Inclusive; on a shared linear axis it is flat against zero.
+#   - Series are labelled at the line end in every panel, so neither row needs a
+#     legend competing for space.
+#
+# The bottom row's denominator is PEOPLE ever tested and still alive, not tests
+# administered -- all the series are cummax stocks, so someone tested at 65 is
+# still counted at 80. That is intentional: the claim is cumulative burden
+# ("23% of the people Inclusive tested carry a false positive"), not per-test
+# yield. Per-test yield would be a flow built from the raw array instead.
+
+# Full names, spelled out. "FP" is jargon the reader decodes on every glance.
+outcome_long <- c(Deaths = "Deaths",
+                  TP = "True positive",  FN = "False negative",
+                  TN = "True negative",  FP = "False positive",
+                  `No test, impaired` = "Not tested, impaired",
+                  `No test, healthy`  = "Not tested, healthy")
+
+# Deaths take the light grey and sit behind everything, so "not tested, healthy"
+# moves off grey onto a muted teal -- cool like the other healthy series, but
+# desaturated like its brown "not tested, impaired" partner.
+pal_outcome <- c(Deaths = "#C2C7CA",
+                 TP = "#9E2A2B", FN = "#E8A33D",
+                 TN = "#1B4965", FP = "#5FA8D3",
+                 `No test, impaired` = "#8C6D46", `No test, healthy` = "#6F9A94")
+
+outcome_levels <- c("Deaths", "TP", "FN", "TN", "FP",
+                    "No test, impaired", "No test, healthy")
+
+
+# Push colliding labels apart by splitting the difference between the two
+# involved, relaxing until nothing moves. A single bottom-up pass instead anchors
+# the lowest label and shunts the whole stack upward, leaving labels floating
+# above the line ends they belong to. `trans` works in the transformed space so
+# this behaves on a square-root axis.
+f.spread_labels <- function(y, gap, trans = c("identity", "sqrt")) {
+  trans <- match.arg(trans)
+  f  <- if (trans == "sqrt") sqrt else identity
+  fi <- if (trans == "sqrt") function(x) x^2 else identity
+  ord <- order(y)
+  z <- f(y[ord])
+  for (iter in seq_len(80)) {
+    moved <- FALSE
+    for (i in seq_along(z)[-1]) {
+      deficit <- gap - (z[i] - z[i - 1])
+      if (deficit > 1e-9) {
+        z[i - 1] <- z[i - 1] - deficit / 2
+        z[i]     <- z[i]     + deficit / 2
+        moved <- TRUE
+      }
+    }
+    if (!moved) break
+  }
+  out <- numeric(length(y))
+  out[ord] <- fi(pmax(z, 0))
+  out
+}
+
+
+plot_counts_and_shares <- function(plot_data,
+                                   scenario_names,          # named vector, key -> label; its ORDER sets panel order
+                                   strategy_stats = NULL,   # scenario / n_people / n_tests / per_person; NULL = name-only strips
+                                   ages = 65:80,
+                                   top_title    = "Cumulative strategy-level outcomes among eligible and alive",
+                                   top_subtitle = NULL,
+                                   bottom_title    = "Share of test result among those tested",
+                                   bottom_subtitle = "Includes everyone the strategy has ever tested and who is still alive, by current status and latest test result",
+                                   y_breaks   = c(0, 1000, 5000, 15000, 30000, 60000),
+                                   show_deaths = TRUE,  # cumulative deaths, top row only
+                                   base_size  = 15,     # everything else scales off this
+                                   label_size = 3.15,   # line-end and band labels
+                                   gap_frac   = 0.062,  # minimum label separation, as a share of the axis
+                                   right_pad  = NULL,   # gutter for the labels; defaults to fit label_size
+                                   heights    = c(1.15, 1)) {
+  
+  keys <- names(scenario_names)
+  
+  # The gutter has to grow with the type, or bigger labels run off the panel.
+  # 0.146 per point of label_size is what fits the longest label at the default.
+  if (is.null(right_pad)) right_pad <- 0.146 * label_size
+  
+  d <- plot_data %>%
+    filter(age %in% ages, scenario %in% keys) %>%
+    transmute(Age      = age,
+              Scenario = factor(scenario_names[scenario], levels = unname(scenario_names)),
+              TP = tp + converted_tp,
+              FP = fp + early_pos,
+              TN = tn,
+              FN = fn,
+              `No test, healthy`  = notest_tn,
+              `No test, impaired` = notest_fn,
+              Deaths              = death) %>%
+    { if (show_deaths) . else select(., -Deaths) } %>%
+    pivot_longer(-c(Age, Scenario), names_to = "Outcome", values_to = "Count") %>%
+    mutate(Outcome = factor(Outcome, levels = outcome_levels),
+           Not_tested = grepl("^No test", Outcome))
+  
+  # Deaths is a cohort total, not a test result, so it stays out of the
+  # composition row. Naming the four cells beats negating Not_tested, which
+  # would let Deaths through.
+  d_tested <- d %>% filter(Outcome %in% c("TP", "FN", "TN", "FP"))
+  
+  # Shared so the two panel grids align and 65-80 sits at the same horizontal
+  # position in each row.
+  age_breaks <- pretty(range(ages), n = 4)
+  age_breaks <- age_breaks[age_breaks >= min(ages) & age_breaks <= max(ages)]
+  x_shared <- scale_x_continuous(breaks = age_breaks,
+                                 expand = expansion(mult = c(0.03, right_pad)))
+  
+  # Self-contained: this figure is a patchwork, so do NOT add theme_paper2 to it
+  # afterwards. `&` would push theme_paper2's 20pt bold strip.text onto the
+  # bottom row's stats line, which is a long string that has to stay small.
+  # Size it with base_size instead.
+  base <- theme_minimal(base_size = base_size) +
+    theme(panel.grid.minor   = element_blank(),
+          panel.grid.major.x = element_line(colour = "grey92"),
+          panel.spacing.x    = unit(1.9, "lines"),
+          axis.title         = element_text(face = "bold"),
+          strip.text         = element_text(size = base_size, face = "bold", hjust = 0),
+          plot.title         = element_text(face = "bold", size = base_size * 1.15),
+          plot.subtitle      = element_text(colour = "grey35", size = base_size * 0.8),
+          legend.position    = "none")
+  
+  ## Top row: counts, every series labelled at its line end in every panel
+  span <- sqrt(max(d$Count)) - sqrt(min(d$Count))
+  line_labels <- d %>%
+    filter(Age == max(Age)) %>%
+    group_by(Scenario) %>%
+    mutate(y   = f.spread_labels(Count, gap_frac * span, "sqrt"),
+           lab = outcome_long[as.character(Outcome)]) %>%
+    ungroup()
+  
+  p_top <- ggplot(d, aes(Age, Count, colour = Outcome, group = Outcome)) +
+    # drawn first, so the test series sit on top of it rather than under it
+    geom_line(data = filter(d, Outcome == "Deaths"), linewidth = 1.4) +
+    geom_line(data = filter(d, Outcome != "Deaths"),
+              aes(linetype = Not_tested), linewidth = 1.05) +
+    geom_text(data = line_labels, aes(x = Age, y = y, label = lab),
+              hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
+              inherit.aes = FALSE, colour = pal_outcome[as.character(line_labels$Outcome)]) +
+    facet_wrap(~Scenario) +
+    scale_colour_manual(values = pal_outcome) +
+    scale_linetype_manual(values = c(`FALSE` = "solid", `TRUE` = "21")) +
+    x_shared +
+    scale_y_sqrt(labels = comma, breaks = y_breaks) +
+    labs(title = top_title, subtitle = top_subtitle, y = "Number of people\n(square-root scale)") +
+    base
+  
+  ## Bottom row: composition, labelled at the right edge with each band's share.
+  # position_fill stacks the FIRST factor level on top, so the bottom-up order is
+  # the reverse of levels(Outcome) -- hence desc() before the cumulative sum.
+  band_labels <- d_tested %>%
+    filter(Age == max(Age)) %>%
+    group_by(Scenario) %>%
+    arrange(desc(Outcome), .by_group = TRUE) %>%
+    mutate(share = Count / sum(Count),
+           ymid  = cumsum(share) - share / 2,
+           y     = f.spread_labels(ymid, 0.075),
+           lab   = sprintf("%s", outcome_long[as.character(Outcome)])) %>%
+    ungroup()
+  
+  strip_fn <- if (is.null(strategy_stats)) {
+    identity
+  } else {
+    st <- strategy_stats
+    st$label <- unname(scenario_names[st$scenario])
+    as_labeller(setNames(
+      sprintf("N ever tested = %s\nN total tests done = %s\nTests per person tested = %.1f",
+              comma(st$n_people), comma(st$n_tests), st$per_person),
+      st$label))
+  }
+  
+  p_bottom <- ggplot(d_tested, aes(Age, Count, fill = Outcome)) +
+    geom_area(position = "fill", colour = "white", linewidth = 0.25) +
+    geom_text(data = band_labels, aes(x = Age, y = y, label = lab),
+              hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
+              inherit.aes = FALSE, colour = pal_outcome[as.character(band_labels$Outcome)]) +
+    facet_wrap(~Scenario, labeller = strip_fn) +
+    scale_fill_manual(values = pal_outcome) +
+    x_shared +
+    scale_y_continuous(labels = percent) +
+    labs(title = bottom_title, subtitle = bottom_subtitle, y = "Share of results\namong those tested") +
+    base +
+    theme(strip.text = element_text(size = base_size * 0.62, face = "plain",
+                                    colour = "grey35", hjust = 0))
+  
+  (p_top / p_bottom) + plot_layout(heights = heights)
 }
