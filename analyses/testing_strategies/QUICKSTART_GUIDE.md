@@ -19,8 +19,7 @@ Each strategy can be configured with different testing frequencies and follow-up
 
 ```
 analyses/testing_strategies/
-├── gram_paper2_testingstrategies.R     # Main analysis script
-├── gram_paper2_testing_pcp_fu.R        # PCP follow-up analysis
+├── gram_paper2_testingstrategies.R     # Analysis script for every Paper 2 scenario
 ├── gram_evolution_charts.R             # Helper functions for early diagnosis analysis
 ├── test_performance_helpers.R          # Functions for test performance metrics & plotting
 ├── bha_scenarios/                      # Scenario configuration files

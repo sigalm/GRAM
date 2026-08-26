@@ -1,17 +1,16 @@
 ######################################## GRAM-US PAPER 2: BHA TESTING STRATEGIES ########################################
 
-# Setup, load libraries, source scripts
+## Setup ####
 source("model/setup.R")
 source("model/simulation.R")
 source("calibration/benchmarking_helpers.R")
 source("model/helpers/source_all.R")
 source("analyses/testing_strategies/test_performance_helpers.R")
-library(tableone)
 library(flextable)
 sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 
 # Calibrated parameters are applied by model/setup.R, so only the cohort size for this
-# analysis is set here. The name is kept for the downstream code that refers to it.
+# analysis is set here.
 l.inputs_calibrated <- l.inputs
 l.inputs_calibrated[["n.ind"]] <- 100000
 
@@ -19,307 +18,416 @@ l.inputs_calibrated[["n.ind"]] <- 100000
 # Strategies analyzed will follow the GRAM-ish one-time testing paper
 #   (1) reactive testing
 #   (2) selective with eRADAR/EHR-based
-#   (3) inclusive 50% random opt-in
+#   (3) inclusive 50% random opt-in (with rr 2.0 at a later cycle if previously opted in)
 
 # Outcomes reported:
-#   (a) overall sensitivity/specificity
-#   (b) PPV and NPV 
-#   all at two time points: at first test, and after 10 years
+#   (a) overall sensitivity/specificity (i.e., strategy level)
+#   (b) overall PPV and NPV
+#   all at two time points: at first visit in which testing is possible, and after 10 years
 
 # Sensitivity analyses
 #   (1) a question-based selective option
 #   (2) inclusive with non-random selection (NB, unlike GRAM-ish, total testing not fixed at 50% here)
-#   (3) threshold inclusive with random selection?? TBD
+
+# PCP follow-up set
+#   inclusive and selective, each with an imperfect and a perfect PCP confirming BHA results
+#   no PCP follow-up scenario for reactive: PCP already heavily involved in referring to BHA
+#                                           so would have no reason to object to a test result
 
 
-# List of scenario config files and output names
-scenario_list <- list(
-  
-  u3bhapos_rand50 = "scenario_u3bhapos_rand50_config.R",
-  s1bhapos_emr = "scenario_s1bhapos_emr_config.R",
-  r1bhapos = "scenario_r1bhapos_config.R",
-  
-  s1bhapos_question = "scenario_s1bhapos_question_config.R",
-  u3bhapos_nonrand = "scenario_u3bhapos_nonrand_config.R"
-  )
+## Scenario registry ####
+# key    = short name used in every file name and in the `scenario` column
+# config = config file in bha_scenarios/
+# label  = facet/table label
+# group  = which figure the scenario belongs to
+scenario_registry <- tibble::tribble(
+  ~key,                   ~config,                                  ~label,                      ~group,
+  "u3bhapos_rand50",      "scenario_u3bhapos_rand50_config.R",      "Inclusive",                 "main",
+  "s1bhapos_emr",         "scenario_s1bhapos_emr_config.R",         "Selective",                 "main",
+  "r1bhapos",             "scenario_r1bhapos_config.R",             "Reactive",                  "main",
+
+  "s1bhapos_question",    "scenario_s1bhapos_question_config.R",    "Selective, question-based", "sens",
+  "u3bhapos_nonrand",     "scenario_u3bhapos_nonrand_config.R",     "Inclusive, non-random",     "sens",
+
+  "u3pcppos_rand50",      "scenario_u3pcppos_rand50_config.R",      "Inclusive, imperfect PCP",  "pcp",
+  "s1pcppos_emr",         "scenario_s1pcppos_emr_config.R",         "Selective, imperfect PCP",  "pcp",
+  "u3pcp_perfect_rand50", "scenario_u3pcp_perfect_rand50_config.R", "Inclusive, perfect PCP",    "pcp",
+  "s1pcp_perfect_emr",    "scenario_s1pcp_perfect_emr_config.R",    "Selective, perfect PCP",    "pcp"
+)
+
+# Subset this to re-run only part of the set
+scenarios_to_run <- scenario_registry$key
+
+reg_row    <- function(key) scenario_registry[match(key, scenario_registry$key), ]
+labels_for <- function(keys) setNames(reg_row(keys)$label, keys)
+keys_in    <- function(...) {
+  scenario_registry$key[scenario_registry$group %in% c(...) &
+                          scenario_registry$key %in% scenarios_to_run]
+}
 
 
+## Analysis groups and shared constants ####
+# Declared here, not inside the figure block, so tables do not depend on plots having run
+main_keys           <- keys_in("main")
+sens_selective_keys <- c("s1bhapos_emr", "s1bhapos_question")
+sens_inclusive_keys <- c("u3bhapos_rand50", "u3bhapos_nonrand")
+pcp_keys            <- keys_in("pcp")
 
-# Directory paths
+testing_window <- 65:80   # matches age_first_test / age_stop_test in every config
+plot_ages      <- 65:80
+plot_y_max     <- 75000
+year10_age     <- 75      # 10 years after testing opens
+
+
+## Paths and run id ####
 config_dir <- "analyses/testing_strategies/bha_scenarios"
 output_dir <- "analyses/testing_strategies/sim_results"
+perf_dir   <- "analyses/testing_strategies/test_perf_results"
+plot_dir   <- "analyses/testing_strategies/plots"
 
-datetime_suffix <- format(Sys.time(), "%Y%m%d_%H%M%S")
+# To pick up an earlier run, set run_id to that timestamp and skip the "Run scenarios" chunk.
+run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
+sim_file  <- function(key, id = run_id) file.path(output_dir, paste0("scenario_", key, "_sim_", id, ".rds"))
+perf_file <- function(key, id = run_id) file.path(perf_dir, paste0(key, "_", id, ".rds"))
+plot_file <- function(name, id = run_id) file.path(plot_dir, paste0(name, "_", id, ".jpeg"))
+
 
 ## Run scenarios ####
-for (scen in names(scenario_list[1:5])) {
+for (scen in scenarios_to_run) {
   local({
-    config_file <- file.path(config_dir, scenario_list[[scen]])
+    config_file <- file.path(config_dir, reg_row(scen)$config)
     cat("Running scenario:", scen, "\n")
     config <- load_scenario(config_file, l.inputs_calibrated)
     result <- f.wrap_run(config, microdata = sample1)
-    saveRDS(result, file = file.path(output_dir, paste0("scenario_", scen, "_sim_", datetime_suffix, ".rds")))
-    
+    saveRDS(result, file = sim_file(scen))
+
     rm(config, result)
     invisible(gc())
   })
 }
 
 
-######## Evolution Charts ####
-# Step 1: create and save test performance data
-for (scen in names(scenario_list[1:5])) {
-  output <- latest_rds(scen)$output
-  test_data <- post_processing_outputs(output)
-  saveRDS(test_data, file = file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "20260815.rds")))
+## Test performance data ####
+for (scen in scenarios_to_run) {
+  local({
+    output <- readRDS(sim_file(scen))$output
+    saveRDS(post_processing_outputs(output), file = perf_file(scen))
+
+    rm(output)
+    invisible(gc())
+  })
 }
 
-# Step 2: generate plots
-main_test_data <- data.frame()
-for (i in seq_along(names(scenario_list[1:3]))) {
-  scen <- names(scenario_list)[i]
-  temp_test_data <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "20260815.rds"))) %>%
-    mutate(scenario = scen)
-  main_test_data <- rbind(main_test_data, temp_test_data)
-}
+all_test_data <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
+  readRDS(perf_file(scen)) %>% mutate(scenario = scen)
+}))
 
-subtitles <- c("Inclusive",
-               "Selective",
-               "Reactive")
-names(subtitles) <- names(scenario_list)[1:3]
-p1 <- plot_test_results(main_test_data, ages = 65:80, show_early_pos = FALSE, scenario_names = subtitles, y_max = 75000)
-p1
+test_data_for <- function(keys) all_test_data %>% filter(scenario %in% keys)
 
 
+## Reporting helpers ####
 
-p1 <- p1 + theme(
-  text         = element_text(size = 18),      # base size for all text
-  axis.title   = element_text(size = 20, face = "bold"),
-  axis.text    = element_text(size = 16),
-  legend.text  = element_text(size = 16),
-  legend.title = element_text(size = 18, face = "bold"),
-  strip.text   = element_text(size = 20, face = "bold"),  # "Reactive/Selective/Inclusive" labels
-  plot.title   = element_text(size = 24, face = "bold"),
-  legend.key.size = unit(1.2, "cm")
-)
-
-ggsave("analyses/testing_strategies/plots/no-early-positives_reordered.jpeg",
-       plot = p1,
-       height = 10, width = 14,   # wider to give 3 panels more breathing room
-       dpi = 300)
-
-plot_testers(main_test_data, 
-             ages = 65:80, 
-             scenario_names = subtitles) 
-
-ggsave("analyses/testing_strategies/plots/no-early-positives_reordered.jpeg", plot = p1, height = 10, width = 8) 
-
-## Sensitivity analyses ####
-### Question-based selective strategy
-scen <- names(scenario_list)[4]
-test_data_question_selective <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
-  mutate(scenario = scen)
-test_data_selective <- rbind(main_test_data, test_data_question_selective) %>%
-  filter(scenario %in% names(scenario_list[c(2,4)]))
-plot_test_results(test_data_selective, ages = 65:80, show_early_pos = FALSE, y_max = 75000)
-
-### Non-random inclusive
-scen <- names(scenario_list)[5]
-test_data_nonrand_inclusive <- readRDS(file.path("analyses/testing_strategies/test_perf_results", paste0(scen, "230126.rds"))) %>%
-  mutate(scenario = scen)
-test_data_inclusive <- rbind(main_test_data, test_data_nonrand_inclusive) %>%
-  filter(scenario %in% names(scenario_list[c(1,5)]))
-plot_test_results(test_data_inclusive, ages = 65:80, show_early_pos = FALSE, y_max = 75000)
-
-
-
-## Reporting methods ####
-# Table 1: Testing likelihood by strategy and cognitive state
-reactive_testing_likelihood <- l.inputs_calibrated$m.cogcon_reactive[1,-1]
-l.inputs_calibrated$m.cogcon_selective
-l.inputs_calibrated$m.cogcon
-
-tab1 <- flextable(as.data.frame(rbind(
-  l.inputs_calibrated$m.cogcon_reactive[1,-1],
-  l.inputs_calibrated$m.cogcon_selective[1,-1],
-  l.inputs_calibrated$m.cogcon[1,-1]
-)))
-
-l.inputs_calibrated$sens_BHAGS
-l.inputs_calibrated$spec_BHAGS
-l.inputs_calibrated$rr.cogcon_prior
-
-## Reporting results ####
-u3bhapos <- latest_rds("u3bhapos_rand50")$output
-s1bhapos <- latest_rds("s1bhapos_emr")$output
-r1bhapos <- latest_rds("r1bhapos")$output
-
-subset_age_65 <- as.data.frame(t(u3bhapos[65-50+1,,])) # rows are IDs, cols are attributes
-subset_age_67 <- as.data.frame(t(u3bhapos[67-50+1,,])) # rows are IDs, cols are attributes
-
-prev_in_undx_65 <- subset_age_65 %>%
-  filter(ALIVE == 1, DX == 0) %>%
-  mutate(status = case_when(SYN < 1 ~ "h",
-                            SEV == 0 ~ "mci",
-                            SEV >= 1 ~ "dem")) %>%
-  group_by(status) %>%
-  summarise(n = n()) %>%
-  mutate(prev = n/sum(n))
-
-
-prev_in_undx_67 <- subset_age_67 %>%
-  filter(ALIVE == 1, DX == 0) %>%
-  mutate(status = case_when(SYN < 1 ~ "h",
-                            SEV == 0 ~ "mci",
-                            SEV >= 1 ~ "dem")) %>%
-  group_by(status) %>%
-  summarise(n = n()) %>%
-  mutate(prev = n/sum(n))
-
-
-# List of scenario arrays
-scenario_arrays <- list(
-  u3bhapos = u3bhapos,
-  s1bhapos = s1bhapos,
-  r1bhapos = r1bhapos
-)
-
-# Function to compute prevalence at first test
-get_prev_at_first_test <- function(scenario_array) {
-  bha_matrix <- scenario_array[, "BHA", ]
-  first_bha_cycle <- apply(bha_matrix, 2, function(x) which(x == 0 | x == 1 )[1])
-  
-  subset_first_test <- t(sapply(seq_along(first_bha_cycle), function(i) {
-    cycle <- first_bha_cycle[i]
-    if (!is.na(cycle)) {
-      scenario_array[cycle, , i]
-    } else {
-      rep(NA, dim(scenario_array)[2])
-    }
-  }))
-  colnames(subset_first_test) <- dimnames(scenario_array)[[2]]
-  subset_first_test <- as.data.frame(subset_first_test)
-  
-  prev_by_status <- subset_first_test %>%
-    filter(ALIVE == 1, DX == 0) %>%
-    mutate(status = case_when(SYN < 1 ~ "h",
-                              SEV == 0 ~ "mci",
-                              SEV >= 1 ~ "dem")) %>%
-    group_by(status) %>%
-    summarise(n = n(), .groups = "drop") %>%
+# The h / mci / dem split, defined once
+status_mix <- function(syn, sev) {
+  data.frame(status = case_when(syn < 1  ~ "h",
+                                sev == 0 ~ "mci",
+                                sev >= 1 ~ "dem")) %>%
+    count(status, name = "n") %>%
     mutate(prev = n / sum(n))
-  
-  n_tested <- sum(!is.na(first_bha_cycle))
-  n_tested_alive <- sum(subset_first_test$ALIVE == 1, na.rm = TRUE)
-  prop_alive_at_test <- n_tested_alive / n_tested
-  
+}
+
+ci_share <- function(mix) sum(mix$prev[mix$status %in% c("mci", "dem")])
+
+# Composition of the undiagnosed (no DX in previous cycle end), living pool at a given age.
+undx_pool <- function(scenario_array, age) {
+  cycle <- age - 50 + 1
+  d <- data.frame(ALIVE = scenario_array[cycle,     "ALIVE", ],
+                  DX    = scenario_array[cycle - 1, "DX", ],
+                  SYN   = scenario_array[cycle,     "SYN", ],
+                  SEV   = scenario_array[cycle,     "SEV", ]) %>%
+    filter(ALIVE == 1, DX == 0)
+  status_mix(d$SYN, d$SEV)
+}
+
+# Number of individuals eligible at ANY point in the testing window: alive, no prior
+# diagnosis, and with a healthcare provider.
+ever_eligible <- function(scenario_array, ages = testing_window) {
+  cycles <- ages - 50 + 1
+  elig <- (scenario_array[cycles,     "ALIVE", ] == 1) &
+          (scenario_array[cycles - 1, "DX", ]    == 0) &
+          (scenario_array[cycles,     "HCARE", ] == 1)
+  sum(apply(elig, 2, function(x) any(x, na.rm = TRUE)))
+}
+
+ever_tested <- function(scenario_array) {
+  sum(apply(scenario_array[, "BHA", ], 2, function(x) any(x >= 0, na.rm = TRUE)))
+}
+
+# Performance at a per-person anchor rather than a common calendar age, so a staggered
+# rollout needs no special case. Two anchors are available:
+#
+#   anchor = "visit"  each person's FIRST VISIT: the first cycle they are due for a
+#                     test, whether or not one happens. Preferred.
+#   anchor = "test"   each person's FIRST ACTUAL TEST, whenever that falls. Kept for
+#                     the "who did each strategy actually test?" question.
+#
+# BHA codes: -9 not due (no provider, prior diagnosis, outside the age window, not this
+# person's turn under cohort_split, or already stopped after a positive); -8 due, but
+# the concern/uptake gate did not fire; 0/1 tested negative/positive.
+#
+# The two anchors answer different questions. Under "visit", people who are due but not
+# tested stay in the denominator as misses, so the metrics are PROGRAM-level and
+# comparable with the year-10 row. Under "test" nobody is untested by construction, so
+# notest_tn/notest_fn are 0 and the metrics are TEST-level -- do not put them in the
+# same table as the year-10 figures.
+#
+# Positives keep the paper's early_pos / fp distinction: a positive in someone healthy
+# now but impaired later is an early catch, not a plain false positive. converted_tp is
+# structurally empty -- "positive while healthy, impaired now" cannot happen within one
+# cycle -- so it is fixed at 0 and the formulas are predictive_value's with it dropped.
+anchored_performance <- function(scenario_array, anchor = c("visit", "test")) {
+  anchor <- match.arg(anchor)
+  bha <- scenario_array[, "BHA", ]
+  pcp <- scenario_array[, "PCP", ]
+  syn <- scenario_array[, "SYN", ]
+  sev <- scenario_array[, "SEV", ]
+  result <- ifelse(!is.na(pcp) & pcp >= 0, pcp, bha)  # PCP verdict lands in the same cycle
+
+  will_be_impaired <- colSums(syn == 1, na.rm = TRUE) > 0   # ever impaired, whole horizon
+
+  # -8 counts as an anchor for "visit", but not for "test"
+  cutoff <- if (anchor == "visit") -8 else 0
+  first_visit <- apply(bha, 2, function(x) which(x >= cutoff)[1])
+  visited <- which(!is.na(first_visit))
+  idx <- cbind(first_visit[visited], visited)
+
+  res      <- result[idx]
+  impaired <- syn[idx] == 1
+  early    <- will_be_impaired[visited]
+  tested   <- res >= 0
+
+  perf <- data.frame(
+    n_visited = length(visited),
+    n_tested  = sum(tested),
+    tp = sum(res ==  1 &  impaired),
+    fp = sum(res ==  1 & !impaired & !early),   # positive, never impaired
+    early_pos = sum(res == 1 & !impaired & early),   # positive, impaired later
+    converted_tp = 0,                                # impossible within one cycle
+    tn = sum(res ==  0 & !impaired),
+    fn = sum(res ==  0 &  impaired),
+    notest_tn = sum(res == -8 & !impaired),
+    notest_fn = sum(res == -8 &  impaired)
+  ) %>%
+    mutate(sens = tp / (tp + fn + notest_fn),
+           spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
+           ppv  = tp / (tp + early_pos + fp),
+           npv  = (tn + notest_tn) / (tn + notest_tn + fn + notest_fn),
+           acc  = (tp + tn + notest_tn) / (tp + early_pos + fp + tn + fn + notest_tn + notest_fn))
+
   list(
-    prev_by_status = prev_by_status,
-    n_tested = n_tested
+    anchor     = anchor,
+    perf       = perf,
+    tested_mix = status_mix(syn[idx][tested], sev[idx][tested]), # cognitive mix among those who actually receive the test
+    visit_age  = table(scenario_array[, "AGE", ][idx])
   )
 }
 
-# Apply to all scenarios
-prev_in_first_test <- lapply(scenario_arrays, get_prev_at_first_test)
-
-# Calculate % of undx tested
-prev_in_first_test$u3bhapos$n_tested / sum(prev_in_undx_67$n)
-prev_in_first_test$s1bhapos$n_tested / sum(prev_in_undx_65$n)
-prev_in_first_test$r1bhapos$n_tested / sum(prev_in_undx_65$n)
-
-# Calculate total CI prev at first test
-sum(prev_in_first_test$u3bhapos$prev_by_status$prev[c(1,3)])
-sum(prev_in_first_test$s1bhapos$prev_by_status$prev[c(1,3)])
-sum(prev_in_first_test$r1bhapos$prev_by_status$prev[c(1,3)])
+first_visit_performance <- function(scenario_array) anchored_performance(scenario_array, "visit")
+first_test_performance  <- function(scenario_array) anchored_performance(scenario_array, "test")
 
 
-# Make table with result numbers
-results_table <- main_test_data %>%
-  filter(age %in% c(65,67,75)) %>%
-  mutate(age = age,
-         scenario = scenario,
-         tp = tp + converted_tp,
-         fp = fp + early_pos,
-         tn = tn + notest_tn,
-         fn = fn + notest_fn,
-         dead = death,
-         .keep = "none") %>%
-  flextable()
-
-
-
-
-predictive_value <- main_test_data %>%
-  filter(age %in% c(65, 67, 70, 75, 80)) %>%
-  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
-         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
-         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
-         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
-         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
-
-predictive_value_emr <- test_data_emr_selective %>%
-  filter(age %in% c(65, 70, 75, 80)) %>%
-  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
-         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
-         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
-         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
-         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
-
-
-
-results_table <- data.frame(
-  Time = c(rep("First Test",3), rep("By Year 10", 3)),
-  Strategy = rep(c("Inclusive", "Selective", "Reactive"), 2),
-  Sensitivity = round(predictive_value$sens[c(2,6,11, 4,9,14)] * 100, digits = 1),
-  Specificity = round(predictive_value$spec[c(2,6,11, 4,9,14)] * 100, digits = 1),
-  PPV = round(predictive_value$ppv[c(2,6,11, 4,9,14)] * 100, digits = 1),
-  NPV = round(predictive_value$npv[c(2,6,11, 4,9,14)] * 100, digits = 1),
-  Accuracy = round(predictive_value$acc[c(2,6,11, 4,9,14)] * 100, digits = 1)
+## Figures ####
+theme_paper2 <- theme(
+  text            = element_text(size = 18),
+  axis.title      = element_text(size = 20, face = "bold"),
+  axis.text       = element_text(size = 16),
+  legend.text     = element_text(size = 16),
+  legend.title    = element_text(size = 18, face = "bold"),
+  strip.text      = element_text(size = 20, face = "bold"),
+  plot.title      = element_text(size = 24, face = "bold"),
+  legend.key.size = unit(1.2, "cm")
 )
 
+figure_specs <- list(
+  list(name = "no-early-positives",          keys = main_keys,           type = "results", width = 14),
+  list(name = "testers",                     keys = main_keys,           type = "testers", width = 14),
+  list(name = "sens-selective",              keys = sens_selective_keys, type = "results", width = 11),
+  list(name = "sens-inclusive",              keys = sens_inclusive_keys, type = "results", width = 11),
+  list(name = "WITH-PCP-no-early-positives", keys = pcp_keys,            type = "results", width = 14),
+  list(name = "WITH-PCP-testers",            keys = pcp_keys,            type = "testers", width = 14)
+)
 
+# Draws and saves every panel; returns them so any one can be viewed, e.g.
+#   figures[["sens-selective"]]
+figures <- setNames(lapply(figure_specs, function(spec) {
+  d    <- test_data_for(spec$keys)
+  labs <- labels_for(spec$keys)
+
+  p <- if (spec$type == "results") {
+    plot_test_results(d, ages = plot_ages, show_early_pos = FALSE,
+                      scenario_names = labs, y_max = plot_y_max)
+  } else {
+    plot_testers(d, ages = plot_ages, scenario_names = labs)
+  }
+
+  ggsave(plot_file(spec$name), plot = p + theme_paper2, height = 10, width = spec$width, dpi = 300)
+  p
+}), vapply(figure_specs, `[[`, character(1), "name"))
+
+figures[["no-early-positives"]]
+names(figures)
+figures[["testers"]] + ylim(NA, 75000)
+
+## Reporting: methods ####
+# Table 1: testing likelihood by strategy and cognitive state
+reactive_testing_likelihood <- l.inputs_calibrated$m.cogcon_reactive[1, -1]
+
+# selective testing here is the question-based -- need to updated with eRADAR ones from the scenario config
+tab1 <- flextable(as.data.frame(rbind(
+  l.inputs_calibrated$m.cogcon_reactive[1, -1],
+  l.inputs_calibrated$m.cogcon_selective[1, -1],
+  l.inputs_calibrated$m.cogcon[1, -1]
+)))
+tab1
+
+# Test characteristics quoted in the methods
+bha_test_params <- list(
+  sensitivity     = l.inputs_calibrated$sens_BHAGS,
+  specificity     = l.inputs_calibrated$spec_BHAGS,
+  rr_cogcon_prior = l.inputs_calibrated$rr.cogcon_prior
+)
+bha_test_params
+
+
+## Reporting: results ####
+# Composition of the undiagnosed pool at the ages quoted in the text. Read from one
+# reference scenario so the quoted figures describe a single cohort.
+denom_ref_key <- "u3bhapos_rand50"
+denom_ref     <- readRDS(sim_file(denom_ref_key))$output
+prev_in_undx  <- setNames(lapply(c(65, 67), function(a) undx_pool(denom_ref, a)),
+                          as.character(c(65, 67)))
+rm(denom_ref); invisible(gc())
+
+prev_in_undx
+
+# One pass over each scenario's array: everything that needs the raw output
+scenario_reports <- setNames(lapply(scenarios_to_run, function(scen) {
+  arr <- readRDS(sim_file(scen))$output
+  out <- list(
+    n_ever_eligible = ever_eligible(arr),
+    n_ever_tested   = ever_tested(arr),
+    first_visit     = first_visit_performance(arr),   # reported
+    first_test      = first_test_performance(arr)     # alternative, if asked for
+  )
+  rm(arr); invisible(gc())
+  out
+}), scenarios_to_run)
+
+# Coverage over the life of the program, and who the first round reached
+coverage_summary <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
+  r  <- scenario_reports[[scen]]
+  fv <- r$first_visit
+  data.frame(
+    scenario        = scen,
+    strategy        = reg_row(scen)$label,
+    n_ever_eligible = r$n_ever_eligible,
+    # Both terms span the whole testing window: of everyone the programme could have
+    # reached, what share ever received a test
+    n_ever_tested       = r$n_ever_tested,
+    pct_eligible_tested = r$n_ever_tested / r$n_ever_eligible,
+    # The first round only
+    n_visited           = fv$perf$n_visited,
+    n_tested_first      = fv$perf$n_tested,
+    ci_prev_first       = ci_share(fv$tested_mix)
+  )
+}))
+
+coverage_summary
+
+# Cognitive status of those tested, by strategy. anchor = "first_visit" is the reported
+# version (the first round only); "first_test" is everyone ever tested, read at whenever
+# their own first test fell -- kept in case a reviewer asks for it.
+tested_mix_for <- function(anchor = c("first_visit", "first_test")) {
+  anchor <- match.arg(anchor)
+  do.call(rbind, lapply(scenarios_to_run, function(scen) {
+    scenario_reports[[scen]][[anchor]]$tested_mix %>%
+      mutate(strategy = reg_row(scen)$label, .before = 1)
+  }))
+}
+
+first_visit_mix <- tested_mix_for("first_visit")
+first_visit_mix
+
+
+# Counts behind the figures. NB this folds early_pos into fp and converted_tp into tp,
+# so the early-catch split is deliberately collapsed here; use scenario_reports for it.
+counts_table <- function(keys, ages = c(65, 67, 75)) {
+  test_data_for(keys) %>%
+    filter(age %in% ages) %>%
+    mutate(age = age,
+           scenario = scenario,
+           tp = tp + converted_tp,
+           fp = fp + early_pos,
+           tn = tn + notest_tn,
+           fn = fn + notest_fn,
+           dead = death,
+           .keep = "none") %>%
+    flextable()
+}
+
+counts_table(main_keys)
+
+
+# Program performance by calendar age, used for the year-10 row
+predictive_value <- all_test_data %>%
+  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
+         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
+         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
+         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
+         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
+
+as_pct_row <- function(d, time, strategy) {
+  data.frame(Time = time,
+             Strategy = strategy,
+             Sensitivity = round(d$sens * 100, digits = 1),
+             Specificity = round(d$spec * 100, digits = 1),
+             PPV = round(d$ppv * 100, digits = 1),
+             NPV = round(d$npv * 100, digits = 1),
+             Accuracy = round(d$acc * 100, digits = 1))
+}
+
+# "First Visit" is read at each person's own first-visit cycle, so no calendar age is
+# involved. "By Year 10" is the calendar snapshot. Both are program-level: eligible
+# people who were never tested count as misses in each.
+# anchor = "first_test" swaps in the test-level first row; see anchored_performance for
+# why that row is NOT comparable with the year-10 one.
+results_table_for <- function(keys, at_year10 = year10_age,
+                              anchor = c("first_visit", "first_test")) {
+  anchor <- match.arg(anchor)
+  first_label <- if (anchor == "first_visit") "First Visit" else "First Test"
+
+  first <- do.call(rbind, lapply(keys, function(scen) {
+    as_pct_row(scenario_reports[[scen]][[anchor]]$perf, first_label, reg_row(scen)$label)
+  }))
+
+  later <- do.call(rbind, lapply(keys, function(scen) {
+    as_pct_row(predictive_value %>% filter(scenario == scen, age == at_year10),
+               "By Year 10", reg_row(scen)$label)
+  }))
+
+  rbind(first, later)
+}
+
+results_table <- results_table_for(main_keys)
 flextable(results_table)
 
-## OLD CODE -- Early diagnoses ####
+results_table_sens_selective <- results_table_for(sens_selective_keys)
+flextable(results_table_sens_selective)
 
-u1pcppos$output <- add_early_dx(u1pcppos$output, dx_var = "BHA-DX")
+results_table_sens_inclusive <- results_table_for(sens_inclusive_keys)
+flextable(results_table_sens_inclusive)
 
-
-# identified at MCI vs at dementia
-# hybrid follow up scenarios 
-# start writing out key assumptions 
-
-# could do a version with alives only wihtout the red line
-p_cum_earlyID_u1pcppos <- plot_cumulative_count(u1pcppos$output, 
-                                                variables = list("SYN" = list(variable_name = "SYN", condition_value = 1),
-                                                                 "DX" = list(variable_name = "DX", condition_value = 1),
-                                                                 "early_dx_1" = list(variable_name = "early_dx_1", condition_value = 1),
-                                                                 "early_dx_2" = list(variable_name = "early_dx_2", condition_value = 1),
-                                                                 "early_dx_3" = list(variable_name = "early_dx_3", condition_value = 1),
-                                                                 "early_dx_4" = list(variable_name = "early_dx_4", condition_value = 1),
-                                                                 "early_dx_5" = list(variable_name = "early_dx_5", condition_value = 1),
-                                                ),
-                                                plot_title = "Cumulative Early Diagnoses",
-                                                scenario_name = "u1pcppos")
-
-
-
-(p_cum_earlyID_u1pcppos <- plot_cumulative_count(u1pcppos$output, 
-                                                 variables = list("SYN" = list(variable_name = "SYN", condition_value = 1))))
-
-
-
-
-
-
-
-
-
-
-
-# u1bhapos_evolution_plot <- plot_simulation_evolution(u1bhapos$output, plot_title = "Evolution for u1bhapos Scenario")
-# print(u1bhapos_evolution_plot)
-
-u1bhapos_evolution_lines_plot <- plot_simulation_evolution_lines(u1bhapos$output, plot_title = "Evolution for u1bhapos Scenario (Lines)")
-print(u1bhapos_evolution_lines_plot)
+results_table_pcp <- results_table_for(pcp_keys)
+flextable(results_table_pcp)
 

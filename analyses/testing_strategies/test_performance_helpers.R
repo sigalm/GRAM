@@ -337,16 +337,14 @@ plot_test_results <- function(plot_data,
   
   
   p <- ggplot(plot_data, aes(x = Age, y = Result_Value)) +
-    geom_line(aes(group = Result, color = Status), linewidth = 1.5) +
+    geom_line(aes(group = Result, color = Status)) +
     geom_point(data = subset(plot_data, Test_Value != "No Test"),
                aes(fill = Test_Value,
                    shape = Test_Value),
-               color = "white",
-               size = 3) +
+               color = "white") +
     geom_point(data = subset(plot_data, Test_Value == "No Test"),
                aes(shape = Test_Value),
-               color = "grey10",
-               size = 3) +
+               color = "grey10") +
     facet_wrap(~Scenario, labeller = as_labeller(scenario_names)) + 
     labs(title = plot_title,
          x = "Age",
