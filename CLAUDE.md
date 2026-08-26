@@ -142,3 +142,15 @@ Two exceptions worth knowing:
 - `main`: stable releases, `develop`: active development
 - Country adaptations: `country/<name>`, features: `feature/<name>`, fixes: `fix/<name>`
 - Core model code in `model/` should not be modified for country adaptations; use config overrides instead
+
+Commit prefixes follow what is already in the log: `feat:`, `fix:`, `refactor:`,
+`build:`, `chore:`, plus `analysis:`, `calib:`, `valid:` and `docs:` for this
+repo's own work. Two conventions worth stating:
+
+- **`claude:` for changes to this file.** CLAUDE.md is agent instructions, not
+  documentation of the model. `docs:` is reserved for things a reader of the
+  model would consult -- the supplements, MODULES.md, ONBOARDING.md.
+- **Keep a change that moves reported numbers in its own commit**, separate from
+  the feature or refactor around it, so `git revert` can undo exactly that and
+  nothing else. This matters more than branching here: history is linear, work
+  lands straight on `develop`, and the commit is the unit that gets undone.
