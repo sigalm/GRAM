@@ -25,13 +25,15 @@ l.inputs1 <- l.inputs
 l.inputs1[["n.cycle"]]
 l.inputs1[["n.ind"]]
 
+run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
 ```
 
 ```{r run, echo = FALSE}
 sim_calib <- run_benchmarking(l.inputs1, "", sample1)
 
 setwd(dirname(dirname(dirname(getwd()))))
-saveRDS(sim_calib, "analyses/model_development/code/sim_calib_20260820.RDS")
+saveRDS(sim_calib, paste0("analyses/model_development/code/sim_calib_", run_id,".RDS"))
 
 ```
 
@@ -62,8 +64,8 @@ table2
 figure1 <- sim_calib$sim$fig.progression
 figure1 <- figure1 + labs(title = NULL, subtitle = NULL)
 figure1
-#ggsave("../Figures/figure1_20250929.pdf", plot = figure1, 
-#       width = 10, height = 6, dpi = 300)
+ggsave(paste0("../Figures/natural_history",run_id,".pdf"), plot = figure1, 
+       width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 2: Predicted prevalence of MCI and dementia
@@ -74,8 +76,8 @@ figure2 <- figure2$fig_prev_by_age +
   xlim(NA,95) + 
   ylim(NA, .5)
 figure2
-# ggsave("../Figures/figure2_20250929.pdf", plot = figure2, 
-#        width = 10, height = 6, dpi = 300)
+ggsave(paste0("../Figures/prevalence_benchmarks",run_id,".pdf"), plot = figure2, 
+       width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 3: Reside time by age of onset
@@ -84,8 +86,8 @@ figure3_dat <- compare_reside_time(sim_calib$sim, description = "", n = l.inputs
 figure3_fig <- figure3_dat$fig_reside_time + labs(title = NULL, subtitle = NULL)
 figure3_fig
 
-#ggsave("../Figures/figure3_60plus_20250929.pdf", plot = figure3_fig_60plus, 
-#       width = 10, height = 6, dpi = 300)
+ggsave(paste0("../Figures/reside_times",run_id,".pdf"), plot = figure3_fig, 
+       width = 10, height = 6, dpi = 300)
 ```
 
 ## Figure 4: Predictive cumulative mortality
@@ -93,8 +95,8 @@ figure3_fig
 figure4 <- compare_mortality(sim_calib$sim, description = "", n = l.inputs1["n.ind"])
 figure4 <- figure4$cumulative_mort[[1]] + labs(title = NULL, subtitle = NULL)
 figure4
-# ggsave("../Figures/figure4_20250929.pdf", plot = figure4, 
-#        width = 10, height = 6, dpi = 300)
+ggsave(paste0("../Figures/mortality_benchmarks",run_id,".pdf"), plot = figure4, 
+       width = 10, height = 6, dpi = 300)
 ```
 
 
@@ -297,7 +299,7 @@ figS1_all <-
 
 figS1_all
 
-ggsave("../Figures/figureS1_combined_20250929.pdf", plot = figS1_all, 
+ggsave(paste0("../Figures/stratified_prevalence",run_id,".pdf"), plot = figS1_all, 
        width = 12, height = 14, dpi = 300)
 ```
 
@@ -320,42 +322,57 @@ onset_df <- data.frame(
                  labels = c("Not Carrier", "Carrier"))
 )
 
+# Update plot objects for legend handling
+legend_inset_theme <- theme(
+  legend.position = c(0.05, 0.95),
+  legend.justification = c("left", "top"),
+  legend.background = element_blank(),
+  legend.box.background = element_rect(fill = "white", color = "black"),
+  legend.box.margin = margin(6, 6, 6, 6),
+  legend.key = element_blank()
+)
 
 figS2_sex <- ggplot(onset_df, aes(x = age_onset, color = SEX)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by Sex', x = 'Age of Onset', y = 'Density') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14) 
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_raceeth <- ggplot(onset_df, aes(x = age_onset, color = RACEETH)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by Race/Ethnicity', x = 'Age of Onset', y = 'Density') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14) 
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_income <- ggplot(onset_df, aes(x = age_onset, color = INCOME)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by Income', x = 'Age of Onset', y = 'Proportion') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_edu <- ggplot(onset_df, aes(x = age_onset, color = EDU_BIN)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by Education', x = 'Age of Onset', y = 'Proportion') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_medbur <- ggplot(onset_df, aes(x = age_onset, color = MEDBUR_BIN)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by Medical Burden', x = 'Age of Onset', y = 'Proportion') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_apoe4 <- ggplot(onset_df, aes(x = age_onset, color = APOE4)) +
   geom_line(stat = "density", size = 1) +
   labs(title = 'Age of Onset by APOE4 Carrier Status', x = 'Age of Onset', y = 'Proportion') +
   scale_color_okabeito() +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  legend_inset_theme
 
 figS2_all <- 
   figS2_sex + labs(title = "(A) Sex") +
@@ -364,38 +381,13 @@ figS2_all <-
   figS2_edu + labs(title = "(D) Educational Attainment") +
   figS2_medbur + labs(title = "(E) Medical Burden") +
   figS2_apoe4 + labs(title = "(F) APOE4 Carrier Status") +
-  plot_layout(ncol = 2) &
-  theme(legend.position = "bottom", legend.title = element_blank())
+  plot_layout(ncol = 2)
 
 figS2_all
 
-ggsave("../Figures/figureS2_combined_20250929.pdf", plot = figS2_all, width = 14, height = 14, dpi = 300)
+ggsave(paste0("../Figures/stratified_age_of_onset",run_id,".pdf"), plot = figS2_all, width = 14, height = 14, dpi = 300)
 
 ```
 
 
-```{r supplement stats}
-# test of significance for dementia prevalence
-fetch_chisq <- function (rawdata, age) {
-  df <- rawdata %>% filter(age == !!age)
-  tab_df <- table(df$strat, df$condition == "Dementia")
-  chisq <- chisq.test(tab_df)
-}
-
-raw_list_S1 <- list(figS1_sex$raw, figS1_raceeth$raw, figS1_income$raw, figS1_edu$raw, figS1_medbur$raw, figS1_apoe4$raw)
-chisq_list <- map(raw_list_S1, fetch_chisq, age = 75)
-sex85 <- fetch_chisq(figS1_sex$raw, age=85)
-
-# test of significance for age of onset distribution
-# kruskall-wallis for 3 level variables, wilcoxon for 2 level variables (apoe4)
-fetch_kw <- function(var_name, onset_df) {
-  formula <- as.formula(paste("age_onset ~", var_name))
-  kw <- kruskal.test(formula, data = onset_df)
-}
-
-raw_list_S2_kw <- list("SEX","RACEETH", "INCOME", "EDU_BIN", "MEDBUR_BIN")
-kw_list <- map(raw_list_S2_kw, fetch_kw, onset_df = onset_df)
- 
-wilcox_apoe4 <- wilcox.test(age_onset ~ APOE4, data = onset_df)
-```
 
