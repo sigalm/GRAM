@@ -118,18 +118,32 @@ post_processing_outputs <- function(output_array) {
   
   syn_status <- output_array[, "SYN", ]
   
-  # 1. TPs
-  tp_direct <- (dx_results == 1) & (syn_status == 1)
+  # Everyone holding a standing positive verdict falls into exactly one of these
+  # two totals, on their CURRENT status: a positive in someone not yet impaired
+  # is a false positive, and becomes a true positive the moment they convert.
+  pos      <- dx_results == 1
+  tp_total <- pos & (syn_status == 1)
+  fp_total <- pos & (syn_status <  1)
   
-  # 2. FPs
-  ever_fp <- apply(((dx_results == 1) & (syn_status == 0)), 2, cummax)
-  
-  # Split FPs into early detection vs actual FP.
+  # Early detection is a DISPLAY split only, for show_early_pos = TRUE. The bands
+  # are carved OUT of the totals above rather than added to them, so they always
+  # sum back exactly. Two things went wrong when they were computed independently:
+  # converted_tp was a strict subset of tp_direct (ever_fp implies dx_results == 1,
+  # which cummax then carries forward), so tp + converted_tp double-counted; and
+  # ever_fp keys on syn_status == 0 rather than < 1, so a first positive during
+  # TCI landed in neither FP band and vanished from fp + early_pos.
+  #
+  # ever_early keeps the syn_status == 0 test on purpose: "early" means flagged
+  # before any sign at all, not merely before conversion. TCI-first positives are
+  # therefore ordinary false positives, and now land in real_fp instead of nowhere.
+  ever_early <- apply(((dx_results == 1) & (syn_status == 0)), 2, cummax)
   will_be_impaired <- colSums(syn_status == 1, na.rm = TRUE) > 0
+  early_flag <- t(t(ever_early) & will_be_impaired)
   
-  real_fp <- t(t(ever_fp) & !will_be_impaired)
-  early_pos <- t(t(ever_fp) & will_be_impaired) & (syn_status != 1)
-  converted_tp <- t(t(ever_fp) & will_be_impaired) & (syn_status == 1)
+  converted_tp <- tp_total &  early_flag    # caught early, impaired now
+  tp_direct    <- tp_total & !converted_tp  # flagged when already impaired
+  early_pos    <- fp_total &  early_flag    # caught early, not yet impaired
+  real_fp      <- fp_total & !early_pos     # positive, will not convert
   
   # TN
   tn <- (dx_results == 0) & (syn_status < 1)
