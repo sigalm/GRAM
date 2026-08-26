@@ -75,3 +75,12 @@ calibration/calibration_results_*.RDS
 docs/*.docx
 docs/*.pdf
 docs/*.html
+# Generated figures and plots (regenerable from the analysis scripts, and each set is
+# stamped with the run id that produced it, so a tracked copy goes stale as soon as the
+# model changes). When a set is actually submitted or circulated, commit that exact
+# version with `git add -f`.
+analyses/**/figures/
+analyses/**/plots/
+
+# Default device dump R writes when a plot is drawn headlessly
+Rplots.pdf
