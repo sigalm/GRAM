@@ -25,6 +25,39 @@ results <- f.wrap_run(l.inputs, microdata = microdata)
 
 There is no automated test suite. Calibration is run via `calibration/run_calibration.R`, and validation via analysis-specific scripts.
 
+## Before Calling Something a Bug
+
+Outcome definitions in this repo encode deliberate analytic intent that is not
+recoverable from the code alone. Two series that look inconsistent with each
+other are usually answering different questions on purpose.
+
+When you notice what looks like a bug, an inconsistency, or a definition that
+"should" be changed: **ask what the quantity is meant to measure before
+asserting anything is wrong.** State the observation, ask the question, and wait
+for the answer before proposing a fix. One question up front is far cheaper than
+an exchange spent working backwards from a wrong assumption about the goal.
+
+Be especially slow to assert on:
+
+- numerator and denominator choices in performance metrics
+- whether a series is a stock (who is in this state at time t) or a flow
+  (how many events happened in cycle t)
+- exit rules: when someone stops being counted, and why
+- an eligibility gate that appears on one series but not on a sibling
+
+Worked example, so this one is not re-litigated. In
+`analyses/testing_strategies/test_performance_helpers.R`, `fn` counts a person
+in every cycle after a negative test and carries no eligibility gate, while its
+sibling `notest_fn` gates on lagged DX. That asymmetry is intentional. `fn` is a
+**verdict**: the test looked at an impaired person and said no, and that error
+stands until a later test overturns it — losing the chance to be corrected (by a
+clinical DX ending eligibility) does not unmake it. `notest_fn` is a **coverage
+gap**: an eligible impaired person the program has not reached, which ceases to
+exist once they are no longer eligible, because there was never a verdict to be
+wrong about. A verdict persists; a gap is transient. The intended quantity is
+errors outstanding among the living: corrections leave via `cummax`, deaths
+leave because `SYN` is `NA` after death, and DX carryover stays.
+
 ## Architecture
 
 ### Three-Dimensional Array Core
