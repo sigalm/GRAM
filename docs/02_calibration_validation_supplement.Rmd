@@ -107,7 +107,7 @@ However, GRAM is a closed cohort in which individuals are followed until death o
 **Table S2.1.** Sensitivity of modeled MCI incidence to the person-time correction. The correction is applied only to non-cases who survived the full 8-cycle follow-up window (n = 4,763).
 
 | Years subtracted per non-case | Person-years | MCI incidence per 1,000 person-years (95% CI) |
-|----------------------|----------------|----------------------------------|
+|----------------------|------------------|---------------------------------|
 | 0 (uncorrected) | 59,331 | 42.9 (41.3 – 44.6) |
 | 2 | 49,805 | 51.2 (49.2 – 53.2) |
 | **3 (base case)** | **45,042** | **56.6 (54.4 – 58.8)** |
@@ -132,3 +132,6 @@ We then ran GRAM for 8 total cycles (1 for initiation, 2 for termination) and ca
 | **3% (base case)** | **3.23** |
 | 6% (equal to MCI prevalence) | 3.78 |
 | *Target (Binder et al.[@binder2020], Epoch 4)* | *3.13 (1.58 – 4.69)* |
+
+\pagebreak
+## References
