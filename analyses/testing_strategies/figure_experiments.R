@@ -480,7 +480,13 @@ pal_cohort <- c(pal_outcome[c("TP", "FN", "TN", "FP")],
                 `Not tested, healthy` = "#6F9A94",
                 `Not tested, impaired`= "#8C6D46",
                 `Not eligible`        = "#B5AEA4",
-                Deceased              = "#D8DCDE")
+                Deceased              = "#C3C9CC")
+
+# Fills stay pale so the two largest bands do not dominate, but pale fill makes
+# illegible label text on white. Labels take a darker shade of the same hue.
+pal_cohort_text <- c(pal_cohort,
+                     `Not eligible` = "#8A8377",
+                     Deceased       = "#7C868B")
 
 # split_untested = FALSE gives one "Not tested" band; TRUE splits it healthy /
 # impaired, which is the same cut the counts row already uses.
@@ -530,7 +536,7 @@ plot_cohort_shares <- function(split_untested = FALSE, label_size = 3.0) {
     geom_area(colour = "white", linewidth = 0.25) +
     geom_text(data = lab, aes(x = Age, y = y, label = lab), hjust = 0, nudge_x = 0.3,
               size = label_size, fontface = "bold", inherit.aes = FALSE,
-              colour = pal_cohort[as.character(lab$Band)]) +
+              colour = pal_cohort_text[as.character(lab$Band)]) +
     facet_wrap(~Scenario) +
     scale_fill_manual(values = pal_cohort, guide = "none") +
     x_age(right = 0.62) +
@@ -548,17 +554,62 @@ v13 <- plot_cohort_shares(split_untested = TRUE) +
        subtitle = "As V12, but the eligible-untested band is cut healthy vs impaired")
 
 
+## V14 -- counts row carries survivors rather than cumulative deaths ####
+# PI's alternative to the deaths line. Same figure as V11 with the complement
+# plotted: "remaining alive" falls from the starting cohort instead of deaths
+# rising from zero. Identical information, opposite direction of travel; the
+# survivor line sits above the test series rather than cutting up through them.
+cohort_size <- 100000   # l.inputs$n.ind for this run; asserted against the data below
+stopifnot(all(
+  (d_with_nt %>% filter(Outcome != "Deaths") %>% pull(Count)) >= 0))
+
+v14 <- plot_counts_and_shares(
+  do.call(rbind, lapply(main_keys, function(k) {
+    readRDS(file.path(perf_dir, paste0(k, "_", run_id, ".rds"))) %>% mutate(scenario = k)
+  })),
+  scenario_names = main_labels[main_keys],
+  strategy_stats = n_stats,
+  ages           = plot_ages,
+  mortality      = "alive",
+  cohort_size    = cohort_size)
+
+
 ## Render ####
 variants <- list(v0 = v0, v1 = v1, v2 = v2, v3 = v3, v4 = v4, v5 = v5,
-                 v6 = v6, v7 = v7, v8 = v8, v9 = v9, v10 = v10, v11 = v11, v12 = v12, v13 = v13)
+                 v6 = v6, v7 = v7, v8 = v8, v9 = v9, v10 = v10, v11 = v11,
+                 v12 = v12, v13 = v13, v14 = v14)
+
+# Saved under descriptive names so they can be found in a folder listing during a
+# meeting. The numeric prefix keeps them in the order they are discussed here;
+# the vN codes stay the handle used in this script and in conversation.
+file_names <- c(
+  v0  = "00_baseline-published-encoding",
+  v1  = "01_colour-per-outcome_linear",
+  v2  = "02_dashed-for-test-error_linear",
+  v3  = "03_marker-shape-for-result_linear",
+  v4  = "04_rows-split-by-true-status",
+  v5  = "05_colour-per-outcome_sqrt",
+  v6  = "06_composition-share-of-tested",
+  v7  = "07_rows-split-correct-vs-error",
+  v8  = "08_colour-per-outcome_sqrt_with-nontested",
+  v9  = "09_marker-shape-for-result_sqrt",
+  v10 = "10_dashed-for-test-error_sqrt",
+  v11 = "11_MAIN_counts-and-shares_deaths",
+  v12 = "12_cohort-share_untested-combined",
+  v13 = "13_cohort-share_untested-split-by-status",
+  v14 = "14_MAIN_counts-and-shares_remaining-alive")
 
 sizes <- list(v0 = c(13, 6),   v1 = c(14.5, 6),  v2 = c(13, 6.8), v3 = c(13, 6.5),
               v4 = c(15, 8.5), v5 = c(14.5, 6),  v6 = c(13, 6.3), v7 = c(15, 8.5),
               v8 = c(15, 6.5), v9 = c(13, 6.5),  v10 = c(13, 6.8),
-              v11 = c(17, 12.5), v12 = c(15, 7), v13 = c(15, 7))
+              v11 = c(17, 12.5), v12 = c(15, 7), v13 = c(15, 7), v14 = c(17, 12.5))
+
+# Clear previously rendered panels so an old file name cannot linger next to the
+# new one and get opened by mistake. Cached .rds inputs in the same folder stay.
+unlink(list.files(out_dir, pattern = "\\.png$", full.names = TRUE))
 
 for (nm in names(variants)) {
-  ggsave(file.path(out_dir, paste0(nm, ".png")), variants[[nm]],
+  ggsave(file.path(out_dir, paste0(file_names[[nm]], ".png")), variants[[nm]],
          width = sizes[[nm]][1], height = sizes[[nm]][2], dpi = 160, bg = "white")
 }
 

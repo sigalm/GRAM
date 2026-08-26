@@ -487,7 +487,7 @@ plot_testers <- function(plot_data,
 # yield. Per-test yield would be a flow built from the raw array instead.
 
 # Full names, spelled out. "FP" is jargon the reader decodes on every glance.
-outcome_long <- c(Deaths = "Deaths",
+outcome_long <- c(Deaths = "Deaths", Alive = "Remaining alive",
                   TP = "True positive",  FN = "False negative",
                   TN = "True negative",  FP = "False positive",
                   `No test, impaired` = "Not tested, impaired",
@@ -496,12 +496,12 @@ outcome_long <- c(Deaths = "Deaths",
 # Deaths take the light grey and sit behind everything, so "not tested, healthy"
 # moves off grey onto a muted teal -- cool like the other healthy series, but
 # desaturated like its brown "not tested, impaired" partner.
-pal_outcome <- c(Deaths = "#C2C7CA",
+pal_outcome <- c(Deaths = "#C2C7CA", Alive = "#8A9BA3",
                  TP = "#9E2A2B", FN = "#E8A33D",
                  TN = "#1B4965", FP = "#5FA8D3",
                  `No test, impaired` = "#8C6D46", `No test, healthy` = "#6F9A94")
 
-outcome_levels <- c("Deaths", "TP", "FN", "TN", "FP",
+outcome_levels <- c("Deaths", "Alive", "TP", "FN", "TN", "FP",
                     "No test, impaired", "No test, healthy")
 
 
@@ -543,7 +543,8 @@ plot_counts_and_shares <- function(plot_data,
                                    bottom_title    = "Share of test result among those tested",
                                    bottom_subtitle = "Includes everyone the strategy has ever tested and who is still alive, by current status and latest test result",
                                    y_breaks   = c(0, 1000, 5000, 15000, 30000, 60000),
-                                   show_deaths = TRUE,  # cumulative deaths, top row only
+                                   mortality = c("deaths", "alive", "none"),
+                                   cohort_size = NULL,  # required for mortality = "alive"
                                    base_size  = 15,     # everything else scales off this
                                    label_size = 3.15,   # line-end and band labels
                                    gap_frac   = 0.062,  # minimum label separation, as a share of the axis
@@ -551,6 +552,13 @@ plot_counts_and_shares <- function(plot_data,
                                    heights    = c(1.15, 1)) {
   
   keys <- names(scenario_names)
+
+  # Counts row can carry the cohort's mortality either way round: cumulative
+  # deaths (the default) or the survivors they are the complement of. "alive"
+  # needs the starting cohort size, which the per-cycle counts do not carry.
+  mortality <- match.arg(mortality)
+  if (mortality == "alive" && is.null(cohort_size))
+    stop("mortality = \"alive\" needs cohort_size (the starting cohort, e.g. l.inputs$n.ind)")
   
   # The gutter has to grow with the type, or bigger labels run off the panel.
   # 0.146 per point of label_size is what fits the longest label at the default.
@@ -566,8 +574,10 @@ plot_counts_and_shares <- function(plot_data,
               FN = fn,
               `No test, healthy`  = notest_tn,
               `No test, impaired` = notest_fn,
-              Deaths              = death) %>%
-    { if (show_deaths) . else select(., -Deaths) } %>%
+              Deaths              = death,
+              Alive               = if (mortality == "alive") cohort_size - death else NA_real_) %>%
+    select(-all_of(setdiff(c("Deaths", "Alive"),
+                           switch(mortality, deaths = "Deaths", alive = "Alive", none = character(0))))) %>%
     pivot_longer(-c(Age, Scenario), names_to = "Outcome", values_to = "Count") %>%
     mutate(Outcome = factor(Outcome, levels = outcome_levels),
            Not_tested = grepl("^No test", Outcome))
@@ -576,6 +586,7 @@ plot_counts_and_shares <- function(plot_data,
   # composition row. Naming the four cells beats negating Not_tested, which
   # would let Deaths through.
   d_tested <- d %>% filter(Outcome %in% c("TP", "FN", "TN", "FP"))
+  cohort_series <- c("Deaths", "Alive")
   
   # Shared so the two panel grids align and 65-80 sits at the same horizontal
   # position in each row.
@@ -609,8 +620,8 @@ plot_counts_and_shares <- function(plot_data,
   
   p_top <- ggplot(d, aes(Age, Count, colour = Outcome, group = Outcome)) +
     # drawn first, so the test series sit on top of it rather than under it
-    geom_line(data = filter(d, Outcome == "Deaths"), linewidth = 1.4) +
-    geom_line(data = filter(d, Outcome != "Deaths"),
+    geom_line(data = filter(d, Outcome %in% cohort_series), linewidth = 1.4) +
+    geom_line(data = filter(d, !Outcome %in% cohort_series),
               aes(linetype = Not_tested), linewidth = 1.05) +
     geom_text(data = line_labels, aes(x = Age, y = y, label = lab),
               hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
