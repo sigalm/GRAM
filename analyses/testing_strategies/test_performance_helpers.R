@@ -141,7 +141,13 @@ post_processing_outputs <- function(output_array) {
   
   clinical_dx <- output_array[,"DX",]  # DX is carried over in the base model, no need for cummax
   has_hcare <- output_array[,"HCARE",]
-  eligible <- clinical_dx == 0 & has_hcare == 1
+
+  # Eligibility uses LAGGED DX, matching f.update_BHA: within a cycle the modules run
+  # BHA before DX, so the testing decision is made against last cycle's diagnosis. Using
+  # the current cycle would drop people from the denominator in the same year they were
+  # still eligible to be tested. HCARE is current, which also matches the gate.
+  dx_lag <- rbind(rep(NA, ncol(clinical_dx)), clinical_dx[-nrow(clinical_dx), , drop = FALSE])
+  eligible <- dx_lag == 0 & has_hcare == 1
   
   ever_tested <- apply(bha_results,2,cummax) >= 0
   
