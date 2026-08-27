@@ -484,13 +484,17 @@ pal_cohort <- c(pal_outcome[c("TP", "FN", "TN", "FP")],
 
 # Fills stay pale so the two largest bands do not dominate, but pale fill makes
 # illegible label text on white. Labels take a darker shade of the same hue.
-pal_cohort_text <- c(pal_cohort,
-                     `Not eligible` = "#8A8377",
-                     Deceased       = "#7C868B")
+# Assign in place: c(pal, Deceased = ...) would APPEND a second entry with the
+# same name, and a [[ ]] lookup returns the first match -- so the override would
+# be silently ignored and the pale fill colour used for the text.
+pal_cohort_text <- pal_cohort
+pal_cohort_text[["Not eligible"]] <- "#5F5A50"
+pal_cohort_text[["Deceased"]]     <- "#4A5459"
 
 # split_untested = FALSE gives one "Not tested" band; TRUE splits it healthy /
 # impaired, which is the same cut the counts row already uses.
-plot_cohort_shares <- function(split_untested = FALSE, label_size = 3.0) {
+plot_cohort_shares <- function(split_untested = FALSE, label_size = 3.0,
+                              base_size_cohort = 15) {
   wide <- lapply(main_keys, function(k) {
     readRDS(file.path(perf_dir, paste0(k, "_", run_id, ".rds"))) %>% mutate(scenario = k)
   }) %>% bind_rows() %>%
@@ -529,7 +533,10 @@ plot_cohort_shares <- function(split_untested = FALSE, label_size = 3.0) {
     mutate(ymid = cumsum(Share) - Share / 2,
            y    = f.spread_labels(ymid, 0.062),
            lab  = ifelse(as.character(Band) %in% names(outcome_long),
-                         outcome_long[as.character(Band)], as.character(Band))) %>%
+                         outcome_long[as.character(Band)], as.character(Band)),
+           # asterisk points at the caption; "not eligible" is the one band whose
+           # membership rule is not obvious from its name
+           lab  = ifelse(Band == "Not eligible", paste0(lab, "*"), lab)) %>%
     ungroup()
 
   ggplot(d, aes(Age, Share, fill = Band)) +
@@ -541,8 +548,12 @@ plot_cohort_shares <- function(split_untested = FALSE, label_size = 3.0) {
     scale_fill_manual(values = pal_cohort, guide = "none") +
     x_age(right = 0.62) +
     scale_y_continuous(labels = percent, expand = expansion(mult = c(0.035, 0.02))) +
-    labs(y = "Share of the age-50 cohort") +
-    base_theme
+    labs(y = "Share of the age-50 cohort",
+         caption = "* Not eligible: no healthcare provider or has known cognitive impairment") +
+    base_theme +
+    theme(plot.caption = element_text(hjust = 0, colour = "grey35",
+                                      size = base_size_cohort * 0.72,
+                                      margin = margin(t = 10)))
 }
 
 v12 <- plot_cohort_shares(split_untested = FALSE) +
