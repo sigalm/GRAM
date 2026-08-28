@@ -4,9 +4,26 @@
 #### Module Wrapper ####
 f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   
+  # Who CAN be tested this cycle: has a provider, is undiagnosed, is in the age window,
+  # is due under the cohort split / repeat interval, and has not hit a stop condition.
+  # Computed once here because selection is drawn among these people, and only these.
+  assess <- f.assess_eligible(
+    scenario         = l.inputs[["scenario"]],
+    cycle            = t,
+    v.HCARE          = a.out[t,"HCARE",alive],
+    v.DX.lag         = a.out[t-1,"DX",alive],
+    v.AGE            = a.out[t,"AGE",alive],
+    v.last_BHA_age   = a.out[t-1,"last_BHA_age",alive],
+    v.NP.lag         = a.out[t-1,"NP",alive],
+    v.any_BHA_pos    = a.out[t-1,"any_BHA_pos",alive],
+    v.any_PCP_pos    = a.out[t-1,"any_PCP_pos",alive],
+    n.alive          = n.alive
+  )
+
   # SELECT
   a.out[t,"SELECT",alive] <- f.update_SELECT(
     scenario         = l.inputs[["scenario"]],
+    assess           = assess,
     v.AGE            = a.out[t,"AGE",alive],
     v.SYN            = a.out[t,"SYN",alive],
     v.SEV            = a.out[t,"SEV",alive],
@@ -21,12 +38,9 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
   # BHA
   a.out[t,"BHA",alive] <- f.update_BHA(
     scenario         = l.inputs[["scenario"]],
-    cycle            = t,
-    v.HCARE          = a.out[t,"HCARE",alive],
-    v.DX.lag         = a.out[t-1,"DX",alive],
+    assess           = assess,
     v.SELECT         = a.out[t,"SELECT",alive],
     v.AGE            = a.out[t,"AGE",alive],
-    v.last_BHA_age   = a.out[t-1,"last_BHA_age",alive],
     v.BHA.lag        = a.out[t-1,"BHA",alive],
     v.NP.lag         = a.out[t-1,"NP",alive], 
     v.SYN            = a.out[t,"SYN",alive],
@@ -34,9 +48,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
     random_cycle     = a.random[t,"BHA",alive],
     n.alive          = n.alive,
-    v.any_BHA_pos    = a.out[t-1,"any_BHA_pos",alive],
-    v.last_FP_age    = v.last_FP_age[alive],
-    v.any_PCP_pos    = a.out[t-1,"any_PCP_pos",alive]
+    v.last_FP_age    = v.last_FP_age[alive]
   )
   
   a.out[t,"last_BHA_age",alive] <- ifelse(a.out[t,"BHA",alive] >= 0, a.out[t,"AGE", alive], a.out[t-1,"last_BHA_age", alive])
@@ -103,74 +115,99 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
 
 #### Module Functions ####
 ######################################## SELECT
-f.update_SELECT <- function(scenario, v.AGE, v.SYN, v.SEV, v.SELECT.lag, rr.select_prior, v.DX.lag, random_cycle, n.alive) {
-  
-  selected <- rep(-9, n.alive)
-  
-  if(!is.null(scenario[["test"]])) {
-    
-    select_col <- case_when(
-      v.SYN < 1 ~ 2,
-      v.SEV == 0 ~ 3,
-      v.SEV >= 1 ~ 4
-    )
-    
-    select_lookup_coordinates <- matrix(data = c(round(v.AGE,0)-50+1, select_col), ncol = 2)  
-    
-    prob_select <- scenario[["probs_select"]][select_lookup_coordinates]
+f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
+                            rr.select_prior, v.DX.lag, random_cycle, n.alive) {
 
-    # Optional: raise the probability for anyone selected last time round. A scenario that
-    # leaves rr.select_prior NULL has no persistence, which is the sensible default where
-    # selection is a coin flip rather than a recurring subjective concern.
-    if (!is.null(rr.select_prior)) {
-      bump <- v.SELECT.lag == 1
-      prob_select[bump] <- f.adjustprobability(prob_select[bump], t_new = 1, t_old = 1, RR = rr.select_prior)
+  selected <- rep(-9, n.alive)
+
+  if(!is.null(scenario[["test"]])) {
+
+    # SELECT records selection status AS OF THE LAST ASSESSMENT, so it is carried forward
+    # through cycles in which no assessment could take place. Redrawing every cycle would
+    # accumulate selections in years the programme was never going to test anyone, and
+    # rr.select_prior would then ratchet the probability above its nominal value.
+    selected <- v.SELECT.lag
+
+    draw <- assess & (v.DX.lag == 0)
+
+    if (any(draw)) {
+      select_col <- case_when(
+        v.SYN < 1 ~ 2,
+        v.SEV == 0 ~ 3,
+        v.SEV >= 1 ~ 4
+      )
+
+      select_lookup_coordinates <- matrix(data = c(round(v.AGE,0)-50+1, select_col), ncol = 2)
+
+      prob_select <- scenario[["probs_select"]][select_lookup_coordinates]
+
+      # Optional: raise the probability for anyone selected at their previous assessment.
+      # A scenario that leaves rr.select_prior NULL has no persistence, which is the
+      # sensible default where selection is a coin flip rather than a recurring concern.
+      if (!is.null(rr.select_prior)) {
+        bump <- draw & (v.SELECT.lag == 1)
+        prob_select[bump] <- f.adjustprobability(prob_select[bump], t_new = 1, t_old = 1, RR = rr.select_prior)
+      }
+
+      selected[draw] <- as.numeric(prob_select[draw] > random_cycle[draw])
     }
-    
-    selected[v.DX.lag == 0] <- as.numeric(prob_select[v.DX.lag == 0] > random_cycle[v.DX.lag == 0])
-  } 
-  
+
+    # A prior diagnosis ends selection permanently (DX never reverts).
+    selected[v.DX.lag == 1] <- -9
+  }
+
   return(selected)
 }
 
 
 
+######################################## ASSESSMENT ELIGIBILITY
+
+# Who CAN be tested this cycle, before selection is considered. Lifted out of
+# f.update_BHA so that f.update_SELECT can draw among exactly this group: selection is
+# a property of an assessment, so it should only be drawn when an assessment happens.
+f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_BHA_age,
+                              v.NP.lag, v.any_BHA_pos, v.any_PCP_pos, n.alive) {
+
+  if (is.null(scenario[["test"]])) return(rep(FALSE, n.alive))
+
+  # The no-prior-diagnosis condition is fixed, not a scenario choice.
+  assess <- (v.HCARE == scenario$HCARE) & (v.DX.lag == 0)
+
+  # age criteria for assessment
+  assess <- assess & (v.AGE >= scenario$age_first_test)
+
+  # cohort split criteria for initial assessment
+  if(is.null(scenario$cohort_split)) {scenario$cohort_split <- 1}
+  first_test <- is.na(v.last_BHA_age) & (((as.numeric(names(v.last_BHA_age))-1) %% scenario$cohort_split) + 1) == (((cycle-1) %% scenario$cohort_split) + 1)
+
+  # repeat criteria for assessment
+  interval_ok <- !is.na(v.last_BHA_age) & ((v.AGE - v.last_BHA_age) >= scenario$repeat_interval)
+  assess <- assess & (first_test | interval_ok)
+
+  # optional stop rule
+  stop_test <- scenario$stop_rule(any_BHA_pos = v.any_BHA_pos,
+                                  NP = v.NP.lag,
+                                  any_PCP_pos = v.any_PCP_pos,
+                                  repeat_after_FP = scenario$repeat_after_FP)
+  assess <- assess & (is.na(stop_test) | !stop_test) & (v.AGE <= scenario$age_stop_test)
+
+  assess
+}
+
+
 ######################################## BHA
 
 
-f.update_BHA <- function(scenario, cycle, v.HCARE, v.DX.lag, v.SELECT, v.AGE, v.last_BHA_age, v.BHA.lag, 
-                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive, 
-                         v.any_BHA_pos, v.last_FP_age, v.any_PCP_pos) {
+f.update_BHA <- function(scenario, assess, v.SELECT, v.AGE, v.BHA.lag,
+                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive,
+                         v.last_FP_age) {
   
   bha <- rep(-9, n.alive)
   
   if(!is.null(scenario[["test"]])) {
     
-    # universally eligible for assessment.
-    # The no-prior-diagnosis condition is fixed, not a scenario choice: f.update_SELECT
-    # only ever draws for v.DX.lag == 0, so a scenario asking to include the diagnosed
-    # would silently never test them.
-    assess <- (v.HCARE == scenario$HCARE) & (v.DX.lag == 0)
-    
-    # age criteria for assessment
-    assess <- assess & (v.AGE >= scenario$age_first_test)
-    
-    # cohort split criteria for initial assessment
-    if(is.null(scenario$cohort_split)) {scenario$cohort_split <- 1}
-    first_test <- is.na(v.last_BHA_age) & (((as.numeric(names(v.last_BHA_age))-1) %% scenario$cohort_split) + 1) == (((cycle-1) %% scenario$cohort_split) + 1)
-    
-    # repeat criteria for assessment
-    interval_ok <- !is.na(v.last_BHA_age) & ((v.AGE - v.last_BHA_age) >= scenario$repeat_interval)
-    assess <- assess & (first_test | interval_ok)
-    
-    # optional stop rule
-    stop_test <- scenario$stop_rule(any_BHA_pos = v.any_BHA_pos, 
-                                    NP = v.NP.lag, 
-                                    any_PCP_pos = v.any_PCP_pos, 
-                                    repeat_after_FP = scenario$repeat_after_FP)
-    assess <- assess & (is.na(stop_test) | !stop_test) & (v.AGE <= scenario$age_stop_test)
-    
-    # cognitive concerns criteria
+    # selection criteria (drawn in f.update_SELECT among exactly this assess group)
     eligible <- assess & (v.SELECT == 1)
     
     # neuropsych criteria
