@@ -7,24 +7,29 @@ scenario_inputs <- list(
   
   # Test parameters
   test        = "BHA-GS", 
-  sensitivity = l.inputs[["sens_BHAGS"]], 
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens, 
+  specificity = BHA_GS$spec,
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
-  DX    = 0,             # 1 = ignore, 0 = require no prior diagnosis
   
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon_reactive"]],
+  # Spontaneous, patient-initiated concern. Carried over verbatim from the retired
+  # data/cogcon/m.cogcon_reactive.RDS (KP preliminary data).
+  probs_select = f.select_matrix(h = 0.01, mci = 0.1, dem = 0.3),
+  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 1,    # years between BHA administrations
   prob_pcpfu = 1,         # prob PCP follow up given a POSITIVE BHA
+  # Previously inherited from model/setup.R; written out here now that strategy
+  # parameters live only in the config. Values unchanged.
+  p.PCP_confirm_TP = c(0.75, 0.88, 0.95, 0.98), # mci, mild, moderate, severe dem
+  p.PCP_reject_FP  = 0.65,   # P(PCP correctly dismisses a BHA false positive)
   
   
   # Optional parameters
   NP = NULL,              
-  PET = NULL,             
   pause_after_FP = NULL,  
   
   # Stop parameters

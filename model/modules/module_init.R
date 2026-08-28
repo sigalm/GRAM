@@ -141,7 +141,7 @@ f.initialize <- function(l.inputs, microdata) {
     a.out[1,"MEMLOSS",mci_start] <- f.qcat(p_rand = a.random[1,"MEMLOSS",mci_start], p_cat = l.inputs[["p.MEMLOSS_start"]], values = l.inputs[["v.MEMLOSS_val"]])
   }
   
-  a.out[1,"COGCON",]    <- 0    # assume no concerns at age 50 when healthy !! TODO: make this dynamic!
+  a.out[1,"SELECT",]    <- 0    # assume no concerns at age 50 when healthy !! TODO: make this dynamic!
   a.out[1,"BHA",]       <- -9   # will be assigned as people are tested
   a.out[1,"last_BHA_age",]   <- NA   # tracking variable for implementing BHA scenarios
   a.out[1,"any_BHA_pos",]    <- FALSE

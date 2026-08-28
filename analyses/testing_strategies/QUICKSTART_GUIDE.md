@@ -167,14 +167,13 @@ scenario_inputs <- list(
   # TEST PARAMETERS
   # ============================================================================
   test        = "BHA-GS",
-  sensitivity = l.inputs[["sens_BHAGS"]],
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens,        # from model/test_properties.R
+  specificity = BHA_GS$spec,
   
   # ============================================================================
   # GLOBAL PARAMETERS
   # ============================================================================
   HCARE = 1,    # 1 = requires healthcare access, 0 = ignore
-  DX    = 0,    # 0 = exclude those with prior diagnosis, 1 = include all
   
   # ============================================================================
   # CORE SCENARIO PARAMETERS
@@ -182,10 +181,12 @@ scenario_inputs <- list(
   age_first_test  = 65,     # Starting age for testing
   age_stop_test   = 80,     # Age to stop testing
   
-  # Cognitive concern probabilities - choose one:
-  probs_cogcon = l.inputs[["m.cogcon"]],              # Universal (everyone tested)
-  # probs_cogcon = l.inputs[["m.cogcon_selective"]],  # Selective (prompted concerns)
-  # probs_cogcon = l.inputs[["m.cogcon_reactive"]],   # Reactive (spontaneous concerns)
+  # Probability of being selected for testing, by true cognitive status.
+  # h covers everyone with SYN < 1 (healthy AND TCI); mci is SEV == 0; dem is SEV >= 1.
+  probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),   # universal: everyone tested
+  # f.select_matrix(h = 0.01, mci = 0.10, dem = 0.30)        # reactive: spontaneous concern
+  # f.select_matrix(h = 0.05, mci = 0.40, dem = 0.80)        # selective: prompted at a visit
+  rr.select_prior = 2,      # RR of reporting concern again after reporting it last cycle
   
   prob_pcpfu      = NULL,   # Probability of PCP follow-up (NULL = no follow-up)
   repeat_interval = 1,      # Years between tests
@@ -238,11 +239,23 @@ for (scen in names(scenario_list)) {
 
 ### Testing Eligibility
 
-- **`probs_cogcon`**: Determines who gets tested based on cognitive concerns
-  - `m.cogcon`: Universal testing (everyone eligible)
-  - `m.cogcon_selective`: Selective testing (prompted concerns)
-  - `m.cogcon_reactive`: Reactive testing (spontaneous concerns only)
-The base model selection criteria was based on whether the individual had a cognitive concern (m.cogcon > 0). Functionally, this variable is a vector of probabilities for getting selected for testing based on true cognitive status. Therefore, it can be used to implement any probabilistic selection criteria, simply replace the values of m.cogcon with your own selection probabilities.
+- **`probs_select`**: Determines who gets tested, as a probability by true cognitive status.
+  Build it with `f.select_matrix(h =, mci =, dem =)`. There is no default: a scenario that
+  sets `test` must declare its own, and `load_scenario()` errors if it does not.
+  - Universal: `f.select_matrix(h = 1, mci = 1, dem = 1)`
+  - Selective (prompted at a visit): `f.select_matrix(h = 0.05, mci = 0.40, dem = 0.80)`
+  - Reactive (spontaneous concern): `f.select_matrix(h = 0.01, mci = 0.10, dem = 0.30)`
+
+  Functionally this is just a selection probability by true status, so it can encode any
+  probabilistic eligibility rule -- a 50% random opt-in is `h = mci = dem = 0.5`. Note `h`
+  covers everyone with `SYN < 1`, which includes TCI.
+- **`rr.select_prior`**: *Optional.* RR of being selected again having been selected the
+  previous cycle. Applied to the base probability on the rate scale, so it does not
+  compound. Omit it (or set `NULL`) for no persistence -- appropriate where selection is a
+  coin flip rather than a recurring subjective concern.
+
+Individuals with a prior diagnosis are never selected and never tested. That is fixed in
+the model, not a scenario option.
 
 ### Age Range
 
@@ -468,7 +481,7 @@ ggsave("analyses/testing_strategies/plots/my_comparison.jpeg",
 
 - **Model parameters**: See `docs/01_natural_history_supplement.Rmd` for detailed parameter descriptions
 - **Calibration benchmarks**: See `calibration/GRAM calibration benchmarks.xlsx`
-- **Cognitive concern data**: See `data/cogcon/` for probability matrices
+- **Test selection probabilities**: declared per scenario in its config; see `f.select_matrix()`
 - **Planning documents**: See `planning/` folder for scenario design rationale
 
 ---

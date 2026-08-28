@@ -8,23 +8,27 @@ scenario_inputs <- list(
   
   # Test parameters
   test        = "BHA-GS", 
-  sensitivity = l.inputs[["sens_BHAGS"]], 
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens, 
+  specificity = BHA_GS$spec,
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
-  DX    = 0,             # 1 = ignore, 0 = require no prior diagnosis
   
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_reactive or m.cogcon_selective for alternatives.
+  # Everyone eligible is tested; cognitive concern is not a gate.
+  probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),
+  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   prob_pcpfu = 0.2,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
+  # Previously inherited from model/setup.R; written out here now that strategy
+  # parameters live only in the config. Values unchanged.
+  p.PCP_confirm_TP = c(0.75, 0.88, 0.95, 0.98), # mci, mild, moderate, severe dem
+  p.PCP_reject_FP  = 0.65,   # P(PCP correctly dismisses a BHA false positive)
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters
   NP = NULL,              
-  PET = NULL,             
   pause_after_FP = NULL,  
   
   # Stop parameters
@@ -33,7 +37,6 @@ scenario_inputs <- list(
   # default stop_rule args:
   # any_BHA_pos = v.any_BHA_pos, 
   # NP = v.NP.lag, 
-  # PET = v.PET.lag,
   # PCP.lag = v.PCP.lag,   
   # repeat_after_FP = scenario$repeat_after_FP
   

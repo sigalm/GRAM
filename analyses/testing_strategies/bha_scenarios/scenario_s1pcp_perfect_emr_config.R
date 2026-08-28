@@ -1,10 +1,5 @@
 ## Scenario Config File
 
-probs_select <-  l.inputs[["m.cogcon"]]
-probs_select[,"h"] <- 0.09
-probs_select[,"mci"] <- 0.8
-probs_select[,"dem"] <- 1
-
 scenario_inputs <- list(
   
   title       = as.factor("S1PCPPOS_PERFECT_EMR"),
@@ -12,17 +7,18 @@ scenario_inputs <- list(
   
   # Test parameters
   test        = "BHA-GS", 
-  sensitivity = l.inputs[["sens_BHAGS"]], 
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens, 
+  specificity = BHA_GS$spec,
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
-  DX    = 0,             # 1 = ignore, 0 = require no prior diagnosis
   
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = probs_select,
+  # eRADAR-style EHR risk flag: assumed selection probabilities, set in this config.
+  probs_select = f.select_matrix(h = 0.09, mci = 0.8, dem = 1),
+  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 1,    # years between BHA administrations
   prob_pcpfu = 1,
   
@@ -33,7 +29,6 @@ scenario_inputs <- list(
   
   # Optional parameters
   NP = NULL,              
-  PET = NULL,             
   pause_after_FP = NULL,  
   
   # Stop parameters

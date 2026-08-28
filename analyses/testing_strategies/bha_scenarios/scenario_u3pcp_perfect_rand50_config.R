@@ -7,17 +7,18 @@ scenario_inputs <- list(
 
   # Test parameters
   test        = "BHA-GS", 
-  sensitivity = l.inputs[["sens_BHAGS"]], 
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens, 
+  specificity = BHA_GS$spec,
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
-  DX    = 0,             # 1 = ignore, 0 = require no prior diagnosis
   
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = 0.5 * l.inputs[["m.cogcon"]],  # Defaults to everyone getting tested. Use m.cogcon_reactive or m.cogcon_selective for alternatives.
+  # 50% random opt-in, independent of cognitive status.
+  probs_select = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
+  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   prob_pcpfu = 1,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
   
   # PERFECT PCP
@@ -29,7 +30,6 @@ scenario_inputs <- list(
   
   # Optional parameters
   NP = NULL,              
-  PET = NULL,             
   pause_after_FP = NULL,  
   
   # Stop parameters

@@ -7,22 +7,23 @@ scenario_inputs <- list(
   
   # Test parameters
   test        = "BHA-GS", 
-  sensitivity = l.inputs[["sens_BHAGS"]], 
-  specificity = l.inputs[["spec_BHAGS"]],
+  sensitivity = BHA_GS$sens, 
+  specificity = BHA_GS$spec,
   
   # Global parameters
   HCARE = 1,             # 1 = requires healthcare provider, 0 = ignore
-  DX    = 0,             # 1 = ignore, 0 = require no prior diagnosis
   
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  probs_cogcon = l.inputs[["m.cogcon_selective"]],
+  # Provider-prompted at an annual wellness visit. Carried over verbatim from the
+  # retired data/cogcon/m.cogcon_selective.RDS (KP preliminary data).
+  probs_select = f.select_matrix(h = 0.05, mci = 0.4, dem = 0.8),
+  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters
   NP = NULL,              
-  PET = NULL,             
   pause_after_FP = NULL,  
   
   # Stop parameters

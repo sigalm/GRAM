@@ -94,7 +94,7 @@ The model tracks the following attributes for each simulated individual:
 | `CDRfast_sd1` | Individual-level variation (fast) | Numeric |
 | `CDRslow_sd1` | Individual-level variation (slow) | Numeric |
 | `DX`† | Clinical diagnosis under standard care | 0 = undiagnosed, 1 = diagnosed with cognitive impairment |
-| `COGCON`† | Cognitive concerns | 0 = no subjective concerns, 1 = has subjective concerns |
+| `SELECT`† | Selected for testing at the last assessment | 0 = not selected, 1 = selected; -9 if diagnosed (never selected) |
 | `BHA`† | Brain Health Assessment result | -9 = not assessed for eligibility, -8 = ineligible, 0 = negative (normal), 1 = positive (impaired) |
 | `CDR_obs`† | Observed CDR-SB score | Numeric, range 0–18; -9 if not yet tested |
 | `SEV_obs`† | Observed dementia severity | 0 = MCI, 1 = mild, 2 = moderate, 3 = severe; -9 if not yet tested |

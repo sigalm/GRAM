@@ -45,7 +45,6 @@ GRAM/
 │   ├── acs_data/             # Population microdata (ACS-based)
 │   ├── mortality/            # Life tables and mortality rates
 │   ├── mci_incidence/        # MCI incidence rates by age
-│   ├── cogcon/               # Cognitive concern probabilities
 │   └── README.md             # Data provenance documentation
 │
 ├── calibration/              # Calibration grid search and benchmarks

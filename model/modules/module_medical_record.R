@@ -4,16 +4,16 @@
 #### Module Wrapper ####
 f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
   
-  # COGCON
-  a.out[t,"COGCON",alive] <- f.update_COGCON(
+  # SELECT
+  a.out[t,"SELECT",alive] <- f.update_SELECT(
     scenario         = l.inputs[["scenario"]],
     v.AGE            = a.out[t,"AGE",alive],
     v.SYN            = a.out[t,"SYN",alive],
     v.SEV            = a.out[t,"SEV",alive],
-    v.COGCON.lag     = a.out[t-1,"COGCON",alive],
-    rr.cogcon_prior  = l.inputs[["rr.cogcon_prior"]],
+    v.SELECT.lag     = a.out[t-1,"SELECT",alive],
+    rr.select_prior  = l.inputs[["scenario"]][["rr.select_prior"]],
     v.DX.lag         = a.out[t-1,"DX",alive],
-    random_cycle     = a.random[t,"COGCON",alive],
+    random_cycle     = a.random[t,"SELECT",alive],
     n.alive          = n.alive
   )
   
@@ -24,12 +24,11 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     cycle            = t,
     v.HCARE          = a.out[t,"HCARE",alive],
     v.DX.lag         = a.out[t-1,"DX",alive],
-    v.COGCON         = a.out[t,"COGCON",alive],
+    v.SELECT         = a.out[t,"SELECT",alive],
     v.AGE            = a.out[t,"AGE",alive],
     v.last_BHA_age   = a.out[t-1,"last_BHA_age",alive],
     v.BHA.lag        = a.out[t-1,"BHA",alive],
     v.NP.lag         = a.out[t-1,"NP",alive], 
-    v.PET.lag        = a.out[t-1,"PET",alive],
     v.SYN            = a.out[t,"SYN",alive],
     v.SEV            = a.out[t,"SEV",alive],
     v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
@@ -70,8 +69,8 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.BHA              = a.out[t,"BHA",alive],
     v.SYN              = a.out[t,"SYN",alive],
     v.SEV              = a.out[t,"SEV",alive],
-    p.PCP_confirm_TP   = l.inputs[["scenario"]][["p.PCP_confirm_TP"]] %||% l.inputs[["p.PCP_confirm_TP"]],
-    p.PCP_reject_FP    = l.inputs[["scenario"]][["p.PCP_reject_FP"]] %||% l.inputs[["p.PCP_reject_FP"]],
+    p.PCP_confirm_TP   = l.inputs[["scenario"]][["p.PCP_confirm_TP"]],
+    p.PCP_reject_FP    = l.inputs[["scenario"]][["p.PCP_reject_FP"]],
     random_cycle       = a.random[t,"PCP",alive],
     n.alive            = n.alive
   )
@@ -79,10 +78,6 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
   a.out[t,"any_PCP_pos",alive] <-  as.numeric((a.out[t-1,"any_PCP_pos",alive]) | (a.out[t,"PCP",alive] == 1))
   
   
-  # PET 
-  a.out[t,"PET",alive] <- f.update_PET(
-    v.PET.lag     = a.out[t-1,"PET",alive]
-  )
   
   
   # NP
@@ -107,10 +102,10 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
 
 
 #### Module Functions ####
-######################################## COGCON
-f.update_COGCON <- function(scenario, v.AGE, v.SYN, v.SEV, v.COGCON.lag, rr.cogcon_prior, v.DX.lag, random_cycle, n.alive) {
+######################################## SELECT
+f.update_SELECT <- function(scenario, v.AGE, v.SYN, v.SEV, v.SELECT.lag, rr.select_prior, v.DX.lag, random_cycle, n.alive) {
   
-  cogcon <- rep(-9, n.alive)
+  selected <- rep(-9, n.alive)
   
   if(!is.null(scenario[["test"]])) {
     
@@ -120,15 +115,22 @@ f.update_COGCON <- function(scenario, v.AGE, v.SYN, v.SEV, v.COGCON.lag, rr.cogc
       v.SEV >= 1 ~ 4
     )
     
-    cogcon_lookup_coordinates <- matrix(data = c(round(v.AGE,0)-50+1, select_col), ncol = 2)  
+    select_lookup_coordinates <- matrix(data = c(round(v.AGE,0)-50+1, select_col), ncol = 2)  
     
-    prob_cogcon <- scenario[["probs_cogcon"]][cogcon_lookup_coordinates]
-    prob_cogcon[v.COGCON.lag == 1] <- f.adjustprobability(prob_cogcon[v.COGCON.lag == 1], t_new = 1, t_old = 1, RR = rr.cogcon_prior)
+    prob_select <- scenario[["probs_select"]][select_lookup_coordinates]
+
+    # Optional: raise the probability for anyone selected last time round. A scenario that
+    # leaves rr.select_prior NULL has no persistence, which is the sensible default where
+    # selection is a coin flip rather than a recurring subjective concern.
+    if (!is.null(rr.select_prior)) {
+      bump <- v.SELECT.lag == 1
+      prob_select[bump] <- f.adjustprobability(prob_select[bump], t_new = 1, t_old = 1, RR = rr.select_prior)
+    }
     
-    cogcon[v.DX.lag == 0] <- as.numeric(prob_cogcon[v.DX.lag == 0] > random_cycle[v.DX.lag == 0])
+    selected[v.DX.lag == 0] <- as.numeric(prob_select[v.DX.lag == 0] > random_cycle[v.DX.lag == 0])
   } 
   
-  return(cogcon)
+  return(selected)
 }
 
 
@@ -136,16 +138,19 @@ f.update_COGCON <- function(scenario, v.AGE, v.SYN, v.SEV, v.COGCON.lag, rr.cogc
 ######################################## BHA
 
 
-f.update_BHA <- function(scenario, cycle, v.HCARE, v.DX.lag, v.COGCON, v.AGE, v.last_BHA_age, v.BHA.lag, 
-                         v.NP.lag = NULL, v.PET.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive, 
+f.update_BHA <- function(scenario, cycle, v.HCARE, v.DX.lag, v.SELECT, v.AGE, v.last_BHA_age, v.BHA.lag, 
+                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive, 
                          v.any_BHA_pos, v.last_FP_age, v.any_PCP_pos) {
   
   bha <- rep(-9, n.alive)
   
   if(!is.null(scenario[["test"]])) {
     
-    # universally eligible for assessment
-    assess <- (v.HCARE == scenario$HCARE) & (v.DX.lag == scenario$DX)
+    # universally eligible for assessment.
+    # The no-prior-diagnosis condition is fixed, not a scenario choice: f.update_SELECT
+    # only ever draws for v.DX.lag == 0, so a scenario asking to include the diagnosed
+    # would silently never test them.
+    assess <- (v.HCARE == scenario$HCARE) & (v.DX.lag == 0)
     
     # age criteria for assessment
     assess <- assess & (v.AGE >= scenario$age_first_test)
@@ -161,13 +166,12 @@ f.update_BHA <- function(scenario, cycle, v.HCARE, v.DX.lag, v.COGCON, v.AGE, v.
     # optional stop rule
     stop_test <- scenario$stop_rule(any_BHA_pos = v.any_BHA_pos, 
                                     NP = v.NP.lag, 
-                                    PET = v.PET.lag,
                                     any_PCP_pos = v.any_PCP_pos, 
                                     repeat_after_FP = scenario$repeat_after_FP)
     assess <- assess & (is.na(stop_test) | !stop_test) & (v.AGE <= scenario$age_stop_test)
     
     # cognitive concerns criteria
-    eligible <- assess & (v.COGCON == 1)
+    eligible <- assess & (v.SELECT == 1)
     
     # neuropsych criteria
     if (!is.null(scenario$NP)) {
@@ -260,6 +264,11 @@ f.update_PCP <- function(prob_pcpfu, v.DX.lag, v.HCARE, v.BHA, v.SYN, v.SEV,
   if(is.null(prob_pcpfu) || prob_pcpfu == 0) {
     eligible <- rep(0, n.alive)
   } else {
+    if (is.null(p.PCP_confirm_TP) || is.null(p.PCP_reject_FP)) {
+      stop("Scenario requests PCP follow-up (prob_pcpfu = ", prob_pcpfu,
+           ") but p.PCP_confirm_TP / p.PCP_reject_FP are not set in the scenario config.",
+           call. = FALSE)
+    }
     eligible <- v.DX.lag == 0 & v.HCARE == 1 & v.BHA == 1
     select_fu <- rbinom(n = length(eligible), size = 1, prob = prob_pcpfu)
     eligible <- eligible & select_fu
@@ -276,14 +285,6 @@ f.update_PCP <- function(prob_pcpfu, v.DX.lag, v.HCARE, v.BHA, v.SYN, v.SEV,
   }
 
   return(pcp)
-}
-
-
-######################################## PET
-
-f.update_PET <- function(v.PET.lag) {
-  pet <- v.PET.lag
-  return(pet)
 }
 
 

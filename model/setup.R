@@ -18,10 +18,11 @@ l.inputs <- vector(mode = "list", length = 0)
 
 # vector of attribute names (see supplemental 'Attribute names')
 l.inputs[["v.attr_names"]] <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCOME","MEDBUR","APOE4","HCARE",
-                                "DX","TX","TCI","SYN","COGCON","BHA","any_BHA_pos","last_BHA_age",
+                                "DX","TX","TCI","SYN","SELECT","BHA","any_BHA_pos","last_BHA_age",
                                 "CDR_track","CDR", "MEMLOSS","SEV",
                                 "CDRfast_sd1","CDRslow_sd1","CDR_obs","SEV_obs",
-                                "PCP","any_PCP_pos","PET","NP",
+                                "PCP","any_PCP_pos","PET","NP",   # PET is a reserved slot: the pathway is not built.
+                                                                  # Kept because removing an attribute re-maps a.random.
                                 "TX2","LTC","QALY","COST_test","COST_fu","COST_tx2","COST_care","COST_tx")
 l.inputs[["n.attr"]] <- length(l.inputs[["v.attr_names"]])    # number of attributes
 
@@ -38,9 +39,8 @@ l.inputs[["v.DX_val"]]      <- c(0,1)      # 0 = no diagnosis, 1 = diagnosed wit
 l.inputs[["v.SYN_val"]]     <- c(0,0.5,1)  # 0 = healthy, 0.5 = transitional cognitive impairment (TCI), 1 = cognitively impaired
 l.inputs[["v.SEV_val"]]     <- c(0,1,2,3)  # 0 = MCI, 1 = mild dementia, 2 = moderate dementia, 3 = severe dementia
 l.inputs[["v.MEMLOSS_val"]] <- c(0,1)      # 0 = no memory loss, 1 = memory loss
-l.inputs[["v.COGCON_val"]]  <- c(0,1)      # 0 = no subjective cognitive concerns, 1 = has subjective cognitive concerns
+l.inputs[["v.SELECT_val"]]  <- c(0,1)      # 0 = no subjective cognitive concerns, 1 = has subjective cognitive concerns
 l.inputs[["v.TX_val"]]      <- c(0,1)      # 0 = Tx off / not provided / stopped, 1 = Tx on / provided / active (DISEASE-MODIFYING)
-l.inputs[["v.PET_val"]]     <- c(0,1)      # 0 = negative PET scan, 1 = positive PET scan
 l.inputs[["v.NP_val"]]      <- c(0,1)      # 0 = negative neuropsych assessment, 1 = positive neuropsych assessment
 l.inputs[["v.TX2_val"]]     <- c(0,1)      # 0 = no treatment (non-DMT), 1 = given treatment (non-DMT)
 l.inputs[["v.LTC_val"]]  <- c(0,1)      # 0 = not institutionalized / not in long-term care), 1 = institutionalized / in long-term care
@@ -54,12 +54,6 @@ l.inputs[["v.LTC_val"]]  <- c(0,1)      # 0 = not institutionalized / not in lon
 l.inputs[["n.ind"]] <- 10000                               # number of individuals to simulate
 l.inputs[["n.cycle"]] <- 50                                # number of cycles to simulate
 l.inputs[["seed_stochastic"]] <- 20250624                  # seed for generating random values that drive stochastic parameters
-l.inputs[["strategy"]] <- NA                               # empty parameter to be filled in as part of the strategies
-l.inputs[["strategy_strat1"]] <- "control"
-l.inputs[["strategy_strat2"]] <- "intervention_dmt"
-l.inputs[["Tx"]] <- 0                                      # empty parameter to be filled in as part of the strategies
-l.inputs[["Tx_strat1"]] <- 0
-l.inputs[["Tx_strat2"]] <- 1
 l.inputs[["seed_pa"]] <- 20241022                          # seed for generating random values that drive probabilistic analysis (currently not in use)
 l.inputs[["n.psa"]] <- 10                                  # number of PSA iterations (currently not in use)
 l.inputs[["r.discount_QALY"]] <- 0.03
@@ -173,23 +167,7 @@ l.inputs[["r.CDRfast_sd1"]] <- 2.2/sqrt(160)           # individual variation fr
 l.inputs[["r.CDRslow_mean"]] <- 0.6
 l.inputs[["r.CDRslow_sd1"]] <- 1.2/sqrt(358)           # individual variation from mean (slow)
 l.inputs[["r.CDR_sd2"]] <- 0                           # observation-level variation in personal trend
-l.inputs[["r.CDR_sd3"]] <- 0                           # rater error (inter-rater reliability, will be less reliable in MCI, better in dem)
 # CDR-SB rates above are for people with MCI and/or Alzheimer's disease, from https://pmc.ncbi.nlm.nih.gov/articles/PMC2809036/ table 4
-
-## Cognitive test performance
-# Source: Elena Tsoy (both CS and GS at the -1.5z cutoff)
-l.inputs[["sens_BHACS"]] <- c(0.44, 0.48, 0.66, 0.96)  # sens[1] for prodromal CI, sens[2] for memory loss (assumed), sens[3] for MCI, sens[4] for dem
-l.inputs[["spec_BHACS"]] <- 0.93
-
-l.inputs[["sens_BHAGS"]] <- c(0.56, 0.61, 0.84, 0.98)
-l.inputs[["spec_BHAGS"]] <- 0.92
-
-# PCP acts as a downstream filter on BHA-positive patients.
-# Combined sens = BHA_sens[sev] * p.PCP_confirm_TP[sev]; combined spec = BHA_spec + (1-BHA_spec) * p.PCP_reject_FP
-# Indexed by SEV: [1]=MCI, [2]=mild, [3]=moderate, [4]=severe
-l.inputs[["p.PCP_confirm_TP"]] <- c(0.75, 0.88, 0.95, 0.98)
-l.inputs[["p.PCP_reject_FP"]]  <- 0.65   # P(PCP correctly dismisses a BHA false positive)
-
 
 ## Health state utilities
 # from Table 2 (community-dwelling columns) of https://journals.sagepub.com/doi/full/10.1177/13872877251350381
@@ -205,28 +183,14 @@ l.inputs[["c.mci"]] <- 13364 # direct cost of MCI (annual; medical + care)
 l.inputs[["c.mil"]] <- 26727 # direct cost of mild dementia (annual; medical + care)
 l.inputs[["c.mod"]] <- 31644 # direct cost moderate dementia (annual; medical + care)
 l.inputs[["c.sev"]] <- 40645 # direct cost of severe dementia (annual; medical + care)
-l.inputs[["c.bha"]] <- 200   # cost of administering the BHA
-l.inputs[["c.bhapos"]] <- 2000   # cost of follow up with patient with positive BHA
-l.inputs[["c.Tx"]] <- 5000   # cost of DMT
-l.inputs[["c.pet"]] <- 500   # cost of administering a PET scan
-l.inputs[["c.np"]] <- 1000  # cost of neuropsych assessment
-l.inputs[["c.Tx2"]] <- 500   # cost of non-DMT treatment
 
-
-## Treatments
-l.inputs[["rr.Tx_mci"]] <- 0.70
-l.inputs[["Tx_t_max"]] <- 3
-l.inputs[["p.Tx"]] <- c(0,1) # Probability of DMT ineligible, vs. eligible
-l.inputs[["rr.Px_mci"]] <- 1 # Hypothetical -- risk ratio for developing MCI given a prevention intervention (effectiveness of intervention)
 
 ## Scenarios
-
-l.inputs[["m.cogcon_reactive"]] <- readRDS("data/cogcon/m.cogcon_reactive.RDS")
-l.inputs[["m.cogcon_selective"]] <- readRDS("data/cogcon/m.cogcon_selective.RDS")
-l.inputs[["m.cogcon"]] <- l.inputs[["m.cogcon_reactive"]] %>%
-  mutate(h = 1, mci = 1, dem = 1)                   # The default model with not consider cognitive concerns (i.e., everyone has concerns)
-
-l.inputs[["rr.cogcon_prior"]] <- 2    # risk ratio for reporting cognitive concerns if concerns were reported in previous cycle (only acts on t-1)
+# Test performance and testing-pathway costs live in model/test_properties.R.
+# Treatment parameters live in model/intervention_properties.R.
+# Everything that defines a testing STRATEGY -- probs_select, rr.select_prior, the PCP
+# follow-up probabilities, ages, intervals and stop rules -- lives in the scenario
+# config and must not be given a default here.
 
 l.inputs[["scenario"]] <- list(
   title       = "Natural progression model - US",

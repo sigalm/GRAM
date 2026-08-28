@@ -87,9 +87,6 @@ f.qaly_cost <- function(a.out, l.inputs) {
   COST_test <- as.numeric(a.out[,"BHA",]!=-9) * l.inputs[["c.bha"]] + as.numeric(a.out[,"BHA",] == 1) * l.inputs[["c.bhapos"]]
   COST_test[is.na(COST_test)] <- 0
   
-  # COST: PET
-  COST_pet <- as.numeric(a.out[,"PET",]) * l.inputs[["c.pet"]]
-  COST_pet[is.na(COST_pet)] <- 0
   
   # COST: NP Assessment
   COST_np <- as.numeric(a.out[,"NP",]) * l.inputs[["c.np"]]
@@ -116,7 +113,7 @@ f.qaly_cost <- function(a.out, l.inputs) {
   # store
   a.out[,"QALY",] <- QALY0 + QALY1 + QALY2 + QALY3
   a.out[,"COST_test",] <- COST_test
-  a.out[,"COST_fu",] <- COST_pet + COST_np
+  a.out[,"COST_fu",] <- COST_np   # PET pathway is not built; see v.attr_names in setup.R
   a.out[,"COST_tx",] <- COST_tx
   a.out[,"COST_tx2"] <- COST_tx2
   a.out[,"COST_care",] <- COST_care0 + COST_care1 + COST_care2

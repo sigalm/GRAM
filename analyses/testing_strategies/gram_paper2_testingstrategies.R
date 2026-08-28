@@ -353,22 +353,30 @@ names(figures)
 figures[["testers"]] + ylim(NA, 75000)
 
 ## Reporting: methods ####
-# Table 1: testing likelihood by strategy and cognitive state
-reactive_testing_likelihood <- l.inputs_calibrated$m.cogcon_reactive[1, -1]
+# Table 1: testing likelihood by strategy and cognitive state.
+# Read from the configs the run actually used, so the table cannot drift from the
+# scenarios. This replaces a hand-assembled version that quoted the question-based
+# probabilities on the selective row while the main analysis ran the eRADAR ones.
+testing_likelihood_for <- function(keys) {
+  do.call(rbind, lapply(keys, function(k) {
+    scen <- load_scenario(file.path(config_dir, reg_row(k)$config), l.inputs_calibrated)[["scenario"]]
+    m <- scen[["probs_select"]][1, ]
+    data.frame(Strategy = reg_row(k)$label,
+               Healthy = m$h, MCI = m$mci, Dementia = m$dem,
+               `RR if concern last cycle` = scen[["rr.select_prior"]],
+               check.names = FALSE)
+  }))
+}
 
-# selective testing here is the question-based -- need to updated with eRADAR ones from the scenario config
-tab1 <- flextable(as.data.frame(rbind(
-  l.inputs_calibrated$m.cogcon_reactive[1, -1],
-  l.inputs_calibrated$m.cogcon_selective[1, -1],
-  l.inputs_calibrated$m.cogcon[1, -1]
-)))
+tab1 <- flextable(testing_likelihood_for(c(main_keys, sens_selective_keys[-1],
+                                           sens_inclusive_keys[-1])))
 tab1
 
-# Test characteristics quoted in the methods
+# Test characteristics quoted in the methods. BHA_GS comes from model/test_properties.R;
+# rr.select_prior is per-scenario now and appears in tab1 above.
 bha_test_params <- list(
-  sensitivity     = l.inputs_calibrated$sens_BHAGS,
-  specificity     = l.inputs_calibrated$spec_BHAGS,
-  rr_cogcon_prior = l.inputs_calibrated$rr.cogcon_prior
+  sensitivity = BHA_GS$sens,
+  specificity = BHA_GS$spec
 )
 bha_test_params
 

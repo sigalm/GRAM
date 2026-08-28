@@ -80,8 +80,8 @@ This document provides an overview of each major module in the `modules/` direct
 - Simulates observed health states, cognitive test results, diagnoses, and clinical assessments for each individual.
 
 **Attribute Updates:**
-- `f.update_COGCON(v.COGCON.lag, ...)`
-  - Updates observed cognitive concern. For scenarios that do not consider cognitive concerns, this attribute is set to 1 for all individuals. Alternatively, it could be operationalized to flag eligibility for intervention based on different criteria.
+- `f.update_SELECT(v.SELECT.lag, ...)`
+  - Draws whether an individual is selected for testing, from the active scenario's `probs_select` (a probability by true cognitive status, built with `f.select_matrix()`). What this represents depends on the strategy: spontaneous cognitive concern in a reactive programme, an EHR risk flag in a selective one, a random opt-in in an inclusive one. Individuals with a prior diagnosis are never selected. Selection is necessary but not sufficient for a test -- see `f.update_BHA()` for the remaining gates.
 - `f.update_BHA(v.BHA.lag, ...)`
   - Updates Brain Health Assessment (BHA) test result. Whether an eligible individual is tested in a given cycle is governed by the active scenario's `stop_rule()`, which can retire someone from further testing based on their testing history (e.g. a previous positive result, or reaching a maximum age). See `scenario_TEMPLATE_config.R` for the arguments a `stop_rule` receives.
 - `f.update_CDR_obs(v.CDR_obs.lag, ...)`
