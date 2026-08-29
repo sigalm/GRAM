@@ -131,16 +131,23 @@ post_processing_outputs <- function(output_array) {
   
   # Early detection is a DISPLAY split only, for show_early_pos = TRUE. The bands
   # are carved OUT of the totals above rather than added to them, so they always
-  # sum back exactly. Two things went wrong when they were computed independently:
-  # converted_tp was a strict subset of tp_direct (ever_fp implies dx_results == 1,
-  # which cummax then carries forward), so tp + converted_tp double-counted; and
-  # ever_fp keys on syn_status == 0 rather than < 1, so a first positive during
-  # TCI landed in neither FP band and vanished from fp + early_pos.
+  # sum back exactly -- every consumer of this frame reads tp + converted_tp and
+  # fp + early_pos, so where the boundary falls changes no reported metric. It was
+  # once computed independently of the totals and converted_tp came out a strict
+  # subset of tp_direct (ever_early implies dx_results == 1, which cummax then
+  # carries forward), so tp + converted_tp double-counted.
   #
-  # ever_early keeps the syn_status == 0 test on purpose: "early" means flagged
-  # before any sign at all, not merely before conversion. TCI-first positives are
-  # therefore ordinary false positives, and now land in real_fp instead of nowhere.
-  ever_early <- apply(((dx_results == 1) & (syn_status == 0)), 2, cummax)
+  # ever_early tests syn_status < 1, not == 0: a positive is EARLY if it landed
+  # before the person was impaired, and TCI is not impairment (SYN 0.5, not 1).
+  # Being flagged during TCI and converting later is an early catch for exactly
+  # the reason being flagged while healthy and converting later is. This is the
+  # same rule as anchored_performance's `early` and as the NNT table's early
+  # catch; all three now agree, and TCI is the larger half of what they count.
+  #
+  # will_be_impaired is what separates early from wrong: a positive during TCI in
+  # someone who never goes on to convert is an ordinary false positive, and lands
+  # in real_fp.
+  ever_early <- apply(((dx_results == 1) & (syn_status < 1)), 2, cummax)
   will_be_impaired <- colSums(syn_status == 1, na.rm = TRUE) > 0
   early_flag <- t(t(ever_early) & will_be_impaired)
   

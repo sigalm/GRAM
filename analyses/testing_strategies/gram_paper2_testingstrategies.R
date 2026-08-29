@@ -213,7 +213,8 @@ strategy_stats <- if (stats_cached) {
     # which is what makes it cover BOTH ways of being early, flagged while healthy
     # and flagged during TCI. Verified against the arrays: every early catch has
     # SYN 0 or 0.5 at first_pos, every non-early one has SYN 1, and TCI is the
-    # larger half of the early group in all three main strategies.
+    # larger half of the early group in all three main strategies. The figure bands
+    # in post_processing_outputs() and anchored_performance() use the same rule.
     early      <- got[first_pos[got] < first_tp[got]]
     syn_at_pos <- syn[cyc, ][cbind(first_pos[early], early)]
 
@@ -291,8 +292,9 @@ undx_pool <- function(scenario_array, age) {
 # notest_tn/notest_fn are 0 and the metrics are TEST-level -- do not put them in the
 # same table as the programme-end figures.
 #
-# Positives keep the paper's early_pos / fp distinction: a positive in someone healthy
-# now but impaired later is an early catch, not a plain false positive. converted_tp is
+# Positives keep the paper's early_pos / fp distinction: a positive in someone not yet
+# impaired -- healthy or in TCI -- who is impaired later is an early catch, not a plain
+# false positive. converted_tp is
 # structurally empty -- "positive while healthy, impaired now" cannot happen within one
 # cycle -- so it is fixed at 0 and the formulas are predictive_value's with it dropped.
 #
@@ -608,11 +610,6 @@ results_table_for <- function(keys, at_end_followup = end_age,
 # positive. Checked against the arrays: every early catch has SYN 0 or 0.5 when
 # flagged, every non-early one has SYN 1, and TCI is roughly two thirds of the
 # early group in each main strategy (strategy_stats$n_early_at_tci has the split).
-#
-# NB this is deliberately NOT the same "early" as the figure bands. show_early_pos
-# in post_processing_outputs() keys on SYN == 0 only, so it treats a TCI-first
-# positive as an ordinary false positive; see the comment there for why that
-# display split wants the stricter reading.
 #
 # UNRESOLVED, for the team: anyone flagged before they were impaired necessarily
 # enters the identified state at the moment they convert, which is by definition
