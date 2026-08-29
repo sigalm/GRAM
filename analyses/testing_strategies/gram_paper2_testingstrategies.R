@@ -76,6 +76,29 @@ sens_selective_keys <- c("s1bhapos_emr", "s1bhapos_question")
 sens_inclusive_keys <- c("u3bhapos_rand50", "u3bhapos_nonrand")
 pcp_keys            <- keys_in("pcp")
 
+# A comparison is either complete or it is not produced. Two ways a subset run used
+# to go wrong: a group with no scenarios in the run yielded an empty figure, which
+# ggsave turned into a blank jpeg and an error that killed the rest of the loop, or a
+# 0-row table; and a group missing only SOME of its keys silently rendered a partial
+# comparison that looked complete. NB an empty `keys` has nothing "missing" --
+# keys_in() returns character(0) when no scenario of that group ran -- so the empty
+# case has to be tested separately.
+skip_incomplete <- function(keys, what) {
+  missing <- setdiff(keys, scenarios_to_run)
+  if (!length(keys) || length(missing)) {
+    message("Skipping ", what, ": ",
+            if (!length(keys)) "no scenarios from this group are in the current run."
+            else paste0("not in this run -- ", paste(missing, collapse = ", "),
+                        ". Add them to scenarios_to_run, or set run_id to a run that has them."))
+    return(TRUE)
+  }
+  FALSE
+}
+
+# flextable() on a skipped (NULL) table errors, so the tail of the script goes
+# through this instead.
+as_flex <- function(x) if (is.null(x)) invisible(NULL) else flextable(x)
+
 testing_window <- 65:80   # matches age_first_test / age_stop_test in every config
 plot_ages      <- 65:80
 plot_y_max     <- 75000
@@ -330,21 +353,7 @@ figure_specs <- list(
 # Draws and saves every panel; returns them so any one can be viewed, e.g.
 #   figures[["sens-selective"]]
 figures <- setNames(lapply(figure_specs, function(spec) {
-  # A figure is only drawn when EVERY scenario it compares is in the current run.
-  # Two ways this used to go wrong when scenarios_to_run was a subset: a spec whose
-  # keys were all missing produced an empty facet, which ggsave turned into a blank
-  # jpeg and an error that killed the rest of the loop; and a spec missing only some
-  # keys silently rendered a partial comparison that looked complete.
-  # NB an empty spec$keys has nothing "missing" -- keys_in() returns character(0) when
-  # no scenario of that group ran -- so the empty case has to be tested separately.
-  missing <- setdiff(spec$keys, unique(all_test_data$scenario))
-  if (!length(spec$keys) || length(missing)) {
-    message("Skipping figure '", spec$name, "': ",
-            if (!length(spec$keys)) "no scenarios from this group are in the current run."
-            else paste0("not in this run -- ", paste(missing, collapse = ", "),
-                        ". Add them to scenarios_to_run, or set run_id to a run that has them."))
-    return(NULL)
-  }
+  if (skip_incomplete(spec$keys, paste0("figure '", spec$name, "'"))) return(NULL)
 
   d    <- test_data_for(spec$keys)
   labs <- labels_for(spec$keys)
@@ -503,6 +512,7 @@ as_pct_row <- function(d, time, strategy) {
 # why that row is NOT comparable with the year-10 one.
 results_table_for <- function(keys, at_end_followup = end_age,
                               anchor = c("first_visit", "first_test")) {
+  if (skip_incomplete(keys, "results table")) return(NULL)
   anchor <- match.arg(anchor)
   first_label <- if (anchor == "first_visit") "First Visit" else "First Test"
 
@@ -537,6 +547,7 @@ results_table_for <- function(keys, at_end_followup = end_age,
 # judgement about what the paper is claiming, not a coding question. Shown as a
 # separate count for now so the choice is visible rather than buried.
 nnt_table_for <- function(keys) {
+  if (skip_incomplete(keys, "NNT table")) return(NULL)
   d <- strategy_stats[match(keys, strategy_stats$scenario), ]
   data.frame(
     Strategy                    = reg_row(keys)$label,
@@ -552,7 +563,7 @@ nnt_table_for <- function(keys) {
 }
 
 nnt_table <- nnt_table_for(main_keys)
-flextable(nnt_table)
+as_flex(nnt_table)
 
 # Same table for the other groups, if the call runs long
 nnt_table_sens_selective <- nnt_table_for(sens_selective_keys)
@@ -561,14 +572,14 @@ nnt_table_pcp            <- nnt_table_for(pcp_keys)
 
 
 results_table <- results_table_for(main_keys)
-flextable(results_table)
+as_flex(results_table)
 
 results_table_sens_selective <- results_table_for(sens_selective_keys)
-flextable(results_table_sens_selective)
+as_flex(results_table_sens_selective)
 
 results_table_sens_inclusive <- results_table_for(sens_inclusive_keys)
-flextable(results_table_sens_inclusive)
+as_flex(results_table_sens_inclusive)
 
 results_table_pcp <- results_table_for(pcp_keys)
-flextable(results_table_pcp)
+as_flex(results_table_pcp)
 
