@@ -23,7 +23,7 @@ l.inputs_calibrated[["n.ind"]] <- 100000
 # Outcomes reported:
 #   (a) overall sensitivity/specificity (i.e., strategy level)
 #   (b) overall PPV and NPV
-#   all at two time points: at first visit in which testing is possible, and at end of program (age 80)
+#   all at two time points: at the first cycle in which testing is possible, and at end of program (age 80)
 
 # Sensitivity analyses
 #   (1) a question-based selective option
@@ -261,8 +261,8 @@ undx_pool <- function(scenario_array, age) {
 # Performance at a per-person anchor rather than a common calendar age, so a staggered
 # rollout needs no special case. Two anchors are available:
 #
-#   anchor = "visit"  each person's FIRST VISIT: the first cycle they are due for a
-#                     test, whether or not one happens. Preferred.
+#   anchor = "visit"  each person's FIRST CYCLE due: the first cycle they are due
+#                     for a test, whether or not one happens. Preferred.
 #   anchor = "test"   each person's FIRST ACTUAL TEST, whenever that falls. Kept for
 #                     the "who did each strategy actually test?" question.
 #
@@ -274,7 +274,7 @@ undx_pool <- function(scenario_array, age) {
 # tested stay in the denominator as misses, so the metrics are PROGRAM-level and
 # comparable with the year-10 row. Under "test" nobody is untested by construction, so
 # notest_tn/notest_fn are 0 and the metrics are TEST-level -- do not put them in the
-# same table as the year-10 figures.
+# same table as the programme-end figures.
 #
 # Positives keep the paper's early_pos / fp distinction: a positive in someone healthy
 # now but impaired later is an early catch, not a plain false positive. converted_tp is
@@ -523,10 +523,13 @@ predictive_value <- all_test_data %>%
          spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
          acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
 
-as_pct_row <- function(d, time, strategy) {
+# `eligible_tested` is supplied by the caller rather than read off `d`, because its
+# denominator is row-specific -- see results_table_for.
+as_pct_row <- function(d, time, strategy, eligible_tested) {
   pct <- function(x) round(x * 100, digits = 1)
   data.frame(Time                    = time,
              Strategy                = strategy,
+             `Eligible tested`       = pct(eligible_tested),
              Sensitivity             = pct(d$sens),
              `Sensitivity, MCI`      = pct(d$sens_mci),
              `Sensitivity, dementia` = pct(d$sens_dem),
@@ -537,24 +540,36 @@ as_pct_row <- function(d, time, strategy) {
              check.names = FALSE)
 }
 
-# "First Visit" is read at each person's own first-visit cycle, so no calendar age is
-# involved. "By Year 10" is the calendar snapshot. Both are program-level: eligible
-# people who were never tested count as misses in each.
+# "First Cycle" is read at each person's own first cycle due for a test, so no calendar
+# age is involved. "By Program End" is the calendar snapshot at end_age. Both are
+# program-level: eligible people who were never tested count as misses in each.
 # anchor = "first_test" swaps in the test-level first row; see anchored_performance for
-# why that row is NOT comparable with the year-10 one.
+# why that row is NOT comparable with the program-end one.
+#
+# "Eligible tested" is the share of eligible people the strategy actually tested. Its
+# denominator is MATCHED TO THE ROW, so the column reads consistently as reach-so-far:
+# on the First Cycle row, of those due a test that cycle, the share tested; on the
+# Program End row, of everyone ever eligible across the whole window, the share ever
+# tested. Under anchor = "first_test" the first row is 100% by construction -- nobody
+# is untested there -- which is one more reason that row does not belong beside the
+# program-end one.
 results_table_for <- function(keys, at_end_followup = end_age,
                               anchor = c("first_visit", "first_test")) {
   if (skip_incomplete(keys, "results table")) return(NULL)
   anchor <- match.arg(anchor)
-  first_label <- if (anchor == "first_visit") "First Visit" else "First Test"
+  first_label <- if (anchor == "first_visit") "First Cycle" else "First Test"
 
   first <- do.call(rbind, lapply(keys, function(scen) {
-    as_pct_row(scenario_reports[[scen]][[anchor]]$perf, first_label, reg_row(scen)$label)
+    fv <- scenario_reports[[scen]][[anchor]]$perf
+    as_pct_row(fv, first_label, reg_row(scen)$label,
+               eligible_tested = fv$n_tested / fv$n_visited)
   }))
 
   later <- do.call(rbind, lapply(keys, function(scen) {
+    st <- strategy_stats[match(scen, strategy_stats$scenario), ]
     as_pct_row(predictive_value %>% filter(scenario == scen, age == at_end_followup),
-               "By Program End", reg_row(scen)$label)
+               "By Program End", reg_row(scen)$label,
+               eligible_tested = st$n_people / st$n_eligible)
   }))
 
   rbind(first, later)
