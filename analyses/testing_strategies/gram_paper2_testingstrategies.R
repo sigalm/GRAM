@@ -79,7 +79,7 @@ pcp_keys            <- keys_in("pcp")
 testing_window <- 65:80   # matches age_first_test / age_stop_test in every config
 plot_ages      <- 65:80
 plot_y_max     <- 75000
-year10_age     <- 75      # 10 years after testing opens
+end_age        <- 80      # end of follow up period for reporting
 
 
 ## Paths and run id ####
@@ -501,7 +501,7 @@ as_pct_row <- function(d, time, strategy) {
 # people who were never tested count as misses in each.
 # anchor = "first_test" swaps in the test-level first row; see anchored_performance for
 # why that row is NOT comparable with the year-10 one.
-results_table_for <- function(keys, at_year10 = year10_age,
+results_table_for <- function(keys, at_end_followup = end_age,
                               anchor = c("first_visit", "first_test")) {
   anchor <- match.arg(anchor)
   first_label <- if (anchor == "first_visit") "First Visit" else "First Test"
@@ -511,8 +511,8 @@ results_table_for <- function(keys, at_year10 = year10_age,
   }))
 
   later <- do.call(rbind, lapply(keys, function(scen) {
-    as_pct_row(predictive_value %>% filter(scenario == scen, age == at_year10),
-               "By Year 10", reg_row(scen)$label)
+    as_pct_row(predictive_value %>% filter(scenario == scen, age == at_end_followup),
+               "By Program End", reg_row(scen)$label)
   }))
 
   rbind(first, later)
