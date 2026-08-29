@@ -16,14 +16,14 @@ l.inputs_calibrated[["n.ind"]] <- 100000
 
 # Analysis plan:
 # Strategies analyzed will follow the GRAM-ish one-time testing paper
-#   (1) reactive testing
-#   (2) selective with eRADAR/EHR-based
+#   (1) reactive testing (with rr 2.0 at a later cycle if previously opted in)
+#   (2) selective with eRADAR/EHR-based (with rr 2.0 at a later cycle if previously flagged)
 #   (3) inclusive 50% random opt-in (with rr 2.0 at a later cycle if previously opted in)
 
 # Outcomes reported:
 #   (a) overall sensitivity/specificity (i.e., strategy level)
 #   (b) overall PPV and NPV
-#   all at two time points: at first visit in which testing is possible, and after 10 years
+#   all at two time points: at first visit in which testing is possible, and at end of program (age 80)
 
 # Sensitivity analyses
 #   (1) a question-based selective option
@@ -56,7 +56,7 @@ scenario_registry <- tibble::tribble(
 )
 
 # Subset this to re-run only part of the set
-scenarios_to_run <- scenario_registry$key
+scenarios_to_run <- scenario_registry$key[1:3]
 
 reg_row    <- function(key) scenario_registry[match(key, scenario_registry$key), ]
 labels_for <- function(keys) setNames(reg_row(keys)$label, keys)
@@ -69,6 +69,9 @@ keys_in    <- function(...) {
 ## Analysis groups and shared constants ####
 # Declared here, not inside the figure block, so tables do not depend on plots having run
 main_keys           <- keys_in("main")
+# Literal rather than keys_in("sens"): each pairs a main-analysis scenario with its
+# sensitivity variant, which the registry groups cannot express. Not filtered by
+# scenarios_to_run -- the figure loop checks availability instead.
 sens_selective_keys <- c("s1bhapos_emr", "s1bhapos_question")
 sens_inclusive_keys <- c("u3bhapos_rand50", "u3bhapos_nonrand")
 pcp_keys            <- keys_in("pcp")
@@ -327,6 +330,22 @@ figure_specs <- list(
 # Draws and saves every panel; returns them so any one can be viewed, e.g.
 #   figures[["sens-selective"]]
 figures <- setNames(lapply(figure_specs, function(spec) {
+  # A figure is only drawn when EVERY scenario it compares is in the current run.
+  # Two ways this used to go wrong when scenarios_to_run was a subset: a spec whose
+  # keys were all missing produced an empty facet, which ggsave turned into a blank
+  # jpeg and an error that killed the rest of the loop; and a spec missing only some
+  # keys silently rendered a partial comparison that looked complete.
+  # NB an empty spec$keys has nothing "missing" -- keys_in() returns character(0) when
+  # no scenario of that group ran -- so the empty case has to be tested separately.
+  missing <- setdiff(spec$keys, unique(all_test_data$scenario))
+  if (!length(spec$keys) || length(missing)) {
+    message("Skipping figure '", spec$name, "': ",
+            if (!length(spec$keys)) "no scenarios from this group are in the current run."
+            else paste0("not in this run -- ", paste(missing, collapse = ", "),
+                        ". Add them to scenarios_to_run, or set run_id to a run that has them."))
+    return(NULL)
+  }
+
   d    <- test_data_for(spec$keys)
   labs <- labels_for(spec$keys)
 
