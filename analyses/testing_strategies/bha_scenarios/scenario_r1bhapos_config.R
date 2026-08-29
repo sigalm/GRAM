@@ -16,9 +16,11 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,                     # age at which to stop testing
-  # Spontaneous, patient-initiated concern. Carried over verbatim from the retired
-  # data/cogcon/m.cogcon_reactive.RDS (KP preliminary data).
-  probs_select = f.select_matrix(h = 0.01, mci = 0.1, dem = 0.3),
+  # Reactive: spontaneous, patient-initiated concern.
+  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
+  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Workbook TCI folds into h; workbook memory loss folds into mci.
+  probs_select = f.select_matrix(h = 0.005, mci = 0.2, dem = 0.9),
   rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 1,    # years between BHA administrations
   

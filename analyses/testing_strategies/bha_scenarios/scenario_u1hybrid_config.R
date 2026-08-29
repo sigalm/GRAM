@@ -17,7 +17,7 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  # Everyone eligible is tested; cognitive concern is not a gate.
+  # Universal: everyone assessable is tested; selection is not a gate.
   probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),
   rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   prob_pcpfu = 0.2,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test

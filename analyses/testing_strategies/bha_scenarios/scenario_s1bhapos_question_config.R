@@ -16,9 +16,11 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
-  # Provider-prompted at an annual wellness visit. Carried over verbatim from the
-  # retired data/cogcon/m.cogcon_selective.RDS (KP preliminary data).
-  probs_select = f.select_matrix(h = 0.05, mci = 0.4, dem = 0.8),
+  # Selective: question-based prompt at an annual wellness visit.
+  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
+  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Workbook TCI folds into h; workbook memory loss folds into mci.
+  probs_select = f.select_matrix(h = 0.07, mci = 0.7, dem = 0.95),
   rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 1,    # years between BHA administrations
   

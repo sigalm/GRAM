@@ -16,8 +16,11 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,                     # age at which last BHA is administered
-  # Non-random opt-in: impaired individuals self-select at twice the healthy rate.
-  probs_select = f.select_matrix(h = 0.315, mci = 0.63, dem = 0.63),
+  # Inclusive: 50% opt-in with self-selection by cognitive status.
+  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
+  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Workbook TCI folds into h; workbook memory loss folds into mci.
+  probs_select = f.select_matrix(h = 0.46, mci = 0.92, dem = 0.92),
   rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 3,    # years between BHA administrations
   prob_pcpfu = 0,         # Explicitly set to 0 to prevent default PCP follow-up behavior

@@ -16,7 +16,10 @@ scenario_inputs <- list(
   # Core scenario parameters
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,                     # age at which last BHA is administered
-  # 50% random opt-in, independent of cognitive status.
+  # Inclusive: 50% random opt-in, independent of cognitive status.
+  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
+  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
   rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
   repeat_interval = 3,    # years between BHA administrations

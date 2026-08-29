@@ -184,8 +184,8 @@ scenario_inputs <- list(
   # Probability of being selected for testing, by true cognitive status.
   # h covers everyone with SYN < 1 (healthy AND TCI); mci is SEV == 0; dem is SEV >= 1.
   probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),   # universal: everyone tested
-  # f.select_matrix(h = 0.01, mci = 0.10, dem = 0.30)        # reactive: spontaneous concern
-  # f.select_matrix(h = 0.05, mci = 0.40, dem = 0.80)        # selective: prompted at a visit
+  # f.select_matrix(h = 0.005, mci = 0.20, dem = 0.90)      # reactive: spontaneous concern
+  # f.select_matrix(h = 0.07, mci = 0.70, dem = 0.95)        # selective: prompted at a visit
   rr.select_prior = 2,      # RR of reporting concern again after reporting it last cycle
   
   prob_pcpfu      = NULL,   # Probability of PCP follow-up (NULL = no follow-up)
@@ -243,8 +243,12 @@ for (scen in names(scenario_list)) {
   Build it with `f.select_matrix(h =, mci =, dem =)`. There is no default: a scenario that
   sets `test` must declare its own, and `load_scenario()` errors if it does not.
   - Universal: `f.select_matrix(h = 1, mci = 1, dem = 1)`
-  - Selective (prompted at a visit): `f.select_matrix(h = 0.05, mci = 0.40, dem = 0.80)`
-  - Reactive (spontaneous concern): `f.select_matrix(h = 0.01, mci = 0.10, dem = 0.30)`
+  - Selective (prompted at a visit): `f.select_matrix(h = 0.07, mci = 0.70, dem = 0.95)`
+  - Reactive (spontaneous concern): `f.select_matrix(h = 0.005, mci = 0.20, dem = 0.90)`
+
+  `h` covers everyone with `SYN < 1`, so TCI is selected at the healthy rate; `mci` covers
+  `SEV == 0`, so non-progressive memory loss is selected at the MCI rate. Source estimates
+  that separate those strata must be collapsed accordingly.
 
   Functionally this is just a selection probability by true status, so it can encode any
   probabilistic eligibility rule -- a 50% random opt-in is `h = mci = dem = 0.5`. Note `h`
