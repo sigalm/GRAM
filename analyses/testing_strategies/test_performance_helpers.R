@@ -120,6 +120,7 @@ post_processing_outputs <- function(output_array) {
   dx_results <- apply(bha_dx_results, 2, cummax)
   
   syn_status <- output_array[, "SYN", ]
+  sev_status <- output_array[, "SEV", ]
   
   # Everyone holding a standing positive verdict falls into exactly one of these
   # two totals, on their CURRENT status: a positive in someone not yet impaired
@@ -183,6 +184,15 @@ post_processing_outputs <- function(output_array) {
   deaths <- output_array[,"ALIVE",] == 0
   alive  <- output_array[,"ALIVE",] == 1
   
+  # MCI vs dementia split of the impaired series, on SEV at the cycle the person
+  # is counted -- caught AT MCI, not has MCI now. TCI never reaches here:
+  # syn_status == 0.5 is not impaired, so a TCI cycle sits in the healthy series
+  # throughout this file. Each pair sums back to its parent exactly.
+  at_mci <- sev_status == 0
+  at_dem <- sev_status >= 1
+  n_mci  <- function(m) rowSums(m & at_mci, na.rm = TRUE)
+  n_dem  <- function(m) rowSums(m & at_dem, na.rm = TRUE)
+  
   # create data frame
   plot_data <- data.frame(
     age = 50:(50 + dim(output_array)[1] - 1),
@@ -194,6 +204,10 @@ post_processing_outputs <- function(output_array) {
     fn = rowSums(fn, na.rm = TRUE),
     notest_tn = rowSums(notest_tn, na.rm = TRUE),
     notest_fn = rowSums(notest_fn, na.rm = TRUE),
+    tp_mci = n_mci(tp_direct), tp_dem = n_dem(tp_direct),
+    converted_tp_mci = n_mci(converted_tp), converted_tp_dem = n_dem(converted_tp),
+    fn_mci = n_mci(fn), fn_dem = n_dem(fn),
+    notest_fn_mci = n_mci(notest_fn), notest_fn_dem = n_dem(notest_fn),
     clinical_dx = rowSums(clinical_dx, na.rm = TRUE),
     not_eligible = rowSums(not_eligible, na.rm = TRUE),
     alive = rowSums(alive, na.rm = TRUE),

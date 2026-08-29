@@ -164,7 +164,9 @@ for (scen in scenarios_to_run) {
 # post_processing_outputs(), would silently serve stale results.
 stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests",
                 "n_identified", "n_at_mci", "n_at_dem", "n_early_catch")
-perf_cols  <- c("not_eligible", "alive")
+perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
+                "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
+                "not_eligible", "alive")
 
 stats_cached <- file.exists(stats_file()) &&
   all(stats_cols %in% names(readRDS(stats_file()))) &&
@@ -278,6 +280,12 @@ undx_pool <- function(scenario_array, age) {
 # now but impaired later is an early catch, not a plain false positive. converted_tp is
 # structurally empty -- "positive while healthy, impaired now" cannot happen within one
 # cycle -- so it is fixed at 0 and the formulas are predictive_value's with it dropped.
+#
+# Sensitivity is also reported split by the severity of the impairment being missed:
+# SEV 0 is MCI, SEV >= 1 is dementia of any stage. TCI never enters either, because
+# impairment here is SYN == 1 and TCI is SYN == 0.5 -- so TCI sits with the healthy,
+# which is how every other definition in this analysis treats it. Specificity takes no
+# such split: its denominator is the unimpaired, who have no severity.
 anchored_performance <- function(scenario_array, anchor = c("visit", "test")) {
   anchor <- match.arg(anchor)
   bha <- scenario_array[, "BHA", ]
@@ -298,6 +306,8 @@ anchored_performance <- function(scenario_array, anchor = c("visit", "test")) {
   impaired <- syn[idx] == 1
   early    <- will_be_impaired[visited]
   tested   <- res >= 0
+  at_mci   <- impaired & sev[idx] == 0    # SEV only means anything where impaired,
+  at_dem   <- impaired & sev[idx] >= 1    # so both are gated on it
 
   perf <- data.frame(
     n_visited = length(visited),
@@ -309,9 +319,17 @@ anchored_performance <- function(scenario_array, anchor = c("visit", "test")) {
     tn = sum(res ==  0 & !impaired),
     fn = sum(res ==  0 &  impaired),
     notest_tn = sum(res == -8 & !impaired),
-    notest_fn = sum(res == -8 &  impaired)
+    notest_fn = sum(res == -8 &  impaired),
+    tp_mci        = sum(res ==  1 & at_mci),
+    fn_mci        = sum(res ==  0 & at_mci),
+    notest_fn_mci = sum(res == -8 & at_mci),
+    tp_dem        = sum(res ==  1 & at_dem),
+    fn_dem        = sum(res ==  0 & at_dem),
+    notest_fn_dem = sum(res == -8 & at_dem)
   ) %>%
     mutate(sens = tp / (tp + fn + notest_fn),
+           sens_mci = tp_mci / (tp_mci + fn_mci + notest_fn_mci),
+           sens_dem = tp_dem / (tp_dem + fn_dem + notest_fn_dem),
            spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
            ppv  = tp / (tp + early_pos + fp),
            npv  = (tn + notest_tn) / (tn + notest_tn + fn + notest_fn),
@@ -498,17 +516,25 @@ predictive_value <- all_test_data %>%
   mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
          npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
          sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
+         sens_mci = (tp_mci + converted_tp_mci) /
+                      (tp_mci + converted_tp_mci + fn_mci + notest_fn_mci),
+         sens_dem = (tp_dem + converted_tp_dem) /
+                      (tp_dem + converted_tp_dem + fn_dem + notest_fn_dem),
          spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
          acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
 
 as_pct_row <- function(d, time, strategy) {
-  data.frame(Time = time,
-             Strategy = strategy,
-             Sensitivity = round(d$sens * 100, digits = 1),
-             Specificity = round(d$spec * 100, digits = 1),
-             PPV = round(d$ppv * 100, digits = 1),
-             NPV = round(d$npv * 100, digits = 1),
-             Accuracy = round(d$acc * 100, digits = 1))
+  pct <- function(x) round(x * 100, digits = 1)
+  data.frame(Time                    = time,
+             Strategy                = strategy,
+             Sensitivity             = pct(d$sens),
+             `Sensitivity, MCI`      = pct(d$sens_mci),
+             `Sensitivity, dementia` = pct(d$sens_dem),
+             Specificity             = pct(d$spec),
+             PPV                     = pct(d$ppv),
+             NPV                     = pct(d$npv),
+             Accuracy                = pct(d$acc),
+             check.names = FALSE)
 }
 
 # "First Visit" is read at each person's own first-visit cycle, so no calendar age is
