@@ -157,13 +157,17 @@ for (scen in scenarios_to_run) {
 #   n_at_mci /    the same people, split on SEV at the cycle they were FIRST
 #   n_at_dem      correctly identified: caught at MCI vs caught at dementia.
 #   n_early_catch of those, the ones already flagged positive BEFORE they were
-#                 impaired. See the NNT table for why this one needs care.
+#                 impaired -- flagged while healthy OR while in TCI. See the NNT
+#                 table for why this one needs care.
+#   n_early_at_tci the subset of those flagged during TCI rather than while
+#                 outright healthy. Not in any table; carried so the split behind
+#                 the NNT footnote can be read off without re-deriving it.
 #
 # Cached, but only reused if BOTH caches carry every column the reporting code
 # reads -- otherwise adding a statistic here, or a column to
 # post_processing_outputs(), would silently serve stale results.
-stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests",
-                "n_identified", "n_at_mci", "n_at_dem", "n_early_catch")
+stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests", "n_identified",
+                "n_at_mci", "n_at_dem", "n_early_catch", "n_early_at_tci")
 perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
                 "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
                 "not_eligible", "alive")
@@ -203,6 +207,16 @@ strategy_stats <- if (stats_cached) {
     got    <- which(!is.na(first_tp))
     sev_at <- sev[cyc, ][cbind(first_tp[got], got)]
 
+    # Early catch: the standing positive predates the first cycle the person is
+    # both positive and impaired. cummax makes first_pos <= first_tp always, so
+    # the strict inequality is exactly "not impaired at the moment of flagging" --
+    # which is what makes it cover BOTH ways of being early, flagged while healthy
+    # and flagged during TCI. Verified against the arrays: every early catch has
+    # SYN 0 or 0.5 at first_pos, every non-early one has SYN 1, and TCI is the
+    # larger half of the early group in all three main strategies.
+    early      <- got[first_pos[got] < first_tp[got]]
+    syn_at_pos <- syn[cyc, ][cbind(first_pos[early], early)]
+
     res_row <- data.frame(
       scenario      = scen,
       n_eligible    = sum(apply(elig, 2, any, na.rm = TRUE)),
@@ -211,7 +225,8 @@ strategy_stats <- if (stats_cached) {
       n_identified  = length(got),
       n_at_mci      = sum(sev_at == 0),
       n_at_dem      = sum(sev_at >= 1),
-      n_early_catch = sum(first_pos[got] < first_tp[got]))
+      n_early_catch  = length(early),
+      n_early_at_tci = sum(syn_at_pos == 0.5))
 
     rm(output, bha, pcp, syn, sev, res, dxr, elig)
     invisible(gc())
@@ -585,14 +600,27 @@ results_table_for <- function(keys, at_end_followup = end_age,
 # while impaired, and the MCI/dementia split is their SEV at that cycle -- caught
 # at MCI, not has MCI now.
 #
-# UNRESOLVED, for the team: the last column. Anyone flagged positive before they
-# were impaired necessarily enters the identified state at the moment they
-# convert, which is by definition MCI -- so an early catch can ONLY ever land in
-# the MCI column, never in dementia. That is 5% of Reactive's MCI count, 13% of
-# Selective's, and 42% of Inclusive's. Whether those belong in "caught at MCI",
-# in a column of their own, or outside the NNT denominator altogether is a
-# judgement about what the paper is claiming, not a coding question. Shown as a
-# separate count for now so the choice is visible rather than buried.
+# The last column counts EARLY catches, and it counts both ways of being early:
+# flagged while outright healthy and later converting, and flagged during TCI and
+# later converting. Both fall out of the same test -- the standing positive
+# predates the first impaired-and-positive cycle -- because impairment here is
+# SYN == 1 and TCI is SYN == 0.5, so a TCI-cycle positive is not yet a true
+# positive. Checked against the arrays: every early catch has SYN 0 or 0.5 when
+# flagged, every non-early one has SYN 1, and TCI is roughly two thirds of the
+# early group in each main strategy (strategy_stats$n_early_at_tci has the split).
+#
+# NB this is deliberately NOT the same "early" as the figure bands. show_early_pos
+# in post_processing_outputs() keys on SYN == 0 only, so it treats a TCI-first
+# positive as an ordinary false positive; see the comment there for why that
+# display split wants the stricter reading.
+#
+# UNRESOLVED, for the team: anyone flagged before they were impaired necessarily
+# enters the identified state at the moment they convert, which is by definition
+# MCI -- so an early catch can ONLY ever land in the MCI column, never in
+# dementia. Whether those belong in "caught at MCI", in a column of their own, or
+# outside the NNT denominator altogether is a judgement about what the paper is
+# claiming, not a coding question. Shown as a separate count for now so the
+# choice is visible rather than buried.
 nnt_table_for <- function(keys) {
   if (skip_incomplete(keys, "NNT table")) return(NULL)
   d <- strategy_stats[match(keys, strategy_stats$scenario), ]
@@ -605,7 +633,7 @@ nnt_table_for <- function(keys) {
     `Tests per 10 at MCI`       = round(d$nnt10_at_mci, 1),
     `Caught at dementia`        = d$n_at_dem,
     `Tests per 10 at dementia`  = round(d$nnt10_at_dem, 1),
-    `of MCI: flagged pre-onset` = d$n_early_catch,
+    `of MCI: flagged before impairment` = d$n_early_catch,
     check.names = FALSE)
 }
 
