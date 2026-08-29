@@ -171,8 +171,17 @@ post_processing_outputs <- function(output_array) {
   notest_tn <- eligible & !ever_tested & syn_status != 1
   notest_fn <- eligible & !ever_tested & syn_status == 1
   
-  # deaths
+  # Alive, never tested, and NOT eligible: no provider, or already carrying a
+  # clinical diagnosis. Kept apart from notest_tn / notest_fn on purpose -- those
+  # two measure a coverage gap the programme could still close, and someone
+  # ineligible is not that. Together with the four tested cells, the two notest_
+  # cells and the deaths below, this partitions the starting cohort exactly.
+  # NA in cycle 1, where DX has no lag, so the partition only closes from cycle 2.
+  not_eligible <- (output_array[,"ALIVE",] == 1) & !ever_tested & !eligible
+  
+  # deaths, and the survivors they are the complement of
   deaths <- output_array[,"ALIVE",] == 0
+  alive  <- output_array[,"ALIVE",] == 1
   
   # create data frame
   plot_data <- data.frame(
@@ -186,6 +195,8 @@ post_processing_outputs <- function(output_array) {
     notest_tn = rowSums(notest_tn, na.rm = TRUE),
     notest_fn = rowSums(notest_fn, na.rm = TRUE),
     clinical_dx = rowSums(clinical_dx, na.rm = TRUE),
+    not_eligible = rowSums(not_eligible, na.rm = TRUE),
+    alive = rowSums(alive, na.rm = TRUE),
     death = rowSums(deaths))
   
   return(plot_data)
@@ -463,10 +474,10 @@ plot_testers <- function(plot_data,
   
 }
 
-######################################## COUNTS + COMPOSITION FIGURE ########################################
+######################################## COUNTS + COHORT-SHARE FIGURE ########################################
 #
 # plot_counts_and_shares() draws the two-row main figure: counts per cell above,
-# composition of the tested population below, on one aligned panel grid.
+# and below, the same cells as a share of the WHOLE starting cohort.
 #
 # Encoding notes, since this deliberately departs from plot_test_results():
 #   - One colour per OUTCOME, not one for status and another for test result.
@@ -477,21 +488,42 @@ plot_testers <- function(plot_data,
 #     impaired, cool = healthy) and shade carries whether the test was right.
 #   - Square-root y-axis on the counts row. Reactive is an order of magnitude
 #     smaller than Inclusive; on a shared linear axis it is flat against zero.
+#   - Mortality on the counts row is carried as SURVIVORS by default, not
+#     cumulative deaths. Same information, opposite direction of travel: the
+#     survivor line sits above the test series rather than rising up through them.
 #   - Series are labelled at the line end in every panel, so neither row needs a
 #     legend competing for space.
 #
-# The bottom row's denominator is PEOPLE ever tested and still alive, not tests
-# administered -- all the series are cummax stocks, so someone tested at 65 is
-# still counted at 80. That is intentional: the claim is cumulative burden
-# ("23% of the people Inclusive tested carry a false positive"), not per-test
-# yield. Per-test yield would be a flow built from the raw array instead.
+# The bottom row's denominator is the STARTING COHORT, not the tested. Closing
+# the stack to 100% keeps growth in reach visible as area rather than dividing it
+# out, and leaves the untested and deceased remainder on the page. At any age
+# every member of the cohort is in exactly one band:
+#
+#   dead                                             -> death
+#   alive, ever tested                               -> TP / FN / TN / FP
+#   alive, never tested, ELIGIBLE                    -> notest_tn / notest_fn
+#   alive, never tested, NOT eligible                -> not_eligible
+#
+# "Not eligible" stays its own band rather than folding into "not tested",
+# because notest_tn / notest_fn are deliberately eligibility-gated: they measure
+# a coverage gap the programme could still close, and someone ineligible is not
+# that. post_processing_outputs() supplies all four groups; they are verified to
+# sum to the starting cohort exactly.
+#
+# All the series are cummax stocks, so someone tested at 65 is still counted at
+# 80. That is intentional: the claim is cumulative burden ("23% of the cohort
+# carries a false positive by 80"), not per-test yield. Per-test yield would be a
+# flow built from the raw array instead.
 
 # Full names, spelled out. "FP" is jargon the reader decodes on every glance.
 outcome_long <- c(Deaths = "Deaths", Alive = "Remaining alive",
                   TP = "True positive",  FN = "False negative",
                   TN = "True negative",  FP = "False positive",
                   `No test, impaired` = "Not tested, impaired",
-                  `No test, healthy`  = "Not tested, healthy")
+                  `No test, healthy`  = "Not tested, healthy",
+                  `No test`           = "Not tested",
+                  `Not eligible`      = "Not eligible",
+                  Deceased            = "Deceased")
 
 # Deaths take the light grey and sit behind everything, so "not tested, healthy"
 # moves off grey onto a muted teal -- cool like the other healthy series, but
@@ -499,7 +531,20 @@ outcome_long <- c(Deaths = "Deaths", Alive = "Remaining alive",
 pal_outcome <- c(Deaths = "#C2C7CA", Alive = "#8A9BA3",
                  TP = "#9E2A2B", FN = "#E8A33D",
                  TN = "#1B4965", FP = "#5FA8D3",
-                 `No test, impaired` = "#8C6D46", `No test, healthy` = "#6F9A94")
+                 `No test, impaired` = "#8C6D46", `No test, healthy` = "#6F9A94",
+                 `No test`           = "#8FA8A2",
+                 `Not eligible`      = "#B5AEA4",
+                 Deceased            = "#C3C9CC")
+
+# Fills stay pale so the two largest bands do not dominate, but pale fill makes
+# illegible label text on white, so labels take a darker shade of the same hue.
+# Assign in place: c(pal_outcome, Deceased = ...) would APPEND a second entry
+# under the same name and a [[ ]] lookup returns the FIRST match, so the override
+# would be silently ignored and the pale fill colour used for the text.
+pal_label <- pal_outcome
+pal_label[["Not eligible"]] <- "#5F5A50"
+pal_label[["Deceased"]]     <- "#4A5459"
+pal_label[["Deaths"]]       <- "#4A5459"
 
 outcome_levels <- c("Deaths", "Alive", "TP", "FN", "TN", "FP",
                     "No test, impaired", "No test, healthy")
@@ -540,61 +585,65 @@ plot_counts_and_shares <- function(plot_data,
                                    ages = 65:80,
                                    top_title    = "Cumulative strategy-level outcomes among eligible and alive",
                                    top_subtitle = NULL,
-                                   bottom_title    = "Share of test result among those tested",
-                                   bottom_subtitle = "Includes everyone the strategy has ever tested and who is still alive, by current status and latest test result",
+                                   bottom_title    = "Share of the cohort in each outcome",
+                                   bottom_subtitle = "Stack totals 100% of the starting cohort; the tested block at the bottom is programme reach",
+                                   bottom_caption  = "* Not eligible: no healthcare provider, or already has a known cognitive impairment",
                                    y_breaks   = c(0, 1000, 5000, 15000, 30000, 60000),
-                                   mortality = c("deaths", "alive", "none"),
-                                   cohort_size = NULL,  # required for mortality = "alive"
+                                   mortality = c("alive", "deaths", "none"),
+                                   split_untested = FALSE,  # bottom row: one "Not tested" band, or cut healthy / impaired
                                    base_size  = 15,     # everything else scales off this
                                    label_size = 3.15,   # line-end and band labels
                                    gap_frac   = 0.062,  # minimum label separation, as a share of the axis
                                    right_pad  = NULL,   # gutter for the labels; defaults to fit label_size
                                    heights    = c(1.15, 1)) {
-  
+
   keys <- names(scenario_names)
 
-  # Counts row can carry the cohort's mortality either way round: cumulative
-  # deaths (the default) or the survivors they are the complement of. "alive"
-  # needs the starting cohort size, which the per-cycle counts do not carry.
+  # Counts row can carry the cohort's mortality either way round: the survivors
+  # (the default) or the cumulative deaths they are the complement of. Both come
+  # straight from post_processing_outputs(), so no cohort size is needed here.
   mortality <- match.arg(mortality)
-  if (mortality == "alive" && is.null(cohort_size))
-    stop("mortality = \"alive\" needs cohort_size (the starting cohort, e.g. l.inputs$n.ind)")
-  
+
   # The gutter has to grow with the type, or bigger labels run off the panel.
   # 0.146 per point of label_size is what fits the longest label at the default.
   if (is.null(right_pad)) right_pad <- 0.146 * label_size
-  
-  d <- plot_data %>%
+
+  scen_levels <- unname(scenario_names)
+
+  # Every band, wide, for both rows. The counts row drops the cohort remainder
+  # bands; the share row keeps them, which is what closes its stack to 100%.
+  wide <- plot_data %>%
     filter(age %in% ages, scenario %in% keys) %>%
     transmute(Age      = age,
-              Scenario = factor(scenario_names[scenario], levels = unname(scenario_names)),
+              Scenario = factor(scenario_names[scenario], levels = scen_levels),
               TP = tp + converted_tp,
               FP = fp + early_pos,
               TN = tn,
               FN = fn,
               `No test, healthy`  = notest_tn,
               `No test, impaired` = notest_fn,
+              `Not eligible`      = not_eligible,
+              Deceased            = death,
               Deaths              = death,
-              Alive               = if (mortality == "alive") cohort_size - death else NA_real_) %>%
-    select(-all_of(setdiff(c("Deaths", "Alive"),
+              Alive               = alive)
+
+  d <- wide %>%
+    select(-`Not eligible`, -Deceased,
+           -all_of(setdiff(c("Deaths", "Alive"),
                            switch(mortality, deaths = "Deaths", alive = "Alive", none = character(0))))) %>%
     pivot_longer(-c(Age, Scenario), names_to = "Outcome", values_to = "Count") %>%
     mutate(Outcome = factor(Outcome, levels = outcome_levels),
            Not_tested = grepl("^No test", Outcome))
-  
-  # Deaths is a cohort total, not a test result, so it stays out of the
-  # composition row. Naming the four cells beats negating Not_tested, which
-  # would let Deaths through.
-  d_tested <- d %>% filter(Outcome %in% c("TP", "FN", "TN", "FP"))
+
   cohort_series <- c("Deaths", "Alive")
-  
+
   # Shared so the two panel grids align and 65-80 sits at the same horizontal
   # position in each row.
   age_breaks <- pretty(range(ages), n = 4)
   age_breaks <- age_breaks[age_breaks >= min(ages) & age_breaks <= max(ages)]
   x_shared <- scale_x_continuous(breaks = age_breaks,
                                  expand = expansion(mult = c(0.03, right_pad)))
-  
+
   # Self-contained: this figure is a patchwork, so do NOT add theme_paper2 to it
   # afterwards. `&` would push theme_paper2's 20pt bold strip.text onto the
   # bottom row's stats line, which is a long string that has to stay small.
@@ -608,7 +657,7 @@ plot_counts_and_shares <- function(plot_data,
           plot.title         = element_text(face = "bold", size = base_size * 1.15),
           plot.subtitle      = element_text(colour = "grey35", size = base_size * 0.8),
           legend.position    = "none")
-  
+
   ## Top row: counts, every series labelled at its line end in every panel
   span <- sqrt(max(d$Count)) - sqrt(min(d$Count))
   line_labels <- d %>%
@@ -617,7 +666,7 @@ plot_counts_and_shares <- function(plot_data,
     mutate(y   = f.spread_labels(Count, gap_frac * span, "sqrt"),
            lab = outcome_long[as.character(Outcome)]) %>%
     ungroup()
-  
+
   p_top <- ggplot(d, aes(Age, Count, colour = Outcome, group = Outcome)) +
     # drawn first, so the test series sit on top of it rather than under it
     geom_line(data = filter(d, Outcome %in% cohort_series), linewidth = 1.4) +
@@ -625,7 +674,7 @@ plot_counts_and_shares <- function(plot_data,
               aes(linetype = Not_tested), linewidth = 1.05) +
     geom_text(data = line_labels, aes(x = Age, y = y, label = lab),
               hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
-              inherit.aes = FALSE, colour = pal_outcome[as.character(line_labels$Outcome)]) +
+              inherit.aes = FALSE, colour = pal_label[as.character(line_labels$Outcome)]) +
     facet_wrap(~Scenario) +
     scale_colour_manual(values = pal_outcome) +
     scale_linetype_manual(values = c(`FALSE` = "solid", `TRUE` = "21")) +
@@ -633,20 +682,37 @@ plot_counts_and_shares <- function(plot_data,
     scale_y_sqrt(labels = comma, breaks = y_breaks) +
     labs(title = top_title, subtitle = top_subtitle, y = "Number of people\n(square-root scale)") +
     base
-  
-  ## Bottom row: composition, labelled at the right edge with each band's share.
-  # position_fill stacks the FIRST factor level on top, so the bottom-up order is
-  # the reverse of levels(Outcome) -- hence desc() before the cumulative sum.
-  band_labels <- d_tested %>%
+
+  ## Bottom row: share of the whole cohort, labelled at the right edge.
+  # position_stack puts the FIRST factor level on TOP, so the level order below
+  # is the reverse of the bottom-up reading order.
+  w_share <- wide %>% select(-Deaths, -Alive)
+  if (!split_untested) {
+    w_share <- w_share %>%
+      mutate(`No test` = `No test, healthy` + `No test, impaired`, .keep = "unused")
+  }
+  untested_lv <- if (split_untested) c("No test, impaired", "No test, healthy") else "No test"
+  band_levels <- c("Deceased", "Not eligible", untested_lv, "FP", "TN", "FN", "TP")
+
+  d_share <- w_share %>%
+    pivot_longer(-c(Age, Scenario), names_to = "Band", values_to = "Count") %>%
+    mutate(Band = factor(Band, levels = band_levels)) %>%
+    group_by(Scenario, Age) %>%
+    mutate(Share = Count / sum(Count)) %>%   # sums to exactly 1: verified partition
+    ungroup()
+
+  band_labels <- d_share %>%
     filter(Age == max(Age)) %>%
     group_by(Scenario) %>%
-    arrange(desc(Outcome), .by_group = TRUE) %>%
-    mutate(share = Count / sum(Count),
-           ymid  = cumsum(share) - share / 2,
-           y     = f.spread_labels(ymid, 0.075),
-           lab   = sprintf("%s", outcome_long[as.character(Outcome)])) %>%
+    arrange(desc(Band), .by_group = TRUE) %>%
+    mutate(ymid = cumsum(Share) - Share / 2,
+           y    = f.spread_labels(ymid, 0.075),
+           lab  = outcome_long[as.character(Band)],
+           # asterisk points at the caption; "not eligible" is the one band whose
+           # membership rule is not obvious from its name
+           lab  = ifelse(Band == "Not eligible", paste0(lab, "*"), lab)) %>%
     ungroup()
-  
+
   strip_fn <- if (is.null(strategy_stats)) {
     identity
   } else {
@@ -657,20 +723,23 @@ plot_counts_and_shares <- function(plot_data,
               comma(st$n_people), comma(st$n_tests), st$per_person),
       st$label))
   }
-  
-  p_bottom <- ggplot(d_tested, aes(Age, Count, fill = Outcome)) +
-    geom_area(position = "fill", colour = "white", linewidth = 0.25) +
+
+  p_bottom <- ggplot(d_share, aes(Age, Share, fill = Band)) +
+    geom_area(colour = "white", linewidth = 0.25) +
     geom_text(data = band_labels, aes(x = Age, y = y, label = lab),
               hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
-              inherit.aes = FALSE, colour = pal_outcome[as.character(band_labels$Outcome)]) +
+              inherit.aes = FALSE, colour = pal_label[as.character(band_labels$Band)]) +
     facet_wrap(~Scenario, labeller = strip_fn) +
     scale_fill_manual(values = pal_outcome) +
     x_shared +
-    scale_y_continuous(labels = percent) +
-    labs(title = bottom_title, subtitle = bottom_subtitle, y = "Share of results\namong those tested") +
+    scale_y_continuous(labels = percent, expand = expansion(mult = c(0.035, 0.02))) +
+    labs(title = bottom_title, subtitle = bottom_subtitle, caption = bottom_caption,
+         y = "Share of the\nstarting cohort") +
     base +
-    theme(strip.text = element_text(size = base_size * 0.62, face = "plain",
-                                    colour = "grey35", hjust = 0))
-  
+    theme(strip.text   = element_text(size = base_size * 0.62, face = "plain",
+                                      colour = "grey35", hjust = 0),
+          plot.caption = element_text(hjust = 0, colour = "grey35",
+                                      size = base_size * 0.62, margin = margin(t = 10)))
+
   (p_top / p_bottom) + plot_layout(heights = heights)
 }

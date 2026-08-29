@@ -159,13 +159,19 @@ for (scen in scenarios_to_run) {
 #   n_early_catch of those, the ones already flagged positive BEFORE they were
 #                 impaired. See the NNT table for why this one needs care.
 #
-# Cached, but only reused if the cache carries every column -- otherwise adding a
-# statistic here would silently serve stale results.
+# Cached, but only reused if BOTH caches carry every column the reporting code
+# reads -- otherwise adding a statistic here, or a column to
+# post_processing_outputs(), would silently serve stale results.
 stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests",
                 "n_identified", "n_at_mci", "n_at_dem", "n_early_catch")
+perf_cols  <- c("not_eligible", "alive")
 
-strategy_stats <- if (file.exists(stats_file()) &&
-                      all(stats_cols %in% names(readRDS(stats_file())))) {
+stats_cached <- file.exists(stats_file()) &&
+  all(stats_cols %in% names(readRDS(stats_file()))) &&
+  all(file.exists(vapply(scenarios_to_run, perf_file, character(1)))) &&
+  all(perf_cols %in% names(readRDS(perf_file(scenarios_to_run[1]))))
+
+strategy_stats <- if (stats_cached) {
   readRDS(stats_file())
 } else {
   cyc <- testing_window - 50 + 1
