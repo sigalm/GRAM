@@ -13,6 +13,32 @@ f.select_matrix <- function(h, mci, dem, ages = 50:100) {
 }
 
 
+# Map the result of a test in the previous cycle onto a relative risk of being selected
+# again. rr.select_prior may be:
+#   NULL                    no effect anywhere
+#   a single unnamed number one effect after any prior result, positive or negative --
+#                           what the pre-September-2026 configs meant by rr.select_prior = 2
+#   a named vector          any of neg / pos, e.g. c(neg = 0.5)
+# A name left out of a named vector means NO effect for that result, which is not the
+# same as omitting the parameter: an arm can reassure after a negative and still leave a
+# positive at the unadjusted probability. v.BHA.lag is -9 (not assessed last cycle) or
+# -8 (assessed but not tested); neither is a result, so both come back at RR 1.
+f.rr_by_prior_result <- function(rr.select_prior, v.BHA.lag) {
+
+  rr <- rep(1, length(v.BHA.lag))
+  if (is.null(rr.select_prior)) return(rr)
+
+  if (is.null(names(rr.select_prior))) {
+    rr[v.BHA.lag >= 0] <- rr.select_prior[[1]]
+    return(rr)
+  }
+
+  result_code <- c(neg = 0, pos = 1)
+  for (nm in names(rr.select_prior)) rr[v.BHA.lag == result_code[[nm]]] <- rr.select_prior[[nm]]
+  rr
+}
+
+
 # Validate a scenario before it is run.
 # A testing scenario has to carry its own parameters: there are deliberately no defaults
 # in model/setup.R to fall back on, so a missing field is an error here rather than a
@@ -31,6 +57,17 @@ f.validate_scenario <- function(scen, label = "scenario") {
   if (!all(c("age", "h", "mci", "dem") %in% names(m)) || nrow(m) != 51) {
     stop(label, ": probs_select must have columns age/h/mci/dem and 51 rows (ages 50-100). ",
          "Build it with f.select_matrix().", call. = FALSE)
+  }
+
+  # rr.select_prior is optional, but a name f.rr_by_prior_result does not recognise would
+  # be silently ignored for the whole run, so it is caught here instead.
+  rr <- scen[["rr.select_prior"]]
+  if (!is.null(rr) && !is.null(names(rr))) {
+    bad <- setdiff(names(rr), c("neg", "pos"))
+    if (length(bad)) {
+      stop(label, ": rr.select_prior has unrecognised name(s) ", paste(bad, collapse = ", "),
+           ". Use neg and/or pos, keyed on the previous cycle's BHA result.", call. = FALSE)
+    }
   }
 
   # PCP follow-up is optional, but asking for it without its probabilities is not.

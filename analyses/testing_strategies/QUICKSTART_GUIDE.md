@@ -186,7 +186,9 @@ scenario_inputs <- list(
   probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),   # universal: everyone tested
   # f.select_matrix(h = 0.005, mci = 0.20, dem = 0.90)      # reactive: spontaneous concern
   # f.select_matrix(h = 0.07, mci = 0.70, dem = 0.95)        # selective: prompted at a visit
-  rr.select_prior = 2,      # RR of reporting concern again after reporting it last cycle
+  # select_persists = TRUE, # once selected, never redrawn (an eRADAR-style record flag)
+  # rr.select_prior = c(neg = 0.5),
+                            # RR on re-selection, keyed on last cycle's test result
   
   prob_pcpfu      = NULL,   # Probability of PCP follow-up (NULL = no follow-up)
   repeat_interval = 1,      # Years between tests
@@ -253,10 +255,19 @@ for (scen in names(scenario_list)) {
   Functionally this is just a selection probability by true status, so it can encode any
   probabilistic eligibility rule -- a 50% random opt-in is `h = mci = dem = 0.5`. Note `h`
   covers everyone with `SYN < 1`, which includes TCI.
-- **`rr.select_prior`**: *Optional.* RR of being selected again having been selected the
-  previous cycle. Applied to the base probability on the rate scale, so it does not
-  compound. Omit it (or set `NULL`) for no persistence -- appropriate where selection is a
-  coin flip rather than a recurring subjective concern.
+- **`select_persists`**: *Optional, default off.* When `TRUE`, anyone already selected is
+  not redrawn at later assessments -- the flag stands. It does nothing to anyone who is
+  NOT currently flagged: they draw at `probs_select` at every assessment as usual, so the
+  parameter makes selection an absorbing state rather than making it a one-shot draw. Use it where selection belongs to
+  the record rather than to a judgement the patient remakes each year: the eRADAR arms set
+  it, and `probs_select` there governs first flagging only. Everywhere else selection is
+  redrawn at the unadjusted conditional probability at every assessment.
+- **`rr.select_prior`**: *Optional, unused by every current scenario.* RR on re-selection,
+  keyed on the result of a test in the **immediately preceding cycle**: a named vector
+  `c(neg = , pos = )`, or a bare number for one effect after any result. An omitted name
+  means no effect for that result. Applied on the rate scale, so it does not compound. No
+  test in the previous cycle is always an unadjusted redraw, which makes this inert
+  wherever `repeat_interval > 1` -- reassurance is not modelled as surviving a gap year.
 
 Individuals with a prior diagnosis are never selected and never tested. That is fixed in
 the model, not a scenario option.

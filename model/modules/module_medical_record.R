@@ -29,6 +29,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.SEV            = a.out[t,"SEV",alive],
     v.SELECT.lag     = a.out[t-1,"SELECT",alive],
     rr.select_prior  = l.inputs[["scenario"]][["rr.select_prior"]],
+    v.BHA.lag        = a.out[t-1,"BHA",alive],
     v.DX.lag         = a.out[t-1,"DX",alive],
     random_cycle     = a.random[t,"SELECT",alive],
     n.alive          = n.alive
@@ -116,7 +117,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
 #### Module Functions ####
 ######################################## SELECT
 f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
-                            rr.select_prior, v.DX.lag, random_cycle, n.alive) {
+                            rr.select_prior, v.BHA.lag, v.DX.lag, random_cycle, n.alive) {
 
   selected <- rep(-9, n.alive)
 
@@ -124,11 +125,20 @@ f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
 
     # SELECT records selection status AS OF THE LAST ASSESSMENT, so it is carried forward
     # through cycles in which no assessment could take place. Redrawing every cycle would
-    # accumulate selections in years the programme was never going to test anyone, and
-    # rr.select_prior would then ratchet the probability above its nominal value.
+    # accumulate selections in years the programme was never going to test anyone. The
+    # carry-forward is also what select_persists reads to know who is already flagged.
     selected <- v.SELECT.lag
 
     draw <- assess & (v.DX.lag == 0)
+
+    # An EHR-derived flag is a property of the record, not a judgement the patient
+    # remakes every year: once the algorithm has flagged someone it goes on flagging
+    # them, whatever the last test showed. Only the already-flagged are held out of the
+    # redraw -- anyone not flagged draws at probs_select at every assessment, exactly as
+    # they otherwise would, so this raises the FLOOR without touching the entry rate.
+    # Behavioural selection -- a concern raised, a question endorsed, an opt-in -- is
+    # redrawn in full at every assessment, which is the default.
+    if (isTRUE(scenario[["select_persists"]])) draw <- draw & (v.SELECT.lag != 1)
 
     if (any(draw)) {
       select_col <- case_when(
@@ -141,12 +151,23 @@ f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
 
       prob_select <- scenario[["probs_select"]][select_lookup_coordinates]
 
-      # Optional: raise the probability for anyone selected at their previous assessment.
-      # A scenario that leaves rr.select_prior NULL has no persistence, which is the
-      # sensible default where selection is a coin flip rather than a recurring concern.
-      if (!is.null(rr.select_prior)) {
-        bump <- draw & (v.SELECT.lag == 1)
-        prob_select[bump] <- f.adjustprobability(prob_select[bump], t_new = 1, t_old = 1, RR = rr.select_prior)
+      # Optional: adjust the probability by the RESULT of a test in the immediately
+      # preceding cycle, not merely by having been selected. A negative result reassures,
+      # so the person is less likely to raise a concern (or endorse one) again; a positive
+      # result is a different situation and carries its own value.
+      #
+      # Keyed on last cycle's BHA rather than on a carried-forward last result because
+      # "no test in the prior cycle" is deliberately a redraw at the unadjusted
+      # probability: the effect is immediate, and is not meant to persist across the
+      # years between assessments. In the 3-yearly arms no one is ever assessed in
+      # consecutive cycles, so the adjustment is inert there, which is the intended
+      # reading -- reassurance does not survive a 3-year gap. BHA.lag is -9 (not
+      # assessed) or -8 (assessed but not tested) when there is no result; both leave
+      # the probability alone.
+      rr <- f.rr_by_prior_result(rr.select_prior, v.BHA.lag)
+      bump <- draw & (rr != 1)
+      if (any(bump)) {
+        prob_select[bump] <- f.adjustprobability(prob_select[bump], t_new = 1, t_old = 1, RR = rr[bump])
       }
 
       selected[draw] <- as.numeric(prob_select[draw] > random_cycle[draw])

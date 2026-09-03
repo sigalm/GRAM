@@ -28,8 +28,18 @@ scenario_inputs <- list(
   age_stop_test   = 80,                         # Age at which to stop testing
   # Universal: everyone assessable is tested; selection is not a gate.
   probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
                                                     # or custom matrix with dimensions age x cog status
+  # Selection is redrawn at the unadjusted conditional probability at every assessment
+  # unless one of the next two is set. Both are optional and both default to off.
+  # select_persists = TRUE,        # once selected, never redrawn -- for a flag that
+                                   # belongs to the record (eRADAR) rather than to a
+                                   # decision the patient remakes each year
+  # rr.select_prior = c(neg = 0.5, pos = 1),
+                                   # RR on re-selection, keyed on the result of a test in
+                                   # the IMMEDIATELY PRECEDING cycle. Names are optional
+                                   # (neg, pos); an omitted name means no effect for that
+                                   # result. No test last cycle is always an unadjusted
+                                   # redraw, so this is inert wherever repeat_interval > 1.
   prob_pcpfu      = NULL,                       # Probability of PCP follow-up after cognitive test (default is no follow-up)
   repeat_interval = 1,                          # Years between BHA administrations
   cohort_split    = NULL,                       # Split cohort into groups (useful for alternated testing scenarios, e.g., test half the cohort every other year)
