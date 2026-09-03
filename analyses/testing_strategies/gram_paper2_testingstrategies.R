@@ -56,7 +56,7 @@ scenario_registry <- tibble::tribble(
 )
 
 # Subset this to re-run only part of the set
-scenarios_to_run <- scenario_registry$key[1:3]
+scenarios_to_run <- scenario_registry$key
 
 reg_row    <- function(key) scenario_registry[match(key, scenario_registry$key), ]
 labels_for <- function(keys) setNames(reg_row(keys)$label, keys)
@@ -432,7 +432,7 @@ testing_likelihood_for <- function(keys) {
     m <- scen[["probs_select"]][1, ]
     data.frame(Strategy = reg_row(k)$label,
                Healthy = m$h, MCI = m$mci, Dementia = m$dem,
-               `RR if concern last cycle` = scen[["rr.select_prior"]],
+               `Redrawn each year` = if (isTRUE(scen[["select_persists"]])) "No" else "Yes",
                check.names = FALSE)
   }))
 }
@@ -442,7 +442,7 @@ tab1 <- flextable(testing_likelihood_for(c(main_keys, sens_selective_keys[-1],
 tab1
 
 # Test characteristics quoted in the methods. BHA_GS comes from model/test_properties.R;
-# rr.select_prior is per-scenario now and appears in tab1 above.
+# how selection repeats is per-scenario and appears in tab1 above.
 bha_test_params <- list(
   sensitivity = BHA_GS$sens,
   specificity = BHA_GS$spec
@@ -645,6 +645,7 @@ nnt_table_pcp            <- nnt_table_for(pcp_keys)
 
 results_table <- results_table_for(main_keys)
 as_flex(results_table)
+# sensitivity of the program, not sensitivity of the test
 
 results_table_sens_selective <- results_table_for(sens_selective_keys)
 as_flex(results_table_sens_selective)
