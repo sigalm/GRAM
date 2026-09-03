@@ -21,7 +21,8 @@ scenario_inputs <- list(
   # recalibration, so the undiagnosed case mix they were solved against has shifted.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.46, mci = 0.92, dem = 0.92),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
+  # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
+  # every assessment. A prior test result carries no reassurance or persistence effect.
   repeat_interval = 3,    # years between BHA administrations
   prob_pcpfu = 0,         # Explicitly set to 0 to prevent default PCP follow-up behavior
   cohort_split = 3,       # 1/3 of the cohort gets tested every year (thus everyone gets tested once every 3 years) 

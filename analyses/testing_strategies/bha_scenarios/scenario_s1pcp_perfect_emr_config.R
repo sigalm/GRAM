@@ -21,7 +21,12 @@ scenario_inputs <- list(
   # recalibration, so the undiagnosed case mix they were solved against has shifted.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.09, mci = 0.8, dem = 1),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
+  # Eligibility is reassessed from scratch every cycle: no select_persists, no
+  # rr.select_prior. Whether an eRADAR flag should stick, and whether a negative result
+  # should reassure, are both conjecture the data do not settle. A clean redraw is the
+  # assumption that needs no defending, and the pathways it leaves out largely cancel:
+  # those who test positive drop out of the pool anyway, and for those who test negative
+  # a cleared flag IS a pure redraw.
   repeat_interval = 1,    # years between BHA administrations
   prob_pcpfu = 1,
   

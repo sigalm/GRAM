@@ -21,7 +21,8 @@ scenario_inputs <- list(
   # recalibration, so the undiagnosed case mix they were solved against has shifted.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
+  # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
+  # every assessment. A prior test result carries no reassurance or persistence effect.
   prob_pcpfu = 1,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
   
   # IMPERFECT PCP

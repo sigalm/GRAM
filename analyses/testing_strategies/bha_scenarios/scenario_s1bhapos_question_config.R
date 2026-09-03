@@ -21,7 +21,8 @@ scenario_inputs <- list(
   # recalibration, so the undiagnosed case mix they were solved against has shifted.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.07, mci = 0.7, dem = 0.95),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
+  # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
+  # every assessment. A prior test result carries no reassurance or persistence effect.
   repeat_interval = 1,    # years between BHA administrations
   
   # Optional parameters

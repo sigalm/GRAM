@@ -19,7 +19,8 @@ scenario_inputs <- list(
   age_stop_test = 80,
   # Universal: everyone assessable is tested; selection is not a gate.
   probs_select = f.select_matrix(h = 1, mci = 1, dem = 1),
-  rr.select_prior = 2,    # RR of reporting concern again after reporting it last cycle
+  # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
+  # every assessment. A prior test result carries no reassurance or persistence effect.
   prob_pcpfu = 0.2,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test
   # Previously inherited from model/setup.R; written out here now that strategy
   # parameters live only in the config. Values unchanged.
