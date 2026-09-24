@@ -38,7 +38,8 @@ Run the GRAM microsimulation model. If a scenario config file is provided as an 
      config <- load_scenario("$ARGUMENTS", l.inputs)
      result <- f.wrap_run(config, microdata = sample1)
      ```
-     Save output to `analyses/testing_strategies/sim_results/` with a datetime suffix.
+     Save output to `analyses/testing_strategies/sim_results/<run_id>/`, where `<run_id>`
+     is a datetime stamp that also ends the file name.
 
    - **If no argument is provided**:
      Run the base model:
