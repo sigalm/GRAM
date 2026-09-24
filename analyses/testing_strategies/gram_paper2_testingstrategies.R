@@ -442,7 +442,10 @@ figures[["testers"]] + ylim(NA, 75000)
 testing_likelihood_for <- function(keys) {
   do.call(rbind, lapply(keys, function(k) {
     scen <- load_scenario(file.path(config_dir, reg_row(k)$config), l.inputs_calibrated)[["scenario"]]
-    m <- scen[["probs_select"]][1, ]
+    # P(tested) at a first offer: selection times uptake. Where a scenario has no
+    # probs_accept every offer is taken up, and probs_select is already P(tested).
+    m <- scen[["probs_select"]][1, c("h", "mci", "dem")]
+    if (!is.null(scen[["probs_accept"]])) m <- m * scen[["probs_accept"]][1, c("h", "mci", "dem")]
     data.frame(Strategy = reg_row(k)$label,
                Healthy = m$h, MCI = m$mci, Dementia = m$dem,
                `Redrawn each year` = if (isTRUE(scen[["select_persists"]])) "No" else "Yes",

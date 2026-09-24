@@ -1,8 +1,8 @@
 ######################################## GRAM HELPER FUNCTIONS: PROGRAM UTILITY HELPERS ########################################
 # This script defines program utility helpers.
 
-# Build a probs_select matrix.
-# This is the ONLY place the 50:100 age grid is written down. f.update_SELECT() looks the
+# Build a probs_select or probs_accept matrix.
+# This is the ONLY place the 50:100 age grid is written down. f.lookup_by_state() looks the
 # probability up by row POSITION (round(AGE) - 50 + 1), not by the value in the age column,
 # so the grid has to stay pinned to the model's age origin.
 #
@@ -10,6 +10,19 @@
 # Pass length-51 vectors instead of scalars for an age-varying probability.
 f.select_matrix <- function(h, mci, dem, ages = 50:100) {
   data.frame(age = ages, h = h, mci = mci, dem = dem)
+}
+
+
+# Look up each person's probability in a matrix built by f.select_matrix(), by age and
+# true state. Shared by selection and acceptance so the two can never disagree about
+# which column a person falls in.
+f.lookup_by_state <- function(m, v.AGE, v.SYN, v.SEV) {
+  col <- case_when(
+    v.SYN < 1   ~ 2,
+    v.SEV == 0  ~ 3,
+    v.SEV >= 1  ~ 4
+  )
+  m[matrix(data = c(round(v.AGE, 0) - 50 + 1, col), ncol = 2)]
 }
 
 
@@ -53,10 +66,19 @@ f.validate_scenario <- function(scen, label = "scenario") {
          ". Testing parameters must be set in the scenario config.", call. = FALSE)
   }
 
-  m <- scen[["probs_select"]]
-  if (!all(c("age", "h", "mci", "dem") %in% names(m)) || nrow(m) != 51) {
-    stop(label, ": probs_select must have columns age/h/mci/dem and 51 rows (ages 50-100). ",
-         "Build it with f.select_matrix().", call. = FALSE)
+  for (nm in c("probs_select", "probs_accept")) {   # probs_accept is optional
+    m <- scen[[nm]]
+    if (is.null(m)) next
+    if (!all(c("age", "h", "mci", "dem") %in% names(m)) || nrow(m) != 51) {
+      stop(label, ": ", nm, " must have columns age/h/mci/dem and 51 rows (ages 50-100). ",
+           "Build it with f.select_matrix().", call. = FALSE)
+    }
+  }
+
+  # The after-decline probability only means something where offers can be declined.
+  if (!is.null(scen[["p.accept_after_decline"]]) && is.null(scen[["probs_accept"]])) {
+    stop(label, " sets p.accept_after_decline but not probs_accept. Without probs_accept ",
+         "every offer is taken up, so there is never a decline for it to act on.", call. = FALSE)
   }
 
   # rr.select_prior is optional, but a name f.rr_by_prior_result does not recognise would

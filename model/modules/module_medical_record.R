@@ -41,17 +41,24 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     scenario         = l.inputs[["scenario"]],
     assess           = assess,
     v.SELECT         = a.out[t,"SELECT",alive],
+    v.declined_last  = f.declined_last_offer(a.out, t, alive),
     v.AGE            = a.out[t,"AGE",alive],
     v.BHA.lag        = a.out[t-1,"BHA",alive],
-    v.NP.lag         = a.out[t-1,"NP",alive], 
     v.SYN            = a.out[t,"SYN",alive],
     v.SEV            = a.out[t,"SEV",alive],
     v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
+    random_accept    = a.random[t,"ACCEPT",alive],
     random_cycle     = a.random[t,"BHA",alive],
     n.alive          = n.alive
   )
   
-  a.out[t,"last_BHA_age",alive] <- ifelse(a.out[t,"BHA",alive] >= 0, a.out[t,"AGE", alive], a.out[t-1,"last_BHA_age", alive])
+  # last_BHA_age is the age at the last OFFER: a test taken (BHA 0/1) or one declined
+  # (selected, due, and still not tested, BHA -8 with SELECT 1). repeat_interval counts
+  # from it, so someone who declines is not offered again until the interval has passed,
+  # exactly as if they had tested. Where probs_accept is unset nobody declines, and this
+  # is the age at the last test, as it always was.
+  offered <- (a.out[t,"BHA",alive] >= 0) | (a.out[t,"BHA",alive] == -8 & a.out[t,"SELECT",alive] == 1)
+  a.out[t,"last_BHA_age",alive] <- ifelse(offered, a.out[t,"AGE", alive], a.out[t-1,"last_BHA_age", alive])
   a.out[t,"any_BHA_pos",alive] <-  as.numeric((a.out[t-1,"any_BHA_pos",alive]) | (a.out[t,"BHA",alive] == 1))
   
   
@@ -140,15 +147,7 @@ f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
     if (isTRUE(scenario[["select_persists"]])) draw <- draw & (v.SELECT.lag != 1)
 
     if (any(draw)) {
-      select_col <- case_when(
-        v.SYN < 1 ~ 2,
-        v.SEV == 0 ~ 3,
-        v.SEV >= 1 ~ 4
-      )
-
-      select_lookup_coordinates <- matrix(data = c(round(v.AGE,0)-50+1, select_col), ncol = 2)
-
-      prob_select <- scenario[["probs_select"]][select_lookup_coordinates]
+      prob_select <- f.lookup_by_state(scenario[["probs_select"]], v.AGE, v.SYN, v.SEV)
 
       # Optional: adjust the probability by the RESULT of a test in the immediately
       # preceding cycle, not merely by having been selected. A negative result reassures,
@@ -211,39 +210,79 @@ f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_
                                   any_PCP_pos = v.any_PCP_pos)
   assess <- assess & (is.na(stop_test) | !stop_test) & (v.AGE <= scenario$age_stop_test)
 
+  # neuropsych criteria. Checked here rather than in f.update_BHA so that everyone who is
+  # selected and due is genuinely offered a test: SELECT 1 with BHA -8 then means a
+  # decline and nothing else.
+  if (!is.null(scenario$NP)) {
+    assess <- assess & (is.null(v.NP.lag) | v.NP.lag != 1)
+  }
+
   assess
+}
+
+
+# Did each living person decline the last test they were offered? Worked out from the
+# history rather than carried in an attribute. last_BHA_age is the age at the last offer,
+# and AGE rises by exactly one a cycle, so the offer was (AGE - last_BHA_age) cycles ago;
+# a -8 there is a decline, since an offer is either taken (0/1) or declined (-8). Read
+# from t-1's last_BHA_age, so this cycle's offer is never its own history.
+f.declined_last_offer <- function(a.out, t, alive) {
+  idx      <- which(alive)
+  last_age <- a.out[t-1, "last_BHA_age", idx]
+  declined <- rep(FALSE, length(idx))
+  has      <- !is.na(last_age)
+  if (any(has)) {
+    cyc <- t - (a.out[t, "AGE", idx[has]] - last_age[has])
+    bha_col <- match("BHA", dimnames(a.out)[[2]])
+    declined[has] <- a.out[cbind(cyc, bha_col, idx[has])] == -8
+  }
+  declined
 }
 
 
 ######################################## BHA
 
 
-f.update_BHA <- function(scenario, assess, v.SELECT, v.AGE, v.BHA.lag,
-                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive) {
+f.update_BHA <- function(scenario, assess, v.SELECT, v.declined_last, v.AGE, v.BHA.lag,
+                         v.SYN, v.SEV, v.MEMLOSS, random_accept, random_cycle, n.alive) {
   
   bha <- rep(-9, n.alive)
   
   if(!is.null(scenario[["test"]])) {
     
-    # selection criteria (drawn in f.update_SELECT among exactly this assess group)
-    eligible <- assess & (v.SELECT == 1)
-    
-    # neuropsych criteria
-    if (!is.null(scenario$NP)) {
-      eligible <- eligible & (is.null(v.NP.lag) | v.NP.lag != 1)
+    # Offered a test: due this cycle (assess) and selected (drawn in f.update_SELECT
+    # among exactly this assess group).
+    offered <- assess & (v.SELECT == 1)
+
+    # Whether an offer is taken up. probs_accept is P(test | selected, true state), so
+    # probs_select x probs_accept is P(tested) at a first offer. Someone who declined
+    # the last offer they had takes the next one up at p.accept_after_decline instead,
+    # whatever their state. Without probs_accept every offer is taken up and selection
+    # alone decides who is tested, as it did before selection and acceptance were split.
+    #
+    # The acceptance draw has its own random slot. Sharing random_cycle with the test
+    # result would tie the two together: only people with a low draw would accept, and
+    # the same low draw would then make a positive result more likely.
+    tested <- offered
+    if (!is.null(scenario[["probs_accept"]]) && any(offered)) {
+      prob_accept <- f.lookup_by_state(scenario[["probs_accept"]], v.AGE, v.SYN, v.SEV)
+      if (!is.null(scenario[["p.accept_after_decline"]])) {
+        prob_accept[v.declined_last] <- scenario[["p.accept_after_decline"]]
+      }
+      tested <- offered & (prob_accept > random_accept)
     }
     
-    # calculate test results
-    bha[assess & !eligible] <- -8
+    # Due but not tested: -8. SELECT says why -- 0 not selected, 1 selected and declined.
+    bha[assess & !tested] <- -8
     
-    if(any(eligible)) {
-      bha[eligible] <- case_when(
-        v.SYN[eligible] == 0      ~ as.numeric((1 - scenario$specificity) > random_cycle[eligible]),
-        v.SYN[eligible] == 0.5 & (v.BHA.lag[eligible] >= 0)  ~ as.numeric((scenario$sensitivity[1] * 1) > random_cycle[eligible]),  # TCI and second consecutive BHA (sens is lower due to practice effect)
-        v.SYN[eligible] == 0.5 & (v.BHA.lag[eligible] < 0)  ~ as.numeric(scenario$sensitivity[1] > random_cycle[eligible]),  # TCI and first BHA
-        v.MEMLOSS[eligible] == 1  ~ as.numeric(scenario$sensitivity[2] > random_cycle[eligible]),
-        v.SEV[eligible] == 0      ~ as.numeric(scenario$sensitivity[3] > random_cycle[eligible]),
-        v.SEV[eligible] >= 1      ~ as.numeric(scenario$sensitivity[4] > random_cycle[eligible])
+    if(any(tested)) {
+      bha[tested] <- case_when(
+        v.SYN[tested] == 0      ~ as.numeric((1 - scenario$specificity) > random_cycle[tested]),
+        v.SYN[tested] == 0.5 & (v.BHA.lag[tested] >= 0)  ~ as.numeric((scenario$sensitivity[1] * 1) > random_cycle[tested]),  # TCI and second consecutive BHA (sens is lower due to practice effect)
+        v.SYN[tested] == 0.5 & (v.BHA.lag[tested] < 0)  ~ as.numeric(scenario$sensitivity[1] > random_cycle[tested]),  # TCI and first BHA
+        v.MEMLOSS[tested] == 1  ~ as.numeric(scenario$sensitivity[2] > random_cycle[tested]),
+        v.SEV[tested] == 0      ~ as.numeric(scenario$sensitivity[3] > random_cycle[tested]),
+        v.SEV[tested] >= 1      ~ as.numeric(scenario$sensitivity[4] > random_cycle[tested])
       )
     }
   }

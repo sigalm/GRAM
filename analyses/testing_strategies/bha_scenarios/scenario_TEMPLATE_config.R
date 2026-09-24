@@ -40,6 +40,15 @@ scenario_inputs <- list(
                                    # (neg, pos); an omitted name means no effect for that
                                    # result. No test last cycle is always an unadjusted
                                    # redraw, so this is inert wherever repeat_interval > 1.
+  # Acceptance: whether a selected person takes the offered test up. Optional; without
+  # probs_accept every offer is taken up and probs_select alone decides who is tested,
+  # so probs_select is then P(tested), selection and uptake combined. With it,
+  # probs_select is P(selected) alone. A decline is BHA -8 with SELECT 1, and restarts
+  # repeat_interval just as a test does.
+  # probs_accept = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
+                                   # P(test | selected), by true cognitive status
+  # p.accept_after_decline = 0.2,  # replaces probs_accept, whatever the state, for
+                                   # anyone who declined the last offer they had
   prob_pcpfu      = NULL,                       # Probability of PCP follow-up after cognitive test (default is no follow-up)
   repeat_interval = 1,                          # Years between BHA administrations
   cohort_split    = NULL,                       # Split cohort into groups (useful for alternated testing scenarios, e.g., test half the cohort every other year)
