@@ -13,6 +13,49 @@ f.select_matrix <- function(h, mci, dem, ages = 50:100) {
 }
 
 
+# Build a probs_accept matrix from an overall uptake, so that trying another uptake is
+# one number in the config rather than another pass through the workbook.
+#
+# probs_select is P(flagged | state): the uptake = 100% column of the workbook. uptake is
+# the share of the flagged who take the test up. Acceptance is P(test | flagged, state).
+#
+#   healthy    accepts at uptake. With the prevalence-weighted total fixed at
+#              uptake x P(flagged), the impaired then average uptake too.
+#   MCI / dem  split that average so P(test | dem) / P(test | MCI) = R(uptake), a power
+#              curve through two anchors: ratio_ref at uptake_ref (the empirical
+#              anchor) and the flag ratio dem / MCI at uptake = 100%, where every
+#              acceptance is 1. R falls as uptake rises -- the dementia cases are mostly
+#              in already, so more uptake brings in relatively more MCI -- and reaches
+#              the flag ratio without a floor or a kink.
+#
+# prev_mci and prev_dem only enter as their ratio: the mix of MCI and dementia among
+# the impaired. Every argument is required; the values belong in the scenario config.
+f.accept_matrix <- function(probs_select, uptake, ratio_ref, uptake_ref, prev_mci, prev_dem) {
+  stopifnot(uptake > 0, uptake <= 1, uptake_ref > 0, uptake_ref < 1)
+
+  f_h <- probs_select$h; f_mci <- probs_select$mci; f_dem <- probs_select$dem
+
+  ratio_100 <- f_dem / f_mci
+  ratio <- ratio_100 * (ratio_ref / ratio_100)^(log(uptake) / log(uptake_ref))
+
+  p_test_mci <- uptake * (f_mci * prev_mci + f_dem * prev_dem) / (prev_mci + ratio * prev_dem)
+  p_test_dem <- ratio * p_test_mci
+
+  m <- f.select_matrix(h   = rep(uptake, length(f_h)),
+                       mci = p_test_mci / f_mci,
+                       dem = p_test_dem / f_dem,
+                       ages = probs_select$age)
+
+  # Acceptance above 1 means these anchors ask the dementia flag for more tests than
+  # there are flagged people with dementia at this uptake.
+  if (any(m[, c("h", "mci", "dem")] > 1 + 1e-9)) {
+    stop("f.accept_matrix: acceptance above 1 at uptake = ", uptake,
+         ". Check ratio_ref / uptake_ref against probs_select.", call. = FALSE)
+  }
+  m
+}
+
+
 # Look up each person's probability in a matrix built by f.select_matrix(), by age and
 # true state. Shared by selection and acceptance so the two can never disagree about
 # which column a person falls in.

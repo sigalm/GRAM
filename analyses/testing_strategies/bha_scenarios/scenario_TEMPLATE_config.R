@@ -46,7 +46,9 @@ scenario_inputs <- list(
   # probs_select is P(selected) alone. A decline is BHA -8 with SELECT 1, and restarts
   # repeat_interval just as a test does.
   # probs_accept = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
-                                   # P(test | selected), by true cognitive status
+                                   # P(test | selected), by true cognitive status; or
+                                   # f.accept_matrix() to build it from one overall
+                                   # uptake (see the eRADAR configs)
   # p.accept_after_decline = 0.2,  # replaces probs_accept, whatever the state, for
                                    # anyone who declined the last offer they had
   prob_pcpfu      = NULL,                       # Probability of PCP follow-up after cognitive test (default is no follow-up)

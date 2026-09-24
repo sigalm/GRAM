@@ -20,6 +20,10 @@ scenario_inputs <- list(
   # Source: GRAMish workbook, "P conditional testing" tab, 14 Sep 2026.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_select = f.select_matrix(h = 0.004, mci = 0.174, dem = 0.783),
+  # Everyone who raises a concern is tested: the concern is the patient's own
+  # initiative, so there is no offer to decline. Set explicitly so every arm states its
+  # uptake.
+  probs_accept = f.select_matrix(h = 1, mci = 1, dem = 1),
   # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
   # every assessment. A prior test result carries no reassurance or persistence effect.
   repeat_interval = 1,    # years between BHA administrations
