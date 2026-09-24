@@ -150,7 +150,7 @@ f.initialize <- function(l.inputs, microdata) {
   
   a.out[1,"DX",]        <- f.qcat(p_rand = a.random[1,"DX",], p_cat = l.inputs[["p.DX_start"]], values = l.inputs[["v.DX_val"]])
   a.out[1,"PCP",]       <- NA
-  a.out[1,"PET",]       <- NA
+  a.out[1,"ACCEPT",]    <- NA   # only the a.random slot is used; see v.attr_names
   a.out[1,"NP",]        <- NA
   a.out[1,"TX2",]       <- 0    # no one is on treatment at start
   a.out[1,"LTC",]       <- 0    # no one in long-term care at start

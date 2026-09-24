@@ -113,7 +113,7 @@ f.qaly_cost <- function(a.out, l.inputs) {
   # store
   a.out[,"QALY",] <- QALY0 + QALY1 + QALY2 + QALY3
   a.out[,"COST_test",] <- COST_test
-  a.out[,"COST_fu",] <- COST_np   # PET pathway is not built; see v.attr_names in setup.R
+  a.out[,"COST_fu",] <- COST_np   # there is no PET pathway
   a.out[,"COST_tx",] <- COST_tx
   a.out[,"COST_tx2"] <- COST_tx2
   a.out[,"COST_care",] <- COST_care0 + COST_care1 + COST_care2

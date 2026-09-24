@@ -21,8 +21,11 @@ l.inputs[["v.attr_names"]] <- c("TIME","ALIVE","AGE","SEX","EDU","RACEETH","INCO
                                 "DX","TX","TCI","SYN","SELECT","BHA","any_BHA_pos","last_BHA_age",
                                 "CDR_track","CDR", "MEMLOSS","SEV",
                                 "CDRfast_sd1","CDRslow_sd1","CDR_obs","SEV_obs",
-                                "PCP","any_PCP_pos","PET","NP",   # PET is a reserved slot: the pathway is not built.
-                                                                  # Kept because removing an attribute re-maps a.random.
+                                "PCP","any_PCP_pos","ACCEPT","NP",  # ACCEPT: the slot is here for its a.random column,
+                                                                    # the acceptance draw in f.update_BHA; a.out holds NA
+                                                                    # (SELECT and BHA already record who declined). Was the
+                                                                    # unbuilt PET slot, renamed in place because adding or
+                                                                    # removing an attribute re-maps a.random.
                                 "TX2","LTC","QALY","COST_test","COST_fu","COST_tx2","COST_care","COST_tx")
 l.inputs[["n.attr"]] <- length(l.inputs[["v.attr_names"]])    # number of attributes
 

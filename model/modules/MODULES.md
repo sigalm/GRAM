@@ -92,8 +92,6 @@ This document provides an overview of each major module in the `modules/` direct
   - Updates clinical/pre-existing diagnosis status (e.g., MCI, dementia, normal). This attribute tracks diagnoses that occur outside of the BHA pathway, such that those with DX == 1 are ineligible for future BHA testing. It reflects empirical estimates of underdiagnosis of MCI and dementia.
 - `f.update_PCP(v.PCP.lag, ...)`
   - Updates primary care provider assessment of cognitive status, if applicable.
-- `f.update_PET(v.PET.lag, ...)`
-  - Updates PET scan result, if applicable.
 - `f.update_NP(v.NP.lag, ...)`
   - Updates neuropsychological or specialist assessment of cognitive status, if applicable.
 

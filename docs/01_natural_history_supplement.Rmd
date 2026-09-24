@@ -99,7 +99,6 @@ The model tracks the following attributes for each simulated individual:
 | `CDR_obs`† | Observed CDR-SB score | Numeric, range 0–18; -9 if not yet tested |
 | `SEV_obs`† | Observed dementia severity | 0 = MCI, 1 = mild, 2 = moderate, 3 = severe; -9 if not yet tested |
 | `PCP`† | Primary care provider follow-up result | 0 = negative, 1 = positive; `NA` if not applicable |
-| `PET`‡ | PET scan result | 0 = negative, 1 = positive |
 | `NP`‡ | Neuropsychological/specialist assessment result | 0 = negative, 1 = positive |
 | `TX2`‡ | Non-DMT treatment status | 0 = not receiving, 1 = receiving |
 | `LTC`‡ | Long-term care / institutionalization status | 0 = not in LTC, 1 = in LTC |
