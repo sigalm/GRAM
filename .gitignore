@@ -84,3 +84,6 @@ analyses/**/plots/
 
 # Default device dump R writes when a plot is drawn headlessly
 Rplots.pdf
+
+# Talks and slide decks (large binaries, personal working files)
+docs/presentations/
