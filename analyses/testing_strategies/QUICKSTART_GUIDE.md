@@ -289,7 +289,6 @@ The stop_rule function receives the following arguments (all are vectors with on
 - **`NP`**: Neuropsychological test result from previous cycle (lagged)
 - **`PET`**: PET imaging result from previous cycle (lagged)
 - **`any_PCP_pos`**: Logical indicating if the individual ever had a positive PCP evaluation
-- **`repeat_after_FP`**: Scenario parameter for pausing testing after false positives
 
 **Examples:**
 

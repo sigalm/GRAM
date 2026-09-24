@@ -30,7 +30,6 @@ scenario_inputs <- list(
   
   # Optional parameters
   NP = NULL,              
-  pause_after_FP = NULL,  
   
   # Stop parameters
   
@@ -39,7 +38,6 @@ scenario_inputs <- list(
   # any_BHA_pos = v.any_BHA_pos, 
   # NP = v.NP.lag, 
   # PCP.lag = v.PCP.lag,   
-  # repeat_after_FP = scenario$repeat_after_FP
   
   stop_rule = function(...) {
     args <- list(...)

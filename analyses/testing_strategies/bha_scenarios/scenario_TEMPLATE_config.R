@@ -48,7 +48,6 @@ scenario_inputs <- list(
   # OPTIONAL PARAMETERS
   # ============================================================================
   NP              = NULL,                       # Neuropsychological testing
-  pause_after_FP  = NULL,                       # Pause testing after false positive (default is no test after positive)
   
   # ============================================================================
   # STOP RULE
@@ -56,8 +55,7 @@ scenario_inputs <- list(
   # Available args in stop_rule function:
   #   any_BHA_pos    - Any prior positive BHA result
   #   NP             - Neuropsychological test result (lagged)
-  #   PCP.lag        - PCP evaluation result (lagged)
-  #   repeat_after_FP - Repeat after false positive flag
+  #   any_PCP_pos    - Any prior positive PCP evaluation
   
   stop_rule = function(...) {
     args <- list(...)

@@ -37,7 +37,6 @@ scenario_inputs <- list(
   
   # Optional parameters
   NP = NULL,              
-  pause_after_FP = NULL,  
   
   # Stop parameters
   stop_rule = function(...) {

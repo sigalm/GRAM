@@ -48,8 +48,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.SEV            = a.out[t,"SEV",alive],
     v.MEMLOSS        = a.out[t,"MEMLOSS",alive], 
     random_cycle     = a.random[t,"BHA",alive],
-    n.alive          = n.alive,
-    v.last_FP_age    = v.last_FP_age[alive]
+    n.alive          = n.alive
   )
   
   a.out[t,"last_BHA_age",alive] <- ifelse(a.out[t,"BHA",alive] >= 0, a.out[t,"AGE", alive], a.out[t-1,"last_BHA_age", alive])
@@ -209,8 +208,7 @@ f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_
   # optional stop rule
   stop_test <- scenario$stop_rule(any_BHA_pos = v.any_BHA_pos,
                                   NP = v.NP.lag,
-                                  any_PCP_pos = v.any_PCP_pos,
-                                  repeat_after_FP = scenario$repeat_after_FP)
+                                  any_PCP_pos = v.any_PCP_pos)
   assess <- assess & (is.na(stop_test) | !stop_test) & (v.AGE <= scenario$age_stop_test)
 
   assess
@@ -221,8 +219,7 @@ f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_
 
 
 f.update_BHA <- function(scenario, assess, v.SELECT, v.AGE, v.BHA.lag,
-                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive,
-                         v.last_FP_age) {
+                         v.NP.lag = NULL, v.SYN, v.SEV, v.MEMLOSS, random_cycle, n.alive) {
   
   bha <- rep(-9, n.alive)
   
@@ -234,12 +231,6 @@ f.update_BHA <- function(scenario, assess, v.SELECT, v.AGE, v.BHA.lag,
     # neuropsych criteria
     if (!is.null(scenario$NP)) {
       eligible <- eligible & (is.null(v.NP.lag) | v.NP.lag != 1)
-    }
-    
-    # pause after detected false positive BHA
-    if (!is.null(scenario$repeat_after_FP)) {
-      interval_after_fp_ok <- is.na(v.last_FP_age) | ((v.AGE - v.last_FP_age) >= scenario$repeat_after_FP)
-      eligible <- eligible & interval_after_fp_ok
     }
     
     # calculate test results
