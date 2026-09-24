@@ -114,7 +114,8 @@ Two exceptions worth knowing:
 
 `v.attr_names` in `model/setup.R` is the authoritative list; it currently holds
 36 attributes, including cost accumulators (`COST_test`, `COST_fu`, `COST_tx2`,
-`COST_care`, `COST_tx`) and test results (`PCP`, `PET`, `NP`).
+`COST_care`, `COST_tx`) and test results (`PCP`, `NP`). `ACCEPT` exists only for its
+`a.random` slot, the draw for taking up an offered test; its `a.out` column is NA.
 
 ## Key Files
 
