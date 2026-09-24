@@ -111,8 +111,20 @@ output_dir <- "analyses/testing_strategies/sim_results"
 perf_dir   <- "analyses/testing_strategies/test_perf_results"
 plot_dir   <- "analyses/testing_strategies/plots"
 
-# To pick up an earlier run, set run_id to that timestamp and skip the "Run scenarios" chunk.
-run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+# To pick up an earlier run without re-simulating it, set these BEFORE sourcing this
+# file and every table and figure is rebuilt from that run's saved outputs:
+#
+#   options(gram.run_id = "<timestamp>", gram.run_scenarios = FALSE)
+#   options(gram.make_figures = FALSE)   # additionally skip redrawing the jpegs
+#
+# Options rather than plain variables because model/setup.R, sourced at the top of this
+# file, opens with rm(list = ls()) -- anything the caller assigns beforehand is gone by
+# the time this line runs. Interactively, assigning run_id after the setup block and
+# skipping the "Run scenarios" chunk by hand does the same thing. Every default is the
+# interactive behaviour: fresh timestamp, scenarios run, figures written.
+run_id        <- getOption("gram.run_id", format(Sys.time(), "%Y%m%d_%H%M%S"))
+run_scenarios <- getOption("gram.run_scenarios", TRUE)
+make_figures  <- getOption("gram.make_figures", TRUE)
 
 sim_file  <- function(key, id = run_id) file.path(output_dir, paste0("scenario_", key, "_sim_", id, ".rds"))
 perf_file <- function(key, id = run_id) file.path(perf_dir, paste0(key, "_", id, ".rds"))
@@ -121,7 +133,7 @@ plot_file <- function(name, id = run_id) file.path(plot_dir, paste0(name, "_", i
 
 
 ## Run scenarios ####
-for (scen in scenarios_to_run) {
+for (scen in if (run_scenarios) scenarios_to_run else character(0)) {
   local({
     config_file <- file.path(config_dir, reg_row(scen)$config)
     cat("Running scenario:", scen, "\n")
@@ -411,8 +423,9 @@ figures <- setNames(lapply(figure_specs, function(spec) {
   # theme_paper2 on top would override the bottom row's small grey stats strip.
   themed <- if (spec$type == "combined") p else p + theme_paper2
 
-  ggsave(plot_file(spec$name), plot = themed,
-         height = spec$height %||% 10, width = spec$width, dpi = 300)
+  if (make_figures)
+    ggsave(plot_file(spec$name), plot = themed,
+           height = spec$height %||% 10, width = spec$width, dpi = 300)
   p
 }), vapply(figure_specs, `[[`, character(1), "name"))
 
