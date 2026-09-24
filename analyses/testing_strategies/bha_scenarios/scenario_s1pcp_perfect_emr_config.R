@@ -39,7 +39,7 @@ scenario_inputs <- list(
                                  prev_mci   = 0.0825,
                                  prev_dem   = 0.0093),
   # A flagged person who declined their last offer takes the next one up at this,
-  # whatever their state. PLACEHOLDER.
+  # whatever their state. Source: email from Jim; citation to be added.
   p.accept_after_decline = 0.2,
   # A negative test does not clear the flag, but the person is not re-tested for 3
   # years, mirroring the inclusive arm. A decline restarts the interval too, so a
