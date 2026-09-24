@@ -17,17 +17,23 @@ scenario_inputs <- list(
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
   # Selective: eRADAR-style EHR risk flag.
-  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
-  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Source: GRAMish workbook, "P conditional testing" tab, 14 Sep 2026.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
-  probs_select = f.select_matrix(h = 0.09, mci = 0.8, dem = 1),
-  # Eligibility is reassessed from scratch every cycle: no select_persists, no
-  # rr.select_prior. Whether an eRADAR flag should stick, and whether a negative result
-  # should reassure, are both conjecture the data do not settle. A clean redraw is the
-  # assumption that needs no defending, and the pathways it leaves out largely cancel:
-  # those who test positive drop out of the pool anyway, and for those who test negative
-  # a cleared flag IS a pure redraw.
-  repeat_interval = 1,    # years between BHA administrations
+  probs_select = f.select_matrix(h = 0.041, mci = 0.371, dem = 0.734),
+  # The flag belongs to the record: once selected, never redrawn. Whether an eRADAR
+  # flag ever clears is conjecture the data do not settle; a sticky flag is the
+  # working assumption for now.
+  select_persists = TRUE,
+  # A negative test does not clear the flag, but the person is not re-tested for 3
+  # years, mirroring the inclusive arm. repeat_interval counts from the last TEST, so
+  # a flagged person who did not take up the offer is offered again the next year, at
+  # the unadjusted probability.
+  repeat_interval = 3,    # years between BHA administrations
+  # No rr.select_prior: repeats are independent. Neither a declined offer nor a prior
+  # test result changes the next draw. probs_select is compound P(flagged) x
+  # P(accept | flagged), so SELECT == 0 cannot separate "not flagged" from "flagged,
+  # declined", and a decline penalty would hit both; left out until that split is
+  # identified from the trial data.
   prob_pcpfu = 1,
   
   # PERFECT PCP

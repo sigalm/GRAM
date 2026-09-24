@@ -17,10 +17,9 @@ scenario_inputs <- list(
   age_first_test  = 65,                   # age at which first BHA is administered
   age_stop_test = 80,
   # Reactive: spontaneous, patient-initiated concern.
-  # Source: GRAMish workbook v25, 6 Feb 2026. Estimated prior to the July 2026
-  # recalibration, so the undiagnosed case mix they were solved against has shifted.
+  # Source: GRAMish workbook, "P conditional testing" tab, 14 Sep 2026.
   # Workbook TCI folds into h; workbook memory loss folds into mci.
-  probs_select = f.select_matrix(h = 0.005, mci = 0.2, dem = 0.9),
+  probs_select = f.select_matrix(h = 0.004, mci = 0.174, dem = 0.783),
   # No rr.select_prior: selection is redrawn at the unadjusted conditional probability at
   # every assessment. A prior test result carries no reassurance or persistence effect.
   repeat_interval = 1,    # years between BHA administrations
