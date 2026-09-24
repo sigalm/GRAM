@@ -160,9 +160,11 @@ load_scenario <- function(config_file, base_inputs) {
 }
 
 
-# Read the results of last saved run
+# Read the results of last saved run. Runs live in one subfolder per run id, so the
+# search is recursive; the run id leads each path, and sorting on it finds the latest.
 latest_rds <- function(prefix, dir = output_dir) {
-  files <- list.files(output_dir, pattern = paste0("scenario_", prefix, "_sim_.*\\.rds$"), full.names = TRUE)
+  files <- list.files(dir, pattern = paste0("scenario_", prefix, "_sim_.*\\.rds$"), full.names = TRUE,
+                      recursive = TRUE)
   
   if (length(files) == 0) stop("No files found for prefix: ", prefix)
   latest <- sort(files, decreasing = TRUE)[1]

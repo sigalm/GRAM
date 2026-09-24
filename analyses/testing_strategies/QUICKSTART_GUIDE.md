@@ -33,9 +33,9 @@ analyses/testing_strategies/
 │   └── scenario_*pcp*_config.R             # Variants with PCP follow-up
 ├── planning/                           # Planning documents
 ├── validation/                         # Validation outputs
-├── sim_results/                        # Simulation output files (.rds)
-├── test_perf_results/                  # Processed test performance data
-└── plots/                              # Generated figures
+├── sim_results/<run_id>/               # Simulation output files (.rds), one folder per run
+├── test_perf_results/<run_id>/         # Processed test performance data, one folder per run
+└── plots/<run_id>/                     # Generated figures, one folder per run
 ```
 
 Run `list.files("analyses/testing_strategies/bha_scenarios")` for the current set —
@@ -101,7 +101,7 @@ for (scen in c("u3bhapos", "r1bhapos")) {
 Execute the simulation loop. Each scenario will:
 - Load its configuration file
 - Run the simulation
-- Save results with a timestamp to `sim_results/`
+- Save results to `sim_results/<run_id>/`, where the run id is the run's timestamp
 
 **Note**: Each simulation can take several minutes to hours depending on sample size.
 

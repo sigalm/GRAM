@@ -126,10 +126,19 @@ run_id        <- getOption("gram.run_id", format(Sys.time(), "%Y%m%d_%H%M%S"))
 run_scenarios <- getOption("gram.run_scenarios", TRUE)
 make_figures  <- getOption("gram.make_figures", TRUE)
 
-sim_file  <- function(key, id = run_id) file.path(output_dir, paste0("scenario_", key, "_sim_", id, ".rds"))
-perf_file <- function(key, id = run_id) file.path(perf_dir, paste0(key, "_", id, ".rds"))
-stats_file <- function(id = run_id) file.path(perf_dir, paste0("strategy_stats_", id, ".rds"))
-plot_file <- function(name, id = run_id) file.path(plot_dir, paste0(name, "_", id, ".jpeg"))
+# Each run gets its own subfolder in each of the three output folders. The run id stays
+# in the file name too, so a file copied out of its folder still says which run made it.
+sim_file  <- function(key, id = run_id) file.path(output_dir, id, paste0("scenario_", key, "_sim_", id, ".rds"))
+perf_file <- function(key, id = run_id) file.path(perf_dir, id, paste0(key, "_", id, ".rds"))
+stats_file <- function(id = run_id) file.path(perf_dir, id, paste0("strategy_stats_", id, ".rds"))
+plot_file <- function(name, id = run_id) file.path(plot_dir, id, paste0(name, "_", id, ".jpeg"))
+
+# Wrap a path that is about to be written: creates its run folder on first write, so
+# reading an earlier run never leaves an empty folder behind.
+for_writing <- function(path) {
+  dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
+  path
+}
 
 
 ## Run scenarios ####
@@ -139,7 +148,7 @@ for (scen in if (run_scenarios) scenarios_to_run else character(0)) {
     cat("Running scenario:", scen, "\n")
     config <- load_scenario(config_file, l.inputs_calibrated)
     result <- f.wrap_run(config, microdata = sample1)
-    saveRDS(result, file = sim_file(scen))
+    saveRDS(result, file = for_writing(sim_file(scen)))
 
     rm(config, result)
     invisible(gc())
@@ -196,7 +205,7 @@ strategy_stats <- if (stats_cached) {
 
   out <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
     output <- readRDS(sim_file(scen))$output
-    saveRDS(post_processing_outputs(output), file = perf_file(scen))
+    saveRDS(post_processing_outputs(output), file = for_writing(perf_file(scen)))
 
     bha <- output[, "BHA", ]; pcp <- output[, "PCP", ]
     syn <- output[, "SYN", ]; sev <- output[, "SEV", ]
@@ -251,7 +260,7 @@ strategy_stats <- if (stats_cached) {
   out$nnt10_any    <- 10 * out$n_tests / out$n_identified
   out$nnt10_at_mci <- 10 * out$n_tests / out$n_at_mci
   out$nnt10_at_dem <- 10 * out$n_tests / out$n_at_dem
-  saveRDS(out, stats_file())
+  saveRDS(out, for_writing(stats_file()))
   out
 }
 
@@ -424,7 +433,7 @@ figures <- setNames(lapply(figure_specs, function(spec) {
   themed <- if (spec$type == "combined") p else p + theme_paper2
 
   if (make_figures)
-    ggsave(plot_file(spec$name), plot = themed,
+    ggsave(for_writing(plot_file(spec$name)), plot = themed,
            height = spec$height %||% 10, width = spec$width, dpi = 300)
   p
 }), vapply(figure_specs, `[[`, character(1), "name"))
