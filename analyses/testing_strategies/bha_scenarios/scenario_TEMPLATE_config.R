@@ -43,8 +43,8 @@ scenario_inputs <- list(
   # Acceptance: whether a selected person takes the offered test up. Optional; without
   # probs_accept every offer is taken up and probs_select alone decides who is tested,
   # so probs_select is then P(tested), selection and uptake combined. With it,
-  # probs_select is P(selected) alone. A decline is BHA -8 with SELECT 1, and restarts
-  # repeat_interval just as a test does.
+  # probs_select is P(selected) alone. A decline is BHA -8 with SELECT 1. Unlike a test
+  # it does not start repeat_interval: the person is due again the next cycle.
   # probs_accept = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
                                    # P(test | selected), by true cognitive status; or
                                    # f.accept_matrix() to build it from one overall

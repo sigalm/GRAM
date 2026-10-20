@@ -42,8 +42,8 @@ scenario_inputs <- list(
   # whatever their state. Source: email from Jim; citation to be added.
   p.accept_after_decline = 0.2,
   # A negative test does not clear the flag, but the person is not re-tested for 3
-  # years, mirroring the inclusive arm. A decline restarts the interval too, so a
-  # flagged person who did not take up the offer is offered again 3 years later.
+  # years, mirroring the inclusive arm. A decline does not start the interval: a
+  # flagged person who did not take up the offer is offered again the next year.
   repeat_interval = 3,    # years between BHA administrations
   # No rr.select_prior: a prior test result does not change the next draw, and with
   # select_persists the flagged are never redrawn anyway.

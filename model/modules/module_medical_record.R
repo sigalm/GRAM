@@ -3,7 +3,11 @@
 
 #### Module Wrapper ####
 f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive) {
-  
+
+  # Did each person decline the last offer they had? Read from history up to t-1, so it
+  # is the same before and after this cycle's offer; both eligibility and acceptance use it.
+  v.declined_last <- f.declined_last_offer(a.out, t, alive)
+
   # Who CAN be tested this cycle: has a provider, is undiagnosed, is in the age window,
   # is due under the cohort split / repeat interval, and has not hit a stop condition.
   # Computed once here because selection is drawn among these people, and only these.
@@ -14,6 +18,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     v.DX.lag         = a.out[t-1,"DX",alive],
     v.AGE            = a.out[t,"AGE",alive],
     v.last_BHA_age   = a.out[t-1,"last_BHA_age",alive],
+    v.declined_last  = v.declined_last,
     v.NP.lag         = a.out[t-1,"NP",alive],
     v.any_BHA_pos    = a.out[t-1,"any_BHA_pos",alive],
     v.any_PCP_pos    = a.out[t-1,"any_PCP_pos",alive],
@@ -41,7 +46,7 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
     scenario         = l.inputs[["scenario"]],
     assess           = assess,
     v.SELECT         = a.out[t,"SELECT",alive],
-    v.declined_last  = f.declined_last_offer(a.out, t, alive),
+    v.declined_last  = v.declined_last,
     v.AGE            = a.out[t,"AGE",alive],
     v.BHA.lag        = a.out[t-1,"BHA",alive],
     v.SYN            = a.out[t,"SYN",alive],
@@ -53,10 +58,11 @@ f.module_medical_record <- function(l.inputs, a.out, t, a.random, alive, n.alive
   )
   
   # last_BHA_age is the age at the last OFFER: a test taken (BHA 0/1) or one declined
-  # (selected, due, and still not tested, BHA -8 with SELECT 1). repeat_interval counts
-  # from it, so someone who declines is not offered again until the interval has passed,
-  # exactly as if they had tested. Where probs_accept is unset nobody declines, and this
-  # is the age at the last test, as it always was.
+  # (selected, due, and still not tested, BHA -8 with SELECT 1). Recording declines here
+  # is what lets f.declined_last_offer find them. After a test, repeat_interval counts
+  # from it; after a decline the person is due again the next cycle (f.assess_eligible).
+  # Where probs_accept is unset nobody declines, and this is the age at the last test,
+  # as it always was.
   offered <- (a.out[t,"BHA",alive] >= 0) | (a.out[t,"BHA",alive] == -8 & a.out[t,"SELECT",alive] == 1)
   a.out[t,"last_BHA_age",alive] <- ifelse(offered, a.out[t,"AGE", alive], a.out[t-1,"last_BHA_age", alive])
   a.out[t,"any_BHA_pos",alive] <-  as.numeric((a.out[t-1,"any_BHA_pos",alive]) | (a.out[t,"BHA",alive] == 1))
@@ -186,7 +192,7 @@ f.update_SELECT <- function(scenario, assess, v.AGE, v.SYN, v.SEV, v.SELECT.lag,
 # f.update_BHA so that f.update_SELECT can draw among exactly this group: selection is
 # a property of an assessment, so it should only be drawn when an assessment happens.
 f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_BHA_age,
-                              v.NP.lag, v.any_BHA_pos, v.any_PCP_pos, n.alive) {
+                              v.declined_last, v.NP.lag, v.any_BHA_pos, v.any_PCP_pos, n.alive) {
 
   if (is.null(scenario[["test"]])) return(rep(FALSE, n.alive))
 
@@ -200,8 +206,11 @@ f.assess_eligible <- function(scenario, cycle, v.HCARE, v.DX.lag, v.AGE, v.last_
   if(is.null(scenario$cohort_split)) {scenario$cohort_split <- 1}
   first_test <- is.na(v.last_BHA_age) & (((as.numeric(names(v.last_BHA_age))-1) %% scenario$cohort_split) + 1) == (((cycle-1) %% scenario$cohort_split) + 1)
 
-  # repeat criteria for assessment
-  interval_ok <- !is.na(v.last_BHA_age) & ((v.AGE - v.last_BHA_age) >= scenario$repeat_interval)
+  # repeat criteria for assessment. A test buys repeat_interval years before the next
+  # offer; a decline buys none, so the person is offered again the next cycle (at
+  # p.accept_after_decline, in f.update_BHA).
+  interval <- ifelse(v.declined_last, 1, scenario$repeat_interval)
+  interval_ok <- !is.na(v.last_BHA_age) & ((v.AGE - v.last_BHA_age) >= interval)
   assess <- assess & (first_test | interval_ok)
 
   # optional stop rule
