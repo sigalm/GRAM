@@ -47,8 +47,9 @@ scenario_inputs <- list(
   # it does not start repeat_interval: the person is due again the next cycle.
   # probs_accept = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
                                    # P(test | selected), by true cognitive status; or
-                                   # f.accept_matrix() to build it from one overall
-                                   # uptake (see the eRADAR configs)
+                                   # f.accept_matrix() to build it from an overall
+                                   # uptake and the share impaired among those tested
+                                   # (see the eRADAR configs)
   # p.accept_after_decline = 0.2,  # replaces probs_accept, whatever the state, for
                                    # anyone who declined the last offer they had
   prob_pcpfu      = NULL,                       # Probability of PCP follow-up after cognitive test (default is no follow-up)

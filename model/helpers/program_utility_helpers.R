@@ -13,44 +13,44 @@ f.select_matrix <- function(h, mci, dem, ages = 50:100) {
 }
 
 
-# Build a probs_accept matrix from an overall uptake, so that trying another uptake is
-# one number in the config rather than another pass through the workbook.
+# Build a probs_accept matrix from an overall uptake and the share of those tested who are
+# truly impaired, so that each assumption is one number in the config.
 #
-# probs_select is P(flagged | state): the uptake = 100% column of the workbook. uptake is
-# the share of the flagged who take the test up. Acceptance is P(test | flagged, state).
+# probs_select is P(flagged | state). uptake is the share of the flagged who take the test
+# up, so uptake x P(flagged) of the population is tested. Acceptance is
+# P(test | flagged, state):
 #
-#   healthy    accepts at uptake. With the prevalence-weighted total fixed at
-#              uptake x P(flagged), the impaired then average uptake too.
-#   MCI / dem  split that average so P(test | dem) / P(test | MCI) = R(uptake), a power
-#              curve through two anchors: ratio_ref at uptake_ref (the empirical
-#              anchor) and the flag ratio dem / MCI at uptake = 100%, where every
-#              acceptance is 1. R falls as uptake rises -- the dementia cases are mostly
-#              in already, so more uptake brings in relatively more MCI -- and reaches
-#              the flag ratio without a floor or a kink.
+#   dem   1. Every flagged person with dementia takes the test up, so P(tested | dem) is
+#         the flag's own sensitivity and no uptake can raise it.
+#   mci   the rest of the impaired testers: p_impaired_tested of all those tested, less
+#         the dementia ones.
+#   h     the remaining 1 - p_impaired_tested of those tested.
 #
-# prev_mci and prev_dem only enter as their ratio: the mix of MCI and dementia among
-# the impaired. Every argument is required; the values belong in the scenario config.
-f.accept_matrix <- function(probs_select, uptake, ratio_ref, uptake_ref, prev_mci, prev_dem) {
-  stopifnot(uptake > 0, uptake <= 1, uptake_ref > 0, uptake_ref < 1)
+# Once dementia is fixed, p_impaired_tested is what splits the testers between MCI and
+# healthy. prev_mci and prev_dem must be the prevalences probs_select was derived in.
+# Every argument is required; the values belong in the scenario config.
+f.accept_matrix <- function(probs_select, uptake, p_impaired_tested, prev_mci, prev_dem) {
+  stopifnot(uptake > 0, uptake <= 1, p_impaired_tested > 0, p_impaired_tested < 1)
 
   f_h <- probs_select$h; f_mci <- probs_select$mci; f_dem <- probs_select$dem
+  prev_h <- 1 - prev_mci - prev_dem
 
-  ratio_100 <- f_dem / f_mci
-  ratio <- ratio_100 * (ratio_ref / ratio_100)^(log(uptake) / log(uptake_ref))
+  n_tested     <- uptake * (f_h * prev_h + f_mci * prev_mci + f_dem * prev_dem)
+  n_tested_dem <- f_dem * prev_dem
+  n_tested_mci <- p_impaired_tested * n_tested - n_tested_dem
+  n_tested_h   <- (1 - p_impaired_tested) * n_tested
 
-  p_test_mci <- uptake * (f_mci * prev_mci + f_dem * prev_dem) / (prev_mci + ratio * prev_dem)
-  p_test_dem <- ratio * p_test_mci
-
-  m <- f.select_matrix(h   = rep(uptake, length(f_h)),
-                       mci = p_test_mci / f_mci,
-                       dem = p_test_dem / f_dem,
+  m <- f.select_matrix(h   = n_tested_h   / (f_h   * prev_h),
+                       mci = n_tested_mci / (f_mci * prev_mci),
+                       dem = rep(1, length(f_dem)),
                        ages = probs_select$age)
 
-  # Acceptance above 1 means these anchors ask the dementia flag for more tests than
-  # there are flagged people with dementia at this uptake.
-  if (any(m[, c("h", "mci", "dem")] > 1 + 1e-9)) {
-    stop("f.accept_matrix: acceptance above 1 at uptake = ", uptake,
-         ". Check ratio_ref / uptake_ref against probs_select.", call. = FALSE)
+  # Outside [0, 1], the share impaired cannot be reached at this uptake: above 1, it asks
+  # for more MCI or healthy testers than are flagged; below 0, the flagged dementia cases
+  # alone exceed it.
+  if (any(m[, c("h", "mci")] > 1 + 1e-9) || any(m[, c("h", "mci")] < 0)) {
+    stop("f.accept_matrix: p_impaired_tested = ", p_impaired_tested, " cannot be reached ",
+         "at uptake = ", uptake, " with this probs_select.", call. = FALSE)
   }
   m
 }
