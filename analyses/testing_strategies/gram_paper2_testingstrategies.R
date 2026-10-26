@@ -317,7 +317,8 @@ undx_pool <- function(scenario_array, age) {
 # impaired -- healthy or in TCI -- who is impaired later is an early catch, not a plain
 # false positive. converted_tp is
 # structurally empty -- "positive while healthy, impaired now" cannot happen within one
-# cycle -- so it is fixed at 0 and the formulas are predictive_value's with it dropped.
+# cycle -- so it is fixed at 0. The metrics themselves are computed from these counts by
+# metric_counts(), the same formulas as the program-end row.
 #
 # Sensitivity is also reported split by the severity of the impairment being missed:
 # SEV 0 is MCI, SEV >= 1 is dementia of any stage. TCI never enters either, because
@@ -364,14 +365,7 @@ anchored_performance <- function(scenario_array, anchor = c("visit", "test")) {
     tp_dem        = sum(res ==  1 & at_dem),
     fn_dem        = sum(res ==  0 & at_dem),
     notest_fn_dem = sum(res == -8 & at_dem)
-  ) %>%
-    mutate(sens = tp / (tp + fn + notest_fn),
-           sens_mci = tp_mci / (tp_mci + fn_mci + notest_fn_mci),
-           sens_dem = tp_dem / (tp_dem + fn_dem + notest_fn_dem),
-           spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
-           ppv  = tp / (tp + early_pos + fp),
-           npv  = (tn + notest_tn) / (tn + notest_tn + fn + notest_fn),
-           acc  = (tp + tn + notest_tn) / (tp + early_pos + fp + tn + fn + notest_tn + notest_fn))
+  )
 
   list(
     anchor     = anchor,
@@ -553,32 +547,57 @@ counts_table <- function(keys, ages = c(65, 67, 75)) {
 counts_table(main_keys)
 
 
-# Program performance by calendar age, used for the year-10 row
-predictive_value <- all_test_data %>%
-  mutate(ppv = (tp + converted_tp) / (tp + early_pos + converted_tp + fp),
-         npv = ((tn + notest_tn) / (tn + fn + notest_tn + notest_fn)),
-         sens = (tp + converted_tp) / (tp + converted_tp + fn + notest_fn),
-         sens_mci = (tp_mci + converted_tp_mci) /
-                      (tp_mci + converted_tp_mci + fn_mci + notest_fn_mci),
-         sens_dem = (tp_dem + converted_tp_dem) /
-                      (tp_dem + converted_tp_dem + fn_dem + notest_fn_dem),
-         spec = (tn + notest_tn) / (tn + notest_tn + early_pos + fp),
-         acc = (tp + converted_tp + tn + notest_tn) / (tp + converted_tp + tn + notest_tn + fp + early_pos + fn + notest_fn))
+# Numerator and denominator of every reported metric, from one row of counts: either a
+# first-cycle perf (anchored_performance) or one age of all_test_data. The single place
+# these formulas live. converted_tp_mci / _dem exist only in all_test_data; the
+# first-cycle row has no conversions, so they count as 0 there.
+metric_counts <- function(d) {
+  with_conv <- function(col) d[[col]] + (d[[paste0("converted_", col)]] %||% 0)
+  tp     <- with_conv("tp")
+  tp_mci <- with_conv("tp_mci")
+  tp_dem <- with_conv("tp_dem")
+  neg    <- d$tn + d$notest_tn   # correct negatives, tested or not
+  list(sens     = c(x = tp,       n = tp + d$fn + d$notest_fn),
+       sens_mci = c(x = tp_mci,   n = tp_mci + d$fn_mci + d$notest_fn_mci),
+       sens_dem = c(x = tp_dem,   n = tp_dem + d$fn_dem + d$notest_fn_dem),
+       spec     = c(x = neg,      n = neg + d$early_pos + d$fp),
+       ppv      = c(x = tp,       n = tp + d$early_pos + d$fp),
+       npv      = c(x = neg,      n = neg + d$fn + d$notest_fn),
+       acc      = c(x = tp + neg, n = tp + neg + d$early_pos + d$fp + d$fn + d$notest_fn))
+}
 
-# `eligible_tested` is supplied by the caller rather than read off `d`, because its
-# denominator is row-specific -- see results_table_for.
-as_pct_row <- function(d, time, strategy, eligible_tested) {
-  pct <- function(x) round(x * 100, digits = 1)
-  data.frame(Time                    = time,
-             Strategy                = strategy,
-             `Eligible tested`       = pct(eligible_tested),
-             Sensitivity             = pct(d$sens),
-             `Sensitivity, MCI`      = pct(d$sens_mci),
-             `Sensitivity, dementia` = pct(d$sens_dem),
-             Specificity             = pct(d$spec),
-             PPV                     = pct(d$ppv),
-             NPV                     = pct(d$npv),
-             Accuracy                = pct(d$acc),
+# Percent with a 95% Wilson interval, as one cell: "50.4 (44.2-56.6)". Wilson rather than
+# Wald because the first-cycle dementia cells rest on ~250 people and sit near 1 for PPV
+# and specificity, where Wald runs past 100%.
+#
+# These intervals carry Monte Carlo error only -- would the cell move with a different
+# draw of the same cohort size -- not uncertainty in any input parameter. And they are
+# not for comparing strategies: the arms share random numbers, so the same simulated
+# people sit behind every row, and a difference between arms is far more precise than
+# two overlapping intervals suggest.
+pct_ci <- function(x, n, z = qnorm(0.975)) {
+  p      <- x / n
+  centre <- (p + z^2 / (2 * n)) / (1 + z^2 / n)
+  half   <- z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2)) / (1 + z^2 / n)
+  sprintf("%.1f (%.1f–%.1f)", 100 * p, 100 * (centre - half), 100 * (centre + half))
+}
+
+# `n_tested` / `n_eligible` are supplied by the caller rather than read off `d`, because
+# the denominator is row-specific -- see results_table_for.
+as_pct_row <- function(d, time, strategy, n_tested, n_eligible) {
+  m    <- metric_counts(d)
+  cell <- function(k) pct_ci(m[[k]][["x"]], m[[k]][["n"]])
+  data.frame(Time                     = time,
+             Strategy                 = strategy,
+             `Eligible tested, N (%)` = sprintf("%s (%.1f)", format(n_tested, big.mark = ","),
+                                                100 * n_tested / n_eligible),
+             Sensitivity              = cell("sens"),
+             `Sensitivity, MCI`       = cell("sens_mci"),
+             `Sensitivity, dementia`  = cell("sens_dem"),
+             Specificity              = cell("spec"),
+             PPV                      = cell("ppv"),
+             NPV                      = cell("npv"),
+             Accuracy                 = cell("acc"),
              check.names = FALSE)
 }
 
@@ -588,7 +607,8 @@ as_pct_row <- function(d, time, strategy, eligible_tested) {
 # anchor = "first_test" swaps in the test-level first row; see anchored_performance for
 # why that row is NOT comparable with the program-end one.
 #
-# "Eligible tested" is the share of eligible people the strategy actually tested. Its
+# "Eligible tested" is the number of eligible people the strategy actually tested, and
+# their share. Its
 # denominator is MATCHED TO THE ROW, so the column reads consistently as reach-so-far:
 # on the First Cycle row, of those due a test that cycle, the share tested; on the
 # Program End row, of everyone ever eligible across the whole window, the share ever
@@ -604,14 +624,14 @@ results_table_for <- function(keys, at_end_followup = end_age,
   first <- do.call(rbind, lapply(keys, function(scen) {
     fv <- scenario_reports[[scen]][[anchor]]$perf
     as_pct_row(fv, first_label, reg_row(scen)$label,
-               eligible_tested = fv$n_tested / fv$n_visited)
+               n_tested = fv$n_tested, n_eligible = fv$n_visited)
   }))
 
   later <- do.call(rbind, lapply(keys, function(scen) {
     st <- strategy_stats[match(scen, strategy_stats$scenario), ]
-    as_pct_row(predictive_value %>% filter(scenario == scen, age == at_end_followup),
+    as_pct_row(all_test_data %>% filter(scenario == scen, age == at_end_followup),
                "By Program End", reg_row(scen)$label,
-               eligible_tested = st$n_people / st$n_eligible)
+               n_tested = st$n_people, n_eligible = st$n_eligible)
   }))
 
   rbind(first, later)
