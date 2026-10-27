@@ -393,6 +393,53 @@ first_visit_performance <- function(scenario_array) anchored_performance(scenari
 first_test_performance  <- function(scenario_array) anchored_performance(scenario_array, "test")
 
 
+# Time from impairment onset to identification, per person. The cohort is INCIDENT
+# cases: people whose impairment (SYN 1) begins inside the testing window while they
+# are in the program -- provider, no clinical diagnosis as of the previous cycle.
+# People already impaired at 65 are left out, because their onset predates the
+# program and the clock would start before it could act.
+#
+# Each person lands in exactly one outcome by end of window:
+#   early       positive before onset (healthy or TCI). A false positive until they
+#               convert, a true positive from then on -- as everywhere else -- but
+#               kept out of the lag, where it would read as caught on day one.
+#   caught      first positive while impaired, at lag = years after onset
+#               (0 = the onset year itself)
+#   clinic      clinically diagnosed before the program caught them: a miss
+#   neither     not caught by end of window, and not diagnosed -- died, or still
+#               undetected
+# Returns one row per incident case, so the table can summarize it however needed.
+onset_timing <- function(scenario_array, window = testing_window) {
+  bha <- scenario_array[, "BHA", ]; pcp <- scenario_array[, "PCP", ]
+  syn <- scenario_array[, "SYN", ]; age <- scenario_array[, "AGE", ]
+  dx  <- scenario_array[, "DX", ];  hcare <- scenario_array[, "HCARE", ]
+  res <- ifelse(!is.na(pcp) & pcp >= 0, pcp, bha)   # PCP verdict lands in the same cycle
+  pos <- apply(res, 2, cummax) == 1                 # standing positive verdict
+
+  first_of <- function(m) apply(m, 2, function(x) which(x)[1])
+  onset     <- first_of(syn == 1)
+  first_pos <- first_of(pos)
+  first_tp  <- first_of(pos & syn == 1)
+  first_dx  <- first_of(dx == 1)
+  end_cyc   <- max(window) - 50 + 1
+
+  j <- which(!is.na(onset) & onset > 1)
+  j <- j[age[cbind(onset[j], j)] %in% window &
+         dx[cbind(onset[j] - 1, j)] == 0 &
+         hcare[cbind(onset[j], j)] == 1]
+
+  early  <- !is.na(first_pos[j]) & first_pos[j] < onset[j]
+  caught <- !early & !is.na(first_tp[j]) & first_tp[j] <= end_cyc
+  clinic <- !early & !caught & !is.na(first_dx[j]) & first_dx[j] <= end_cyc
+
+  data.frame(
+    onset_age = age[cbind(onset[j], j)],
+    outcome   = ifelse(early, "early", ifelse(caught, "caught", ifelse(clinic, "clinic", "neither"))),
+    lag       = ifelse(caught, first_tp[j] - onset[j], NA)
+  )
+}
+
+
 ## Figures ####
 theme_paper2 <- theme(
   text            = element_text(size = 18),
@@ -505,7 +552,8 @@ scenario_reports <- setNames(lapply(scenarios_to_run, function(scen) {
   arr <- readRDS(sim_file(scen))$output
   out <- list(
     first_visit = first_visit_performance(arr),   # reported
-    first_test  = first_test_performance(arr)     # alternative, if asked for
+    first_test  = first_test_performance(arr),    # alternative, if asked for
+    timing      = onset_timing(arr)
   )
   rm(arr); invisible(gc())
   out
@@ -691,6 +739,45 @@ nnt_table_for <- function(keys) {
     `Tests per 10 caught early` = round(d$nnt10_early, 1),
     check.names = FALSE)
 }
+
+# Time from impairment onset to identification, from onset_timing(). The four
+# outcome columns partition the incident cases. Lag statistics are among those
+# caught after onset only; early catches have their own column instead of a lag.
+#
+# "Within k years" is caught by a positive test no more than k years after the onset
+# year, among people whose onset left at least k years of window to be caught in --
+# onset at 79 cannot show a 2-year catch by 80, so it would dilute the share. Deaths
+# and clinical diagnoses inside those k years count as not caught. Same 95% Wilson
+# interval as the results table.
+timing_table_for <- function(keys) {
+  if (skip_incomplete(keys, "timing table")) return(NULL)
+  n_pct <- function(x, n) sprintf("%s (%.1f)", format(x, big.mark = ","), 100 * x / n)
+  do.call(rbind, lapply(keys, function(scen) {
+    d   <- scenario_reports[[scen]]$timing
+    n   <- nrow(d)
+    k_n <- function(o) sum(d$outcome == o)
+    lag <- d$lag[d$outcome == "caught"]
+    q   <- quantile(lag, c(0.25, 0.5, 0.75), type = 1, names = FALSE)
+    within <- function(k) {
+      at_risk <- d$onset_age <= max(testing_window) - k
+      pct_ci(sum(at_risk & d$outcome == "caught" & d$lag <= k, na.rm = TRUE), sum(at_risk))
+    }
+    data.frame(Strategy                          = reg_row(scen)$label,
+               `Impaired during program, N`      = format(n, big.mark = ","),
+               `Flagged before onset, n (%)`     = n_pct(k_n("early"), n),
+               `Caught after onset, n (%)`       = n_pct(k_n("caught"), n),
+               `Clinic diagnosed first, n (%)`   = n_pct(k_n("clinic"), n),
+               `Not caught, n (%)`               = n_pct(k_n("neither"), n),
+               `Years to catch, median (IQR)`    = sprintf("%d (%d–%d)", q[2], q[1], q[3]),
+               `Years to catch, mean`            = sprintf("%.1f", mean(lag)),
+               `Caught within 1 year, %`         = within(1),
+               `Caught within 2 years, %`        = within(2),
+               check.names = FALSE)
+  }))
+}
+
+timing_table <- timing_table_for(main_keys)
+as_flex(timing_table)
 
 nnt_table <- nnt_table_for(main_keys)
 as_flex(nnt_table)
