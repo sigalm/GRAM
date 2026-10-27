@@ -435,7 +435,11 @@ onset_timing <- function(scenario_array, window = testing_window) {
   data.frame(
     onset_age = age[cbind(onset[j], j)],
     outcome   = ifelse(early, "early", ifelse(caught, "caught", ifelse(clinic, "clinic", "neither"))),
-    lag       = ifelse(caught, first_tp[j] - onset[j], NA)
+    lag       = ifelse(caught, first_tp[j] - onset[j], NA),
+    # Early catches: years they carried a positive before they were impaired -- time
+    # spent labeled while unimpaired. Bounded by the window, since nobody is tested
+    # before age_first_test.
+    lead      = ifelse(early, onset[j] - first_pos[j], NA)
   )
 }
 
@@ -742,7 +746,9 @@ nnt_table_for <- function(keys) {
 
 # Time from impairment onset to identification, from onset_timing(). The four
 # outcome columns partition the incident cases. Lag statistics are among those
-# caught after onset only; early catches have their own column instead of a lag.
+# caught after onset only; early catches have their own column instead of a lag,
+# and their own years-flagged-before-onset, the time they spent labeled while
+# unimpaired (1 = flagged the year before onset).
 #
 # "Within k years" is caught by a positive test no more than k years after the onset
 # year, among people whose onset left at least k years of window to be caught in --
@@ -756,8 +762,12 @@ timing_table_for <- function(keys) {
     d   <- scenario_reports[[scen]]$timing
     n   <- nrow(d)
     k_n <- function(o) sum(d$outcome == o)
-    lag <- d$lag[d$outcome == "caught"]
-    q   <- quantile(lag, c(0.25, 0.5, 0.75), type = 1, names = FALSE)
+    lag  <- d$lag[d$outcome == "caught"]
+    lead <- d$lead[d$outcome == "early"]
+    med_iqr <- function(x) {
+      q <- quantile(x, c(0.25, 0.5, 0.75), type = 1, names = FALSE)
+      sprintf("%d (%d–%d)", q[2], q[1], q[3])
+    }
     within <- function(k) {
       at_risk <- d$onset_age <= max(testing_window) - k
       pct_ci(sum(at_risk & d$outcome == "caught" & d$lag <= k, na.rm = TRUE), sum(at_risk))
@@ -768,7 +778,9 @@ timing_table_for <- function(keys) {
                `Caught after onset, n (%)`       = n_pct(k_n("caught"), n),
                `Clinic diagnosed first, n (%)`   = n_pct(k_n("clinic"), n),
                `Not caught, n (%)`               = n_pct(k_n("neither"), n),
-               `Years to catch, median (IQR)`    = sprintf("%d (%d–%d)", q[2], q[1], q[3]),
+               `Years flagged before onset, median (IQR)` = med_iqr(lead),
+               `Years flagged before onset, mean`         = sprintf("%.1f", mean(lead)),
+               `Years to catch, median (IQR)`    = med_iqr(lag),
                `Years to catch, mean`            = sprintf("%.1f", mean(lag)),
                `Caught within 1 year, %`         = within(1),
                `Caught within 2 years, %`        = within(2),
