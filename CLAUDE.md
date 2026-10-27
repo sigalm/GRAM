@@ -46,17 +46,24 @@ Be especially slow to assert on:
 - an eligibility gate that appears on one series but not on a sibling
 
 Worked example, so this one is not re-litigated. In
-`analyses/testing_strategies/test_performance_helpers.R`, `fn` counts a person
-in every cycle after a negative test and carries no eligibility gate, while its
-sibling `notest_fn` gates on lagged DX. That asymmetry is intentional. `fn` is a
-**verdict**: the test looked at an impaired person and said no, and that error
-stands until a later test overturns it — losing the chance to be corrected (by a
-clinical DX ending eligibility) does not unmake it. `notest_fn` is a **coverage
-gap**: an eligible impaired person the program has not reached, which ceases to
-exist once they are no longer eligible, because there was never a verdict to be
-wrong about. A verdict persists; a gap is transient. The intended quantity is
-errors outstanding among the living: corrections leave via `cummax`, deaths
-leave because `SYN` is `NA` after death, and DX carryover stays.
+`analyses/testing_strategies/test_performance_helpers.R`, `fn` and `notest_fn`
+are both program misses outstanding among the living, and a clinical DX takes
+no one out of either. The question they answer is **"of the impaired, how many
+did the program find before the clinic did?"** — someone the clinic diagnosed
+first is a miss whether or not they ever had a test. `fn` is a standing negative
+verdict, held until a later test overturns it, and that includes a negative
+given while the person was still healthy: it becomes a miss once they convert.
+`notest_fn` is an impaired person who entered the program (testable at some
+point since `age_first_test`) and has never been tested. The gates that remain
+are deliberate: diagnosed before the window opened, or no provider, means never
+in the program, so `not_eligible`; corrections leave via `cummax`; deaths leave
+because `SYN` is `NA` after death.
+
+This replaced an older rule (decided 2026-10-27) under which `notest_fn` left on
+lagged DX while `fn` stayed. That let arms that test few people while healthy
+(selective, reactive) shed misses inclusive kept, and it produced most of
+selective's 5-point sensitivity lead over inclusive at 80. Do not reintroduce a
+DX gate on one miss series without the other.
 
 ## Architecture
 
