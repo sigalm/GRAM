@@ -175,11 +175,10 @@ for (scen in if (run_scenarios) scenarios_to_run else character(0)) {
 #                 verdict WHILE impaired -- i.e. the strategy got them right.
 #                 Distinct people, not the end-of-window TP stock, which loses
 #                 people to death and would flatter NNT the later you read it.
-#   n_at_mci /    the same people, split on SEV at the cycle they were FIRST
-#   n_at_dem      correctly identified: caught at MCI vs caught at dementia.
-#   n_early_catch of those, the ones already flagged positive BEFORE they were
-#                 impaired -- flagged while healthy OR while in TCI. See the NNT
-#                 table for why this one needs care.
+#   n_at_mci /    of those, the ones already impaired when they tested positive,
+#   n_at_dem      split on SEV at that test: caught at MCI vs caught at dementia.
+#   n_early_catch the rest: flagged positive BEFORE they were impaired -- while
+#                 healthy OR while in TCI. The three groups sum to n_identified.
 #   n_early_at_tci the subset of those flagged during TCI rather than while
 #                 outright healthy. Not in any table; carried so the split behind
 #                 the NNT footnote can be read off without re-deriving it.
@@ -188,7 +187,8 @@ for (scen in if (run_scenarios) scenarios_to_run else character(0)) {
 # reads -- otherwise adding a statistic here, or a column to
 # post_processing_outputs(), would silently serve stale results.
 stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests", "n_identified",
-                "n_at_mci", "n_at_dem", "n_early_catch", "n_early_at_tci")
+                "n_at_mci", "n_at_dem", "n_early_catch", "n_early_at_tci",
+                "nnt10_early")
 perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
                 "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
                 "notest_fn_dx", "not_eligible", "alive")
@@ -237,17 +237,20 @@ strategy_stats <- if (stats_cached) {
     # SYN 0 or 0.5 at first_pos, every non-early one has SYN 1, and TCI is the
     # larger half of the early group in all three main strategies. The figure bands
     # in post_processing_outputs() and anchored_performance() use the same rule.
-    early      <- got[first_pos[got] < first_tp[got]]
+    is_early   <- first_pos[got] < first_tp[got]
+    early      <- got[is_early]
     syn_at_pos <- syn[cyc, ][cbind(first_pos[early], early)]
 
+    # For everyone else first_tp IS the positive test, so sev_at is the stage they
+    # were at when they tested positive
     res_row <- data.frame(
       scenario      = scen,
       n_eligible    = sum(apply(elig, 2, any, na.rm = TRUE)),
       n_people      = sum(apply(bha_w >= 0, 2, any, na.rm = TRUE)),
       n_tests       = sum(bha_w >= 0, na.rm = TRUE),
       n_identified  = length(got),
-      n_at_mci      = sum(sev_at == 0),
-      n_at_dem      = sum(sev_at >= 1),
+      n_at_mci      = sum(sev_at[!is_early] == 0),
+      n_at_dem      = sum(sev_at[!is_early] >= 1),
       n_early_catch  = length(early),
       n_early_at_tci = sum(syn_at_pos == 0.5))
 
@@ -261,6 +264,7 @@ strategy_stats <- if (stats_cached) {
   out$nnt10_any    <- 10 * out$n_tests / out$n_identified
   out$nnt10_at_mci <- 10 * out$n_tests / out$n_at_mci
   out$nnt10_at_dem <- 10 * out$n_tests / out$n_at_dem
+  out$nnt10_early  <- 10 * out$n_tests / out$n_early_catch
   saveRDS(out, for_writing(stats_file()))
   out
 }
@@ -639,31 +643,23 @@ results_table_for <- function(keys, at_end_followup = end_age,
 }
 
 # Number needed to test: how many BHAs a strategy runs per 10 people it correctly
-# identifies. All three NNT columns keep the SAME numerator -- every test the
-# strategy runs -- because no test can be aimed at MCI alone; only the denominator
-# changes. So the MCI and dementia columns read as "tests needed to find 10 people
+# identifies. All four NNT columns keep the SAME numerator -- every test the
+# strategy runs -- because no test can be aimed at one stage alone; only the
+# denominator changes. So the stage columns read as "tests needed to find 10 people
 # at that stage", and they do not average to the overall column.
 #
-# "Correctly identified" is the first cycle a person holds a positive verdict
-# while impaired, and the MCI/dementia split is their SEV at that cycle -- caught
-# at MCI, not has MCI now.
-#
-# The last column counts EARLY catches, and it counts both ways of being early:
-# flagged while outright healthy and later converting, and flagged during TCI and
-# later converting. Both fall out of the same test -- the standing positive
-# predates the first impaired-and-positive cycle -- because impairment here is
-# SYN == 1 and TCI is SYN == 0.5, so a TCI-cycle positive is not yet a true
-# positive. Checked against the arrays: every early catch has SYN 0 or 0.5 when
-# flagged, every non-early one has SYN 1, and TCI is roughly two thirds of the
-# early group in each main strategy (strategy_stats$n_early_at_tci has the split).
-#
-# UNRESOLVED, for the team: anyone flagged before they were impaired necessarily
-# enters the identified state at the moment they convert, which is by definition
-# MCI -- so an early catch can ONLY ever land in the MCI column, never in
-# dementia. Whether those belong in "caught at MCI", in a column of their own, or
-# outside the NNT denominator altogether is a judgement about what the paper is
-# claiming, not a coding question. Shown as a separate count for now so the
-# choice is visible rather than buried.
+# "Correctly identified" splits three ways, on the person's state at the positive
+# test, and the three sum to it:
+#   Caught at MCI        impaired with MCI (SEV 0) when they tested positive
+#   Caught at dementia   impaired with dementia (SEV >= 1) when they tested positive
+#   Caught early         not yet impaired when they tested positive -- outright
+#                        healthy or in TCI -- and impaired later in the window.
+#                        TCI is SYN 0.5, not impairment, so a TCI-cycle positive
+#                        is early. TCI is roughly two thirds of this group in each
+#                        main strategy (strategy_stats$n_early_at_tci has the split).
+# Early catches used to sit inside "caught at MCI", because they enter the
+# identified state at conversion and conversion is by definition MCI. They are
+# their own column now so "caught at MCI" means MCI at the time of the test.
 nnt_table_for <- function(keys) {
   if (skip_incomplete(keys, "NNT table")) return(NULL)
   d <- strategy_stats[match(keys, strategy_stats$scenario), ]
@@ -676,7 +672,8 @@ nnt_table_for <- function(keys) {
     `Tests per 10 at MCI`       = round(d$nnt10_at_mci, 1),
     `Caught at dementia`        = d$n_at_dem,
     `Tests per 10 at dementia`  = round(d$nnt10_at_dem, 1),
-    `of MCI: flagged before impairment` = d$n_early_catch,
+    `Caught early`              = d$n_early_catch,
+    `Tests per 10 caught early` = round(d$nnt10_early, 1),
     check.names = FALSE)
 }
 
