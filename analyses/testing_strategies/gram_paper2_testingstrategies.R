@@ -444,6 +444,25 @@ onset_timing <- function(scenario_array, window = testing_window) {
 }
 
 
+# Years each person spent holding a positive result while unimpaired (healthy or in
+# TCI), counted over the testing window -- through end of program, though the label
+# outlasts it, since the stop rule means no one is retested to clear it. Both kinds
+# of false positive: early catches, whose label stops counting when they convert,
+# and people never impaired, whose label never does. One row per person ever
+# labeled. The yearly stock behind it is fp + early_pos in post_processing_outputs().
+labeled_unimpaired <- function(scenario_array, ages = testing_window) {
+  bha <- scenario_array[, "BHA", ]; pcp <- scenario_array[, "PCP", ]
+  syn <- scenario_array[, "SYN", ]
+  res <- ifelse(!is.na(pcp) & pcp >= 0, pcp, bha)
+  pos <- apply(res, 2, cummax) == 1
+
+  # SYN is NA after death, so the dead stop counting
+  years <- colSums((pos & syn < 1)[ages - 50 + 1, , drop = FALSE], na.rm = TRUE)
+  later <- colSums(syn == 1, na.rm = TRUE) > 0   # impaired at any age, as for early_pos
+  data.frame(years = years[years > 0], later_impaired = later[years > 0])
+}
+
+
 ## Figures ####
 theme_paper2 <- theme(
   text            = element_text(size = 18),
@@ -557,7 +576,8 @@ scenario_reports <- setNames(lapply(scenarios_to_run, function(scen) {
   out <- list(
     first_visit = first_visit_performance(arr),   # reported
     first_test  = first_test_performance(arr),    # alternative, if asked for
-    timing      = onset_timing(arr)
+    timing      = onset_timing(arr),
+    labeled     = labeled_unimpaired(arr)
   )
   rm(arr); invisible(gc())
   out
@@ -755,9 +775,10 @@ nnt_table_for <- function(keys) {
 # onset at 79 cannot show a 2-year catch by 80, so it would dilute the share. Deaths
 # and clinical diagnoses inside those k years count as not caught. Same 95% Wilson
 # interval as the results table.
+n_pct <- function(x, n) sprintf("%s (%.1f)", format(x, big.mark = ","), 100 * x / n)
+
 timing_table_for <- function(keys) {
   if (skip_incomplete(keys, "timing table")) return(NULL)
-  n_pct <- function(x, n) sprintf("%s (%.1f)", format(x, big.mark = ","), 100 * x / n)
   do.call(rbind, lapply(keys, function(scen) {
     d   <- scenario_reports[[scen]]$timing
     n   <- nrow(d)
@@ -790,6 +811,31 @@ timing_table_for <- function(keys) {
 
 timing_table <- timing_table_for(main_keys)
 as_flex(timing_table)
+
+# Time spent labeled while unimpaired, from labeled_unimpaired(): the harm side of
+# early detection. Person-years run from each person's first positive while
+# unimpaired to conversion, death, or end of program, whichever comes first. Split
+# by whether the person is ever impaired (at any age, as early_pos is), and scaled
+# per 1,000 ever-eligible so strategies of different reach compare.
+labeled_table_for <- function(keys) {
+  if (skip_incomplete(keys, "labeled table")) return(NULL)
+  do.call(rbind, lapply(keys, function(scen) {
+    d  <- scenario_reports[[scen]]$labeled
+    st <- strategy_stats[match(scen, strategy_stats$scenario), ]
+    py <- sum(d$years)
+    data.frame(Strategy                            = reg_row(scen)$label,
+               `People labeled while unimpaired`   = format(nrow(d), big.mark = ","),
+               `Person-years labeled`              = format(py, big.mark = ","),
+               `Mean years per person`             = sprintf("%.1f", mean(d$years)),
+               `Person-years, later impaired, n (%)` = n_pct(sum(d$years[d$later_impaired]), py),
+               `Person-years, never impaired, n (%)` = n_pct(sum(d$years[!d$later_impaired]), py),
+               `Person-years per 1,000 eligible`   = sprintf("%.0f", 1000 * py / st$n_eligible),
+               check.names = FALSE)
+  }))
+}
+
+labeled_table <- labeled_table_for(main_keys)
+as_flex(labeled_table)
 
 nnt_table <- nnt_table_for(main_keys)
 as_flex(nnt_table)
