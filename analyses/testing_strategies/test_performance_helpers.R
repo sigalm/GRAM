@@ -157,6 +157,19 @@ post_processing_outputs <- function(output_array, age_first_test = 65) {
   tp_direct    <- tp_total & !converted_tp  # flagged when already impaired
   early_pos    <- fp_total &  early_flag    # caught early, not yet impaired
   real_fp      <- fp_total & !early_pos     # positive, will not convert
+
+  # Identified by stage, a RUNNING TOTAL of distinct people, not a stock of the
+  # living: once correctly identified, a person stays counted through death. Split
+  # on their state at the positive test, the NNT table's definitions per age.
+  # first_tp is the first cycle positive AND impaired. A positive before that --
+  # healthy or in TCI -- makes them an early catch; for everyone else first_tp is
+  # the positive test itself, so SEV there is the stage they were caught at.
+  first_tp  <- apply(tp_total, 2, function(x) which(x)[1])
+  first_pos <- apply(pos,      2, function(x) which(x)[1])
+  got       <- which(!is.na(first_tp))
+  is_early  <- first_pos[got] < first_tp[got]
+  sev_caught <- sev_status[cbind(first_tp[got], got)]
+  identified_by <- function(sel) cumsum(tabulate(first_tp[got][sel], nbins = nrow(output_array)))
   
   # TN
   tn <- (dx_results == 0) & (syn_status < 1)
@@ -234,6 +247,10 @@ post_processing_outputs <- function(output_array, age_first_test = 65) {
     converted_tp_mci = n_mci(converted_tp), converted_tp_dem = n_dem(converted_tp),
     fn_mci = n_mci(fn), fn_dem = n_dem(fn),
     notest_fn_mci = n_mci(notest_fn), notest_fn_dem = n_dem(notest_fn),
+    identified       = identified_by(rep(TRUE, length(got))),
+    identified_mci   = identified_by(!is_early & sev_caught == 0),
+    identified_dem   = identified_by(!is_early & sev_caught >= 1),
+    identified_early = identified_by(is_early),
     clinical_dx = rowSums(clinical_dx, na.rm = TRUE),
     not_eligible = rowSums(not_eligible, na.rm = TRUE),
     alive = rowSums(alive, na.rm = TRUE),
@@ -783,4 +800,75 @@ plot_counts_and_shares <- function(plot_data,
                                       size = base_size * 0.62, margin = margin(t = 10)))
 
   (p_top / p_bottom) + plot_layout(heights = heights)
+}
+
+
+# Running total of people correctly identified, by the stage they were at when they
+# tested positive -- the early-detection view. Uses the identified_* series from
+# post_processing_outputs(), which carry the NNT table's definitions per age, so
+# the line ends at 80 match that table's counts. Lines only rise: someone caught at
+# MCI stays an MCI catch after they progress, and after they die.
+#
+# "Total" includes the early catches (positive before impairment, healthy or TCI),
+# which have no line of their own, so the two stage lines do not sum to it: the gap
+# between them and the total is the early catches.
+stage_long <- c(Total = "Total identified", MCI = "Caught at MCI",
+                Dementia = "Caught at dementia")
+pal_stage  <- c(Total = "#3D3D3A", MCI = "#2A78D6", Dementia = "#EB6834")
+
+plot_identified_by_stage <- function(plot_data,
+                                     scenario_names,   # named vector, key -> label; its ORDER sets panel order
+                                     ages = 65:80,
+                                     title    = "People correctly identified, by stage at the positive test",
+                                     subtitle = "Running total. Total also counts people flagged before they were impaired, so it exceeds MCI + dementia",
+                                     base_size  = 15,
+                                     label_size = 3.15,
+                                     gap_frac   = 0.07,    # minimum label separation, as a share of the axis
+                                     right_pad  = NULL) {
+  keys <- names(scenario_names)
+  if (is.null(right_pad)) right_pad <- 0.146 * label_size
+
+  d <- plot_data %>%
+    filter(age %in% ages, scenario %in% keys) %>%
+    transmute(Age      = age,
+              Scenario = factor(scenario_names[scenario], levels = unname(scenario_names)),
+              Total    = identified,
+              MCI      = identified_mci,
+              Dementia = identified_dem) %>%
+    pivot_longer(-c(Age, Scenario), names_to = "Stage", values_to = "Count") %>%
+    mutate(Stage = factor(Stage, levels = names(stage_long)))
+
+  # Name and end value at each line end, in every panel, so no legend is needed
+  span <- max(d$Count) - min(d$Count)
+  line_labels <- d %>%
+    filter(Age == max(Age)) %>%
+    group_by(Scenario) %>%
+    mutate(y   = f.spread_labels(Count, gap_frac * span),
+           lab = paste0(stage_long[as.character(Stage)], "\n", comma(Count))) %>%
+    ungroup()
+
+  age_breaks <- pretty(range(ages), n = 4)
+  age_breaks <- age_breaks[age_breaks >= min(ages) & age_breaks <= max(ages)]
+
+  ggplot(d, aes(Age, Count, colour = Stage)) +
+    geom_line(linewidth = 1.05) +
+    geom_point(data = filter(d, Age == max(Age)), size = 2.4) +
+    geom_text(data = line_labels, aes(x = Age, y = y, label = lab),
+              hjust = 0, nudge_x = 0.4, size = label_size, fontface = "bold",
+              lineheight = 0.9, inherit.aes = FALSE,
+              colour = pal_stage[as.character(line_labels$Stage)]) +
+    facet_wrap(~Scenario) +
+    scale_colour_manual(values = pal_stage) +
+    scale_x_continuous(breaks = age_breaks, expand = expansion(mult = c(0.03, right_pad))) +
+    scale_y_continuous(labels = comma, expand = expansion(mult = c(0.01, 0.05))) +
+    labs(title = title, subtitle = subtitle, x = "Age", y = "People identified") +
+    theme_minimal(base_size = base_size) +
+    theme(panel.grid.minor   = element_blank(),
+          panel.grid.major.x = element_line(colour = "grey92"),
+          panel.spacing.x    = unit(1.9, "lines"),
+          axis.title         = element_text(face = "bold"),
+          strip.text         = element_text(size = base_size, face = "bold", hjust = 0),
+          plot.title         = element_text(face = "bold", size = base_size * 1.15),
+          plot.subtitle      = element_text(colour = "grey35", size = base_size * 0.8),
+          legend.position    = "none")
 }

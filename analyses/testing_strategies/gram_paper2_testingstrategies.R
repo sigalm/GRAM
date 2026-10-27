@@ -191,7 +191,8 @@ stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests", "n_identified",
                 "nnt10_early")
 perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
                 "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
-                "notest_fn_dx", "not_eligible", "alive")
+                "notest_fn_dx", "not_eligible", "alive",
+                "identified", "identified_mci", "identified_dem", "identified_early")
 
 stats_cached <- file.exists(stats_file()) &&
   all(stats_cols %in% names(readRDS(stats_file()))) &&
@@ -205,8 +206,8 @@ strategy_stats <- if (stats_cached) {
 
   out <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
     output <- readRDS(sim_file(scen))$output
-    saveRDS(post_processing_outputs(output, age_first_test = min(testing_window)),
-            file = for_writing(perf_file(scen)))
+    perf <- post_processing_outputs(output, age_first_test = min(testing_window))
+    saveRDS(perf, file = for_writing(perf_file(scen)))
 
     bha <- output[, "BHA", ]; pcp <- output[, "PCP", ]
     syn <- output[, "SYN", ]; sev <- output[, "SEV", ]
@@ -254,7 +255,15 @@ strategy_stats <- if (stats_cached) {
       n_early_catch  = length(early),
       n_early_at_tci = sum(syn_at_pos == 0.5))
 
-    rm(output, bha, pcp, syn, sev, res, dxr, elig)
+    # The identified-by-stage figure reads the same counts per age from
+    # post_processing_outputs(), computed separately; they must meet at window end.
+    at_end <- perf[perf$age == max(testing_window), ]
+    stopifnot(at_end$identified       == res_row$n_identified,
+              at_end$identified_mci   == res_row$n_at_mci,
+              at_end$identified_dem   == res_row$n_at_dem,
+              at_end$identified_early == res_row$n_early_catch)
+
+    rm(output, perf, bha, pcp, syn, sev, res, dxr, elig)
     invisible(gc())
     res_row
   }))
@@ -405,6 +414,8 @@ figure_specs <- list(
                                                                  type = "combined", width = 17, height = 12.5),
   list(name = "no-early-positives",          keys = main_keys,           type = "results", width = 14),
   list(name = "testers",                     keys = main_keys,           type = "testers", width = 14),
+  list(name = "identified-by-stage",         keys = main_keys_by_intensity,
+                                                                 type = "stages",  width = 17, height = 7),
   list(name = "sens-selective",              keys = sens_selective_keys, type = "results", width = 11),
   list(name = "sens-inclusive",              keys = sens_inclusive_keys, type = "results", width = 11),
   list(name = "WITH-PCP-no-early-positives", keys = pcp_keys,            type = "results", width = 14),
@@ -423,13 +434,16 @@ figures <- setNames(lapply(figure_specs, function(spec) {
     results  = plot_test_results(d, ages = plot_ages, show_early_pos = FALSE,
                                  scenario_names = labs, y_max = plot_y_max),
     testers  = plot_testers(d, ages = plot_ages, scenario_names = labs),
+    stages   = plot_identified_by_stage(d, scenario_names = labs, ages = plot_ages,
+                                        base_size = 20, label_size = 4.6),
     combined = plot_counts_and_shares(d, scenario_names = labs, ages = plot_ages,
                                       strategy_stats = strategy_stats[strategy_stats$scenario %in% spec$keys, ],
                                       base_size = 20, label_size = 4.6))
 
-  # plot_counts_and_shares carries its own theme, sized via base_size. Adding
-  # theme_paper2 on top would override the bottom row's small grey stats strip.
-  themed <- if (spec$type == "combined") p else p + theme_paper2
+  # plot_counts_and_shares and plot_identified_by_stage carry their own theme,
+  # sized via base_size. Adding theme_paper2 on top would override the bottom row's
+  # small grey stats strip, and bring back a legend the line-end labels replace.
+  themed <- if (spec$type %in% c("combined", "stages")) p else p + theme_paper2
 
   if (make_figures)
     ggsave(for_writing(plot_file(spec$name)), plot = themed,
@@ -439,6 +453,7 @@ figures <- setNames(lapply(figure_specs, function(spec) {
 
 figures[["counts-and-shares"]]
 figures[["no-early-positives"]]
+figures[["identified-by-stage"]]
 names(figures)
 figures[["testers"]] + ylim(NA, 75000)
 
