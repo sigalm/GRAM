@@ -110,8 +110,10 @@ plot_results <- function(scenario_list) {
 }
 
 
-# Post-process raw model output to add summary variables of interest
-post_processing_outputs <- function(output_array) {
+# Post-process raw model output to add summary variables of interest.
+# age_first_test opens the testing window, which decides who has entered the program
+# (see notest_fn below); it must match the scenario configs' age_first_test.
+post_processing_outputs <- function(output_array, age_first_test = 65) {
   
   bha_results <- output_array[,"BHA",]
   pcp_results <- output_array[,"PCP",]
@@ -163,28 +165,44 @@ post_processing_outputs <- function(output_array) {
   fn <- (dx_results == 0) & (syn_status == 1)
   
   # eligible non-testers
-  
+
   clinical_dx <- output_array[,"DX",]  # DX is carried over in the base model, no need for cummax
   has_hcare <- output_array[,"HCARE",]
-  
-  # Eligibility uses LAGGED DX, matching f.update_BHA: within a cycle the modules run
+
+  # Testable uses LAGGED DX, matching f.update_BHA: within a cycle the modules run
   # BHA before DX, so the testing decision is made against last cycle's diagnosis. Using
   # the current cycle would drop people from the denominator in the same year they were
   # still eligible to be tested. HCARE is current, which also matches the gate.
   dx_lag <- rbind(rep(NA, ncol(clinical_dx)), clinical_dx[-nrow(clinical_dx), , drop = FALSE])
-  eligible <- dx_lag == 0 & has_hcare == 1
-  
+  testable <- dx_lag == 0 & has_hcare == 1
+
+  # Entered the program: testable at some point since the testing window opened. Once
+  # in, a person stays in the untested cells until tested or dead -- a clinical
+  # diagnosis no longer takes them out. The program's question is how many impaired
+  # people it found before the clinic did, so someone the clinic diagnosed first is a
+  # miss, exactly as they are for a person who tested negative before being diagnosed
+  # (fn above, which has never had a DX gate). Someone diagnosed before the window
+  # opened was never in the program and stays not_eligible. HCARE only ever changes at
+  # 65, 0 -> 1, so after entry it cannot take anyone back out.
+  in_window <- testable & output_array[, "AGE", ] >= age_first_test
+  in_window[is.na(in_window)] <- FALSE   # cummax would carry an NA down the column
+  entered <- apply(in_window, 2, cummax) == 1
+  eligible <- has_hcare == 1 & (dx_lag == 0 | entered)
+
   ever_tested <- apply(bha_results,2,cummax) >= 0
-  
+
   notest_tn <- eligible & !ever_tested & syn_status != 1
   notest_fn <- eligible & !ever_tested & syn_status == 1
-  
-  # Alive, never tested, and NOT eligible: no provider, or already carrying a
-  # clinical diagnosis. Kept apart from notest_tn / notest_fn on purpose -- those
-  # two measure a coverage gap the programme could still close, and someone
-  # ineligible is not that. Together with the four tested cells, the two notest_
-  # cells and the deaths below, this partitions the starting cohort exactly.
-  # NA in cycle 1, where DX has no lag, so the partition only closes from cycle 2.
+  # The part of notest_fn the clinic has already diagnosed: misses the program can no
+  # longer close, kept so the split can be read off without re-deriving it.
+  notest_fn_dx <- notest_fn & dx_lag == 1
+
+  # Alive, never tested, and NOT eligible: no provider, or clinically diagnosed before
+  # the testing window opened. Kept apart from notest_tn / notest_fn on purpose -- the
+  # program never had a chance at these people. Together with the four tested cells,
+  # the two notest_ cells and the deaths below, this partitions the starting cohort
+  # exactly. NA in cycle 1, where DX has no lag, so the partition only closes from
+  # cycle 2.
   not_eligible <- (output_array[,"ALIVE",] == 1) & !ever_tested & !eligible
   
   # deaths, and the survivors they are the complement of
@@ -211,6 +229,7 @@ post_processing_outputs <- function(output_array) {
     fn = rowSums(fn, na.rm = TRUE),
     notest_tn = rowSums(notest_tn, na.rm = TRUE),
     notest_fn = rowSums(notest_fn, na.rm = TRUE),
+    notest_fn_dx = rowSums(notest_fn_dx, na.rm = TRUE),
     tp_mci = n_mci(tp_direct), tp_dem = n_dem(tp_direct),
     converted_tp_mci = n_mci(converted_tp), converted_tp_dem = n_dem(converted_tp),
     fn_mci = n_mci(fn), fn_dem = n_dem(fn),
@@ -526,10 +545,11 @@ plot_testers <- function(plot_data,
 #   alive, never tested, NOT eligible                -> not_eligible
 #
 # "Not eligible" stays its own band rather than folding into "not tested",
-# because notest_tn / notest_fn are deliberately eligibility-gated: they measure
-# a coverage gap the programme could still close, and someone ineligible is not
-# that. post_processing_outputs() supplies all four groups; they are verified to
-# sum to the starting cohort exactly.
+# because notest_tn / notest_fn count only people who entered the program: an
+# untested person there is a miss the program owns, even once the clinic has
+# diagnosed them, and someone the program never had a chance at is not that.
+# post_processing_outputs() supplies all four groups; they are verified to sum to
+# the starting cohort exactly.
 #
 # All the series are cummax stocks, so someone tested at 65 is still counted at
 # 80. That is intentional: the claim is cumulative burden ("23% of the cohort
@@ -608,7 +628,7 @@ plot_counts_and_shares <- function(plot_data,
                                    top_subtitle = NULL,
                                    bottom_title    = "Share of the cohort in each outcome",
                                    bottom_subtitle = "Stack totals 100% of the starting cohort; the tested block at the bottom is programme reach",
-                                   bottom_caption  = "* Not eligible: no healthcare provider, or already has a known cognitive impairment",
+                                   bottom_caption  = "* Not eligible: no healthcare provider, or diagnosed with cognitive impairment before testing began",
                                    y_breaks   = c(0, 1000, 5000, 15000, 30000, 60000),
                                    mortality = c("alive", "deaths", "none"),
                                    split_untested = FALSE,  # bottom row: one "Not tested" band, or cut healthy / impaired

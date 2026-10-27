@@ -191,7 +191,7 @@ stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests", "n_identified",
                 "n_at_mci", "n_at_dem", "n_early_catch", "n_early_at_tci")
 perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
                 "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
-                "not_eligible", "alive")
+                "notest_fn_dx", "not_eligible", "alive")
 
 stats_cached <- file.exists(stats_file()) &&
   all(stats_cols %in% names(readRDS(stats_file()))) &&
@@ -205,7 +205,8 @@ strategy_stats <- if (stats_cached) {
 
   out <- do.call(rbind, lapply(scenarios_to_run, function(scen) {
     output <- readRDS(sim_file(scen))$output
-    saveRDS(post_processing_outputs(output), file = for_writing(perf_file(scen)))
+    saveRDS(post_processing_outputs(output, age_first_test = min(testing_window)),
+            file = for_writing(perf_file(scen)))
 
     bha <- output[, "BHA", ]; pcp <- output[, "PCP", ]
     syn <- output[, "SYN", ]; sev <- output[, "SEV", ]
