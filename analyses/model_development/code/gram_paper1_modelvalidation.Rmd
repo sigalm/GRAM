@@ -22,6 +22,10 @@ sample1 <- readRDS("data/acs_data/acs_age50_RACE-revised.RDS")
 # Calibrated parameters, the mortality age gradients and the seed all come from
 # model/setup.R now, so this chunk only prints the cohort size and horizon.
 l.inputs1 <- l.inputs
+# Same cohort size as the Paper 2 testing-strategies runs
+# (analyses/testing_strategies/gram_paper2_testingstrategies.R), so the
+# supplement's calibration figures describe the cohort those results rest on.
+l.inputs1[["n.ind"]] <- 100000
 l.inputs1[["n.cycle"]]
 l.inputs1[["n.ind"]]
 
