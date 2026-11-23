@@ -22,7 +22,7 @@ This document describes the data files required by GRAM and how they were genera
 - `INCOME_CAT`: Income categories (0=<$9k, 1=$9-36k, 2=>$36k), based on [Angevaare et al. 2022](https://pmc.ncbi.nlm.nih.gov/articles/PMC8726570/)
 - `MEDBUR`: Medical burden at baseline (0-10 conditions). This is the *starting* count only —
   during the simulation `f.update_MEDBUR()` accumulates further conditions up to
-  `max(v.MEDBUR_val)`, which `model/setup.R` sets to 15. Derived using education-adjusted prevalence from [Chowdhury et al. 2023](https://bmcpublichealth.biomedcentral.com/articles/10.1186/s12889-023-15768-8):
+  `max(v.MEDBUR_val)`, which `model/setup.R` sets to 15. Derived using education-adjusted prevalence from [Mossadeghi et al. 2023](https://bmcpublichealth.biomedcentral.com/articles/10.1186/s12889-023-15768-8):
   1. Baseline prevalence of 0-10 conditions from Figure 1 (averaged across sex)
   2. Education-adjusted odds ratios for 2+ conditions: College = 1.0 (ref), HS = 1.32, less than HS = 1.58
   3. For each individual: draw binary 2+ conditions using adjusted probability, then sample condition count from appropriate range (0-1 or 2-10)
@@ -128,7 +128,7 @@ working directory.
 
 ## References
 
-- **Chowdhury SR et al. (2023)** Multimorbidity patterns and their association with social determinants. BMC Public Health. [Link](https://bmcpublichealth.biomedcentral.com/articles/10.1186/s12889-023-15768-8)
+- **Mossadeghi B et al. (2023)** Multimorbidity and social determinants of health in the US prior to the COVID-19 pandemic and implications for health outcomes: a cross-sectional analysis based on NHANES 2017–2018. BMC Public Health 23:887. [Link](https://bmcpublichealth.biomedcentral.com/articles/10.1186/s12889-023-15768-8)
 - **Di Battista AM et al. (2016)** Alzheimer's disease genetic risk factor APOE-ε4 also affects normal brain function. Neurobiol Aging. [Link](https://doi.org/10.1016/j.neurobiolaging.2016.03.003)
 - **Gillis C et al. (2019)** The incidence of mild cognitive impairment: A systematic review and data synthesis. Alzheimers Dement (Amst). [Link](https://pmc.ncbi.nlm.nih.gov/articles/PMC6416157)
 - **Angevaare MJ et al. (2022)** Predictors of incident mild cognitive impairment and its course in a diverse community-based population. Neurology. [Link](https://pmc.ncbi.nlm.nih.gov/articles/PMC8726570/)

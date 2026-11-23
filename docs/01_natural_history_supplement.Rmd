@@ -38,14 +38,14 @@ Individuals progress through the following cognitive health states:
 
 - **Healthy**: No cognitive impairment (SYN = 0)
 - **Transitional (Prodromal) Cognitive Impairment**: A tunnel state for individuals who will develop cognitive impairment in two years, based on future risk factors. While there is no clear cognitive or functional decline, there may be early and subtle signs of cognitive impairment which can affect diagnostic accuracy.[@jackjr2024] (SYN = 0.5)
-- **Non-Progressive Cognitive Impairment**: A proportion of MCI that is due to reversible causes. Individuals in this health state have a CDR-SB score within the MCI rane, and most will remain at the initial severity they get assigned. Fewer than 0.1% will randomly reverse to cognitively healthy and all remain at risk for subsequent development of progressive cognitive impairment.[@clarfield2003] (SYN = 1, SEV = 0, MEMLOSS = 1)
-- **Mild Cognitive Impairment**: Progressive cognitive decline without functional impairment (SYN = 1, SEV = 0, MEMLOSS = 0)
-- **Mild Dementia**: Early-stage dementia with some loss of independence. (SYN = 1, SEV = 1)
-- **Moderate Dementia**: Dementia with moderate degree of cognitive and functional impairment and loss of independence. (SYN = 1, SEV = 2)
-- **Severe Dementia**: Advanced dementia with severe cognitive and functional impairment and complete loss of independence. (SYN = 1, SEV = 3)
+- **Non-Progressive Cognitive Impairment**: A proportion of MCI that is due to reversible causes. Individuals in this health state have a CDR-SB score within the MCI range, and most will remain at the initial severity they get assigned. Nine percent of incident MCI cases are assigned to this state.[@clarfield2003] (SYN = 1, SEV = 0, MEMLOSS = 1)
+- **Mild Cognitive Impairment**: CDR-SB score between 0.5 and 4.0. Progressive cognitive decline without functional impairment (SYN = 1, SEV = 0, MEMLOSS = 0)
+- **Mild Dementia**: CDR-SB score between 4.5 and 9.0. Early-stage dementia with some loss of independence. (SYN = 1, SEV = 1)
+- **Moderate Dementia**: CDR-SB score between 9.5 and 16.0. Dementia with moderate degree of cognitive and functional impairment and loss of independence. (SYN = 1, SEV = 2)
+- **Severe Dementia**: CDR-SB score between 16.5 and 18.0. Advanced dementia with severe cognitive and functional impairment and complete loss of independence. (SYN = 1, SEV = 3)
 - **Death**: Absorbing state. We do not distinguish between dementia and non-dementia deaths, though those with dementia are at greater risk.
 
-Transitions are generally unidirectional (no reversion to better health states), with the exception of the "reversible cognitive impairment" state (e.g., due to treatable causes such as medication effects, depression, or metabolic disturbances). The model distinguishes between true cognitive status (`SYN`) and observed/diagnosed status, allowing screening and diagnostic test performance to be modeled. This natural history document covers true cognitive status only. See the model application supplement for the diagnostic/screening pathway.
+Transitions are unidirectional (no reversion to better health states), with the exception of the "reversible cognitive impairment" state (e.g., due to treatable causes such as medication effects, depression, or metabolic disturbances). The model distinguishes between true cognitive status (`SYN`) and observed/diagnosed status, allowing screening and diagnostic test performance to be modeled. This natural history document covers true cognitive status only. See the model application supplement for the diagnostic/screening pathway.
 
 ## Time Horizon and Cycle Length
 
@@ -64,10 +64,7 @@ The model uses a naming convention with prefixes to indicate the type and purpos
 - `p.`: **Probability** (e.g., `p.EDU_start` for education distribution)
 - `hr.`: **Hazard ratio** (e.g., `hr.mort_mci` for MCI mortality hazard)
 - `r.`: **Rate** (e.g., `r.CDRfast_mean` for CDR progression rate)
-- `u.`: **Utility** (e.g., `u.mci` for MCI utility weight)
-- `c.`: **Cost** (e.g., `c.mci` for MCI annual cost)
 - `log_`: **Natural logarithm of a coefficient** (e.g., `log_EDU` for education coefficient)
-- `Tx`: **Treatment-related parameters** (e.g., `Tx_t_max` for maximum treatment duration)
 
 ## Tracked Attributes
 
@@ -95,7 +92,7 @@ The model tracks the following attributes for each simulated individual:
 | `CDRslow_sd1` | Individual-level variation (slow) | Numeric |
 | `DX`† | Clinical diagnosis under standard care | 0 = undiagnosed, 1 = diagnosed with cognitive impairment |
 | `SELECT`† | Selected for testing at the last assessment | 0 = not selected, 1 = selected; -9 if diagnosed (never selected) |
-| `BHA`† | Brain Health Assessment result | -9 = not assessed for eligibility, -8 = ineligible, 0 = negative (normal), 1 = positive (impaired) |
+| `BHA`† | Brain Health Assessment result | -9 = not assessed for eligibility, -8 = assessed but not tested (not selected, or selected and declined; `SELECT` tells which), 0 = negative (normal), 1 = positive (impaired) |
 | `CDR_obs`† | Observed CDR-SB score | Numeric, range 0–18; -9 if not yet tested |
 | `SEV_obs`† | Observed dementia severity | 0 = MCI, 1 = mild, 2 = moderate, 3 = severe; -9 if not yet tested |
 | `PCP`† | Primary care provider follow-up result | 0 = negative, 1 = positive; `NA` if not applicable |
@@ -109,7 +106,7 @@ The model tracks the following attributes for each simulated individual:
 | `COST_care`‡ | Cost of care | Numeric (USD) |
 | `COST_tx`‡ | Cost of DMT treatment | Numeric (USD) |
 
-§ The attributes matrix includes several additional bookkeeping columns used for internal tracking (`TCI`, `any_BHA_pos`, `last_BHA_age`, `any_PCP_pos`) that are not listed here. † These attributes support the diagnostic/screening pathway (BHA testing and the downstream medical record module) and are not relevant for the natural history model. Thus, they are not described in this document; see the model application (testing) supplement. ‡ These attributes are defined as rough scaffolding for future use and are not yet operationalized.
+§ The attributes matrix includes several additional bookkeeping columns used for internal tracking (`TCI`, `any_BHA_pos`, `last_BHA_age`, `any_PCP_pos`) that are not listed here, plus `ACCEPT`, which holds no values: it exists only for its slot in the pre-generated random-number array, the draw for taking up an offered test. † These attributes support the diagnostic/screening pathway (BHA testing and the downstream medical record module) and are not relevant for the natural history model. Thus, they are not described in this document; see the model application (testing) supplement. ‡ These attributes are defined as rough scaffolding for future use and are not yet operationalized.
 
 # Population Characteristics
 
@@ -135,11 +132,11 @@ The following variables are derived from the ACS after restricting the microdata
 
 Medical burden (`MEDBUR`) is the count of comorbid chronic conditions (0–15) carried by an individual. It is used as a risk-adjustment covariate for MCI incidence (see Individual Risk Adjustment, below) and evolves independently of cognitive status over the course of the simulation.
 
-Baseline `MEDBUR` is assigned from published population data. Chowdhury et al.[@chowdhury2023] reports two things: (1) the population-wide prevalence of carrying 0–10 chronic conditions, separately by sex, and (2) how much more likely a person is to carry 2+ conditions if they have less education, expressed as odds ratios relative to a college-educated reference group (High school = 1.32, Less than high school = 1.58).
+Baseline `MEDBUR` is assigned from published population data. Mossadeghi et al.[@mossadeghi2023] reports two things: (1) the population-wide prevalence of carrying 0–10 chronic conditions, separately by sex, and (2) how much more likely a person is to carry 2+ conditions if they have less education, expressed as odds ratios relative to a college-educated reference group (High school = 1.32, Less than high school = 1.58).
 
-The source does not report the reference group's prevalence of 2+ conditions, so it is back-solved as approximately 0.53 (`p.MEDBUR_2plus_start`). Each individual's probability of carrying 2+ conditions is then this baseline multiplied by their education group's odds ratio, capped at 1 (`rr.MEDBUR_2plus_EDU`). (This applies the odds ratio as a simple multiplier on probability rather than a true logistic transform which is a reasonable approximation given a reference probability near 0.5.) Once an individual's 2+ / 0–1 status is set, the exact condition count is drawn from the population's condition-count distribution restricted to that range (e.g., someone in the "2+" group draws a count between 2 and 10, weighted by how common each count is in the population), independent of education. Implemented in `model/modules/module_init.R` (parametric cohorts) and `data/acs_data/generate_microdata.R` (the empirical ACS cohort, where the reference prevalence constant `p.MEDBUR_2plus_start` was first derived and then hardcoded for reuse by both pathways).
+The source does not report the reference group's prevalence of 2+ conditions, so we back-solved it as approximately 0.53 (`p.MEDBUR_2plus_start`). Each individual's probability of carrying 2+ conditions is then this baseline multiplied by their education group's odds ratio, capped at 1 (`rr.MEDBUR_2plus_EDU`). (This applies the odds ratio as a simple multiplier on probability rather than a true logistic transform which is a reasonable approximation given a reference probability near 0.5.) Once an individual's 2+ / 0–1 status is set, the exact condition count is drawn from the population's condition-count distribution restricted to that range (e.g., someone in the "2+" group draws a count between 2 and 10, weighted by how common each count is in the population), independent of education. Implemented in `model/modules/module_init.R` (parametric cohorts) and `data/acs_data/generate_microdata.R` (the empirical ACS cohort, where the reference prevalence constant `p.MEDBUR_2plus_start` was first derived and then hardcoded for reuse by both pathways).
 
-Medical burden can then increase over the course of the simulation. Each cycle, a candidate burden count is drawn from a Binomial(size = 15, prob) distribution, and an individual's burden is updated to that draw only if it is greater than or equal to their prior-cycle value. The success probability (prob) rises with age via a logistic function centered at age 90 (`coef_MEDBUR` sets the slope) and is further amplified for individuals who already carry a higher burden (`amplification_MEDBUR`), producing a mild positive-feedback effect. See `f.update_MEDBUR()` in `model/modules/module_true_health.R`. Neither the baseline assignment nor this progression process is itself a calibration target. `MEDBUR` functions purely as a risk-adjustment input, and GRAM's calibration (`model/config/calibrated_params.R`) targets the resulting cognitive impairment and mortality outcomes, not the comorbidity trajectory.
+Medical burden can then increase over the course of the simulation. Each cycle, a candidate burden count is drawn from a Binomial(size = 15, prob) distribution, and an individual's burden is updated to that draw only if it is greater than or equal to their prior-cycle value. The success probability (prob) rises with age via a logistic function centered at age 90 (`coef_MEDBUR` sets the slope) and is further amplified for individuals who already carry a higher burden (`amplification_MEDBUR`), producing a mild positive-feedback effect. See `f.update_MEDBUR()` in `model/modules/module_true_health.R`. Neither the baseline assignment nor this progression process is itself a calibration target. `MEDBUR` functions as a risk-adjustment input, and GRAM's calibration (`model/config/calibrated_params.R`) targets the resulting cognitive impairment and mortality outcomes, not the comorbidity trajectory.
 
 # Disease Progression
 
@@ -147,17 +144,37 @@ Medical burden can then increase over the course of the simulation. Each cycle, 
 
 ### Age-Specific Incidence Rates
 
-MCI incidence rates are based on Gillis et al. [@gillis2019] who report incidence per 1,000 person-years at five age bands. We took the midpoints (67, 72, 77, 82, 87) to correspond to reported incidences and fit a log-linear regression on age. The fitted model was then used to generate incidence estimates for every single year of age from 50 to 100.
+MCI incidence rates are based on Gillis et al. [@gillis2019] meta-analysis who report incidence per 1,000 person-years by age group. We fit a log-linear regression on age these data, placing each reported incidence at its band midpoint. The fitted model was then used to generate incidence estimates for every single year of age from 50 to 100 (Figure S1.1).
+
+```{r fig-mci-incidence, echo=FALSE, message=FALSE, warning=FALSE, fig.width=7, fig.height=4.5, fig.cap="**Figure S1.1.** Baseline MCI incidence by age, before calibration scaling and individual risk adjustment. The line is the log-linear fit used in GRAM (ages 50-100); points are the four Gillis et al. age-band estimates it was fit to, plotted at band midpoints (the 70-74 band was excluded)."}
+library(ggplot2)
+# Gillis et al. 2019, Table 1, as entered in
+# data/mci_incidence/generate_mci_incidence_rate_by_age.R. The curve is the file
+# the model reads; the refit below only checks that the two still agree.
+gillis <- data.frame(age = c(67, 72, 77, 82, 87),
+                     mci = c(14, NA, 22.5, 40.9, 60.1))
+mci_curve <- readRDS(file.path(gram_root(), "data/mci_incidence/mci_incidence_rate_by_age.RDS"))
+refit <- exp(predict(lm(log(mci) ~ age, data = na.omit(gillis)),
+                     newdata = data.frame(age = mci_curve$age)))
+stopifnot(isTRUE(all.equal(unname(refit), unname(mci_curve$mci))))
+
+ggplot(mci_curve, aes(age, mci)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = na.omit(gillis), size = 2.8, shape = 21, fill = "white", stroke = 1.1) +
+  scale_x_continuous(breaks = seq(50, 100, 10)) +
+  labs(x = "Age (years)", y = "MCI incidence per 1,000 person-years") +
+  theme_minimal(base_size = 12)
+```
 
 **Data file**: `mci_incidence_rate_by_age.RDS`, generated by `generate_mci_incidence_rate_by_age.R`.
 
 ### Baseline Rate Calibration
 
-The population-average incidence rates from Gillis et al. [@gillis2019] are scaled by a calibration multiplier before individual-level risk adjustment, since GRAM's explicit modeling of individual risk factors (education, income, APOE4, medical burden) would otherwise double-count an average risk profile already embedded in the published rates. This multiplier, together with the CDR-SB progression parameters described below, is set through a formal calibration procedure. See the calibration and validation appendix for the calibration targets, search procedure, and parameter values.
+The population-average incidence rates from Gillis et al. [@gillis2019] are scaled by a calibration multiplier before individual-level risk adjustment, since GRAM's explicit modeling of individual risk factors (education, income, APOE4, medical burden) would otherwise double-count an average risk profile already embedded in the published rates. This multiplier, together with the CDR-SB progression parameters described below, is set through a formal calibration procedure. See S2 Calibration and Validation Supplement for the calibration targets, search procedure, and parameter values.
 
 ### Individual Risk Adjustment
 
-Individual MCI incidence probability is adjusted using logistic regression coefficients from Angevaare et al:[@angevaare2022]
+Individual MCI incidence probability is adjusted using hazard ratios from Angevaare et al:[@angevaare2022]
 
 | **Risk Factor** | **Parameter** | **Hazard Ratio** | **Log Coefficient** |
 |------------------|------------------|------------------|-------------------|
@@ -173,13 +190,13 @@ A proportion of incident MCI cases are assumed to be reversible (e.g., due to tr
 
 ## CDR-SB Progression
 
-Disease severity is measured using the Clinical Dementia Rating Scale - Sum of Boxes (CDR-SB), which ranges from 0 (no impairment) to 18 (severe impairment) and is conventionally scored in 0.5-point increments. GRAM models CDR-SB as a continuous quantity during simulation, so that mean rates of change need not be exact multiples of 0.5. Each score in the final matrix is rounded to the nearest 0.5 point when the run is finalized.
+Disease severity is measured using the Clinical Dementia Rating Scale - Sum of Boxes (CDR-SB), which ranges from 0 (no impairment) to 18 (severe impairment) and is scored in 0.5-point increments. GRAM models CDR-SB as a continuous quantity during simulation and each score in the final matrix is rounded to the nearest 0.5 point when the run is finalized.
 
 ### Progression Rates
 
 Individuals are assigned to one of two progression groups (fast or slow) based on empirical data from the Alzheimer's Disease Neuroimaging Initiative (ADNI)[@petersen2010]. Currently, group membership is only dependent on having MCI (slow) or dementia (fast). Future iterations could revise this to incorporate individual risk factors for progression rate.
 
-| **Progression Group** | **Parameter** | **Mean Annual Change** | **Standard Error** |
+| **Progression Group** | **Parameter** | **Mean Annual Change** | **SD** |
 |------------------|------------------|-------------------|------------------|
 | Fast progressors | `r.CDRfast_mean` | `r fmt(inp$r.CDRfast_mean, 1)` points/year | `r.CDRfast_sd1` = `r fmt(inp$r.CDRfast_sd1, 3)` |
 | Slow progressors | `r.CDRslow_mean` | `r fmt(inp$r.CDRslow_mean, 1)` points/year (uncalibrated scale input; see calibrated age-curve below) | `r.CDRslow_sd1` = `r fmt(inp$r.CDRslow_sd1, 3)` |
@@ -188,7 +205,7 @@ Slow progression rates are modeled as age-dependent. The rate at each age follow
 
 $r_{slow}(age) = \left(\frac{age - 50}{50}\right)^{param2a} \times param2b \times r.CDRslow\_mean$
 
-where `param2a` controls the curvature of the increase and `param2b` scales the maximum rate. Under the calibrated values (`param2a` = `r fmt(inp$param2a)`, `param2b` = `r fmt(inp$param2b)`), the curve is convex (i.e., CDR-SB accumulates increasingly quickly with age) rising from `r fmt(min(cdrslow), 1)` at age 50 to approximately `r fmt(max(cdrslow))` CDR-SB points/year at age 100, averaging approximately `r fmt(mean(cdrslow))` points/year across ages 50–100 (unweighted). Note this is lower than the `r fmt(inp$r.CDRslow_mean, 1)` points/year scale input above: because the curve is convex rather than linear, the age-range average no longer equals the input scale once calibration reshapes the curve. Individual-level variation is incorporated by sampling from a normal distribution with the group-specific mean and standard error.
+where `param2a` controls the curvature of the increase and `param2b` scales the maximum rate. Under the calibrated values (`param2a` = `r fmt(inp$param2a)`, `param2b` = `r fmt(inp$param2b)`), the curve is convex (i.e., CDR-SB accumulates increasingly quickly with age) rising from `r fmt(min(cdrslow), 1)` at age 50 to approximately `r fmt(max(cdrslow))` CDR-SB points/year at age 100, averaging approximately `r fmt(mean(cdrslow))` points/year across ages 50–100 (unweighted). Note this is lower than the `r fmt(inp$r.CDRslow_mean, 1)` points/year scale input above: because the curve is convex, the age-range average no longer equals the input scale once calibration reshapes the curve. Individual-level variation is incorporated by sampling from a normal distribution with the group-specific mean and standard error.
 
 ### Severity Classification
 
@@ -218,7 +235,7 @@ applying the directly-observed share to the (partly extrapolated) all-cause rate
 
 $p = 1 - e^{-\text{rate}}$
 
-The resulting table spans ages 50–100 (51 single-year rows, no missing values). `model/setup.R` reads it into `m.lifetable` and indexes it by position (`AGE - 50 + 1`), so row 1 must correspond to age 50 and rows must stay sorted by age.
+The resulting table spans ages 50–100. `model/setup.R` reads it into `m.lifetable` and indexes it by position (`AGE - 50 + 1`), so row 1 must correspond to age 50 and rows must stay sorted by age.
 
 **Data file**: `non_dementia_mortality_prob_bysex_byage.RDS`, generated by `data/mortality/calculate_non_dementia_death_rates.Rmd`.
 
@@ -237,13 +254,13 @@ Individual mortality probability in each cycle is calculated as: $$p_{death} = 1
 
 # Intervention Parameters
 
-GRAM includes early scaffolding for assessing diagnostic interventions which is not yet developed or validated, and none of it is used in the natural history model. See `model/setup.R` for the current placeholder parameter values.
+GRAM includes scaffolding for assessing diagnostic interventions however these are not yet fully developed or validated. They are not used in the natural history model. See `model/setup.R` for the current placeholder parameter values.
 
-Code for assessing testing interventions have been developed and are described in `testing_appendix.Rmd`.
+Code for assessing testing interventions described in the testing interventions supplement.
 
 # Economic Parameters
 
-GRAM includes early scaffolding for cost-effectiveness analysis including health state utility weights, annual care costs, cost/QALY discounting, and infrastructure for probabilistic sensitivity analysis (PSA). These are not yet developed or validated, and none of it is used in the results presented in this document. See `model/setup.R` for the current placeholder parameter values.
+GRAM includes scaffolding for cost-effectiveness analysis including health state utility weights, annual care costs, cost/QALY discounting, and infrastructure for probabilistic sensitivity analysis (PSA). These are not yet developed or validated, and are not used in the results presented in this document. See `model/setup.R` for the current placeholder parameter values.
 
 # Model Configuration
 
