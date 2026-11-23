@@ -87,3 +87,7 @@ Rplots.pdf
 
 # Talks and slide decks (large binaries, personal working files)
 docs/presentations/
+
+# Knitted Paper 2 report and the reference doc 00_reference_docx.R writes
+# (both rebuilt by word_report/build.R)
+analyses/testing_strategies/word_report/*.docx
