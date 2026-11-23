@@ -46,11 +46,29 @@ Do NOT publish this file.
 
 ---
 
-[DATE] - GITHUB RELEASE v2.0.0 - PAPER 2: Cognitive Testing Strategies in Primary Care
+2026.11.23 - STAGED (not yet committed, released or pushed) - GITHUB RELEASE v2.0.0 - PAPER 2: Cognitive Testing Strategies in Primary Care
+  Staged in the GRAM-public working tree with `git add`; review with `git diff --cached` there.
   Folders added:
-    - [list folders added]
+    - analyses/testing_strategies/ (analysis script, helpers, bha_scenarios/, word_report/ build scripts;
+      NOT planning/, validation/ workbooks, the Legends .docx, or "gramish plots/")
+    - analyses/model_development/code/ (replaces paper1_model_development/code/)
+    - calibration/ at the root (replaces paper1_model_development/calibration/), with the
+      20260814_162215 pass-1 and pass-2 results that calibrated_params.R cites
+    - validation/ (internal WHICAP and external FHS validation)
+    - data/eradar/, data/question/
+    - docs/01_natural_history_supplement.Rmd, docs/02_calibration_validation_supplement.Rmd,
+      docs/ONBOARDING.md (replace docs/methods_appendix.Rmd)
+  Removed from public:
+    - data/cogcon/ (selection probabilities now live in the scenario configs)
+    - superseded mortality working files (kept in the private repo's archive/)
+    - model/config/calibrate_config.R, model/helpers/test_performance_helpers.R (moved to the analysis)
+  Kept private (not copied): CLAUDE.md, .claude/, _pubs_log.txt, archive/,
+    analyses/presentation_southafrica/, analyses/country_adaptations/
   Changes to model:
-    - [list any bug fixes or updates]
-  DOI: [Version DOI]
+    - Calibrated parameters generated into model/config/calibrated_params.R and applied by setup.R
+    - Non-dementia mortality rebuilt from CDC WONDER 2018-2024, by sex
+    - Test selection split from test uptake; declined offers are re-offered the next year
+    - eRADAR flag rates derived from the published validation
+  DOI: [Version DOI, assigned by Zenodo on release]
   Associated manuscript(s):
     - [Manuscript Title]
