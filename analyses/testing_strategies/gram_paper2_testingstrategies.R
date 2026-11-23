@@ -30,9 +30,11 @@ l.inputs_calibrated[["n.ind"]] <- 100000
 #   (2) inclusive with non-random selection (NB, unlike GRAM-ish, total testing not fixed at 50% here)
 
 # PCP follow-up set
-#   inclusive and selective, each with an imperfect and a perfect PCP confirming BHA results
-#   no PCP follow-up scenario for reactive: PCP already heavily involved in referring to BHA
-#                                           so would have no reason to object to a test result
+#   inclusive and selective, each with a perfect PCP confirming BHA results (reported), and
+#   an imperfect one (registry group "pcp_imperfect", not reported)
+#   reactive has the perfect PCP only, for completeness: the PCP is already heavily involved
+#                                      in referring to BHA, so it is the arm least likely to
+#                                      see a test result overturned
 
 
 ## Scenario registry ####
@@ -49,14 +51,21 @@ scenario_registry <- tibble::tribble(
   "s1bhapos_question",    "scenario_s1bhapos_question_config.R",    "Selective, question-based", "sens",
   "u3bhapos_nonrand",     "scenario_u3bhapos_nonrand_config.R",     "Inclusive, non-random",     "sens",
 
-  "u3pcppos_rand50",      "scenario_u3pcppos_rand50_config.R",      "Inclusive, imperfect PCP",  "pcp",
-  "s1pcppos_emr",         "scenario_s1pcppos_emr_config.R",         "Selective, imperfect PCP",  "pcp",
   "u3pcp_perfect_rand50", "scenario_u3pcp_perfect_rand50_config.R", "Inclusive, perfect PCP",    "pcp",
-  "s1pcp_perfect_emr",    "scenario_s1pcp_perfect_emr_config.R",    "Selective, perfect PCP",    "pcp"
+  "s1pcp_perfect_emr",    "scenario_s1pcp_perfect_emr_config.R",    "Selective, perfect PCP",    "pcp",
+  "r1pcp_perfect",        "scenario_r1pcp_perfect_config.R",        "Reactive, perfect PCP",     "pcp",
+
+  # Not reported: the perfect PCP is the bound on how much confirmation can undo, and
+  # the imperfect one adds a second layer of assumptions without a new question.
+  # Kept runnable by adding the group to scenarios_to_run.
+  "u3pcppos_rand50",      "scenario_u3pcppos_rand50_config.R",      "Inclusive, imperfect PCP",  "pcp_imperfect",
+  "s1pcppos_emr",         "scenario_s1pcppos_emr_config.R",         "Selective, imperfect PCP",  "pcp_imperfect"
 )
 
-# Subset this to re-run only part of the set
-scenarios_to_run <- scenario_registry$key
+# Subset this to re-run only part of the set. options(gram.scenarios = ...) overrides it,
+# for the same reason the run options below are options -- see "Paths and run id".
+scenarios_to_run <- getOption("gram.scenarios",
+                              scenario_registry$key[scenario_registry$group %in% c("main")])
 
 reg_row    <- function(key) scenario_registry[match(key, scenario_registry$key), ]
 labels_for <- function(keys) setNames(reg_row(keys)$label, keys)
@@ -182,22 +191,44 @@ for (scen in if (run_scenarios) scenarios_to_run else character(0)) {
 #   n_early_at_tci the subset of those flagged during TCI rather than while
 #                 outright healthy. Not in any table; carried so the split behind
 #                 the NNT footnote can be read off without re-deriving it.
+#   nnt10_*_lo /  95% bootstrap interval of the NNT table's three ratios, at MCI,
+#   nnt10_*_hi    at dementia, and correctly detected (MCI + dementia). See nnt_boot().
 #
 # Cached, but only reused if BOTH caches carry every column the reporting code
 # reads -- otherwise adding a statistic here, or a column to
 # post_processing_outputs(), would silently serve stale results.
 stats_cols <- c("scenario", "n_eligible", "n_people", "n_tests", "n_identified",
                 "n_at_mci", "n_at_dem", "n_early_catch", "n_early_at_tci",
-                "nnt10_early")
+                "nnt10_early", "nnt10_detected",
+                "nnt10_at_mci_lo", "nnt10_at_mci_hi", "nnt10_at_dem_lo", "nnt10_at_dem_hi",
+                "nnt10_detected_lo", "nnt10_detected_hi")
 perf_cols  <- c("tp_mci", "tp_dem", "converted_tp_mci", "converted_tp_dem",
                 "fn_mci", "fn_dem", "notest_fn_mci", "notest_fn_dem",
                 "notest_fn_dx", "not_eligible", "alive",
-                "identified", "identified_mci", "identified_dem", "identified_early")
+                "identified", "identified_mci", "identified_dem", "identified_early",
+                "new_tp", "new_tp_converted", "new_pos", "new_pos_impaired")
 
 stats_cached <- file.exists(stats_file()) &&
   all(stats_cols %in% names(readRDS(stats_file()))) &&
   all(file.exists(vapply(scenarios_to_run, perf_file, character(1)))) &&
   all(perf_cols %in% names(readRDS(perf_file(scenarios_to_run[1]))))
+
+# Monte Carlo intervals for the NNT ratios, by bootstrapping people rather than tests:
+# one person takes many tests, and their tests and their detection go together. Each
+# replicate reweights the cohort by how many times each person is drawn, so it is one
+# crossprod rather than a copy of the cohort. The seed is fixed and the same for every
+# scenario, and the arms share their simulated people, so every arm is resampled the
+# same way. Like the results table's Wilson intervals, these carry Monte Carlo error
+# only, not uncertainty in any input. Returns a 2 x k matrix, rows the 2.5th and 97.5th
+# percentiles, one column per column of `detected`.
+nnt_boot <- function(tests, detected, n_boot = 1000, seed = 20261029) {
+  n <- length(tests)
+  m <- cbind(tests, detected)
+  sums <- withr::with_seed(seed, t(vapply(seq_len(n_boot), function(b)
+    drop(crossprod(tabulate(sample.int(n, n, replace = TRUE), n), m)), numeric(ncol(m)))))
+  ratios <- 10 * sums[, 1] / sums[, -1, drop = FALSE]
+  apply(ratios, 2, quantile, probs = c(0.025, 0.975), names = FALSE)
+}
 
 strategy_stats <- if (stats_cached) {
   readRDS(stats_file())
@@ -242,6 +273,13 @@ strategy_stats <- if (stats_cached) {
     early      <- got[is_early]
     syn_at_pos <- syn[cyc, ][cbind(first_pos[early], early)]
 
+    # Per person, for the bootstrap: tests taken, and detected at MCI / at dementia
+    at_mci <- at_dem <- logical(ncol(bha_w))
+    at_mci[got[!is_early & sev_at == 0]] <- TRUE
+    at_dem[got[!is_early & sev_at >= 1]] <- TRUE
+    ci <- nnt_boot(colSums(bha_w >= 0, na.rm = TRUE),
+                   cbind(at_mci, at_dem, at_mci | at_dem))
+
     # For everyone else first_tp IS the positive test, so sev_at is the stage they
     # were at when they tested positive
     res_row <- data.frame(
@@ -253,7 +291,10 @@ strategy_stats <- if (stats_cached) {
       n_at_mci      = sum(sev_at[!is_early] == 0),
       n_at_dem      = sum(sev_at[!is_early] >= 1),
       n_early_catch  = length(early),
-      n_early_at_tci = sum(syn_at_pos == 0.5))
+      n_early_at_tci = sum(syn_at_pos == 0.5),
+      nnt10_at_mci_lo   = ci[1, 1], nnt10_at_mci_hi   = ci[2, 1],
+      nnt10_at_dem_lo   = ci[1, 2], nnt10_at_dem_hi   = ci[2, 2],
+      nnt10_detected_lo = ci[1, 3], nnt10_detected_hi = ci[2, 3])
 
     # The identified-by-stage figure reads the same counts per age from
     # post_processing_outputs(), computed separately; they must meet at window end.
@@ -263,7 +304,7 @@ strategy_stats <- if (stats_cached) {
               at_end$identified_dem   == res_row$n_at_dem,
               at_end$identified_early == res_row$n_early_catch)
 
-    rm(output, perf, bha, pcp, syn, sev, res, dxr, elig)
+    rm(output, perf, bha, pcp, syn, sev, res, dxr, elig, at_mci, at_dem)
     invisible(gc())
     res_row
   }))
@@ -274,6 +315,7 @@ strategy_stats <- if (stats_cached) {
   out$nnt10_at_mci <- 10 * out$n_tests / out$n_at_mci
   out$nnt10_at_dem <- 10 * out$n_tests / out$n_at_dem
   out$nnt10_early  <- 10 * out$n_tests / out$n_early_catch
+  out$nnt10_detected <- 10 * out$n_tests / (out$n_at_mci + out$n_at_dem)
   saveRDS(out, for_writing(stats_file()))
   out
 }
@@ -484,6 +526,8 @@ figure_specs <- list(
                                                                  type = "combined", width = 17, height = 12.5),
   list(name = "no-early-positives",          keys = main_keys,           type = "results", width = 14),
   list(name = "testers",                     keys = main_keys,           type = "testers", width = 14),
+  list(name = "annual-performance",          keys = main_keys_by_intensity,
+                                                                 type = "annual",  width = 15, height = 6.5),
   list(name = "identified-by-stage",         keys = main_keys_by_intensity,
                                                                  type = "stages",  width = 17, height = 7),
   list(name = "sens-selective",              keys = sens_selective_keys, type = "results", width = 11),
@@ -506,6 +550,8 @@ figures <- setNames(lapply(figure_specs, function(spec) {
     testers  = plot_testers(d, ages = plot_ages, scenario_names = labs),
     stages   = plot_identified_by_stage(d, scenario_names = labs, ages = plot_ages,
                                         base_size = 20, label_size = 4.6),
+    annual   = plot_annual_performance(d, scenario_names = labs, ages = plot_ages,
+                                       base_size = 20, label_size = 5.5),
     combined = plot_counts_and_shares(d, scenario_names = labs, ages = plot_ages,
                                       strategy_stats = strategy_stats[strategy_stats$scenario %in% spec$keys, ],
                                       base_size = 20, label_size = 4.6))
@@ -513,7 +559,7 @@ figures <- setNames(lapply(figure_specs, function(spec) {
   # plot_counts_and_shares and plot_identified_by_stage carry their own theme,
   # sized via base_size. Adding theme_paper2 on top would override the bottom row's
   # small grey stats strip, and bring back a legend the line-end labels replace.
-  themed <- if (spec$type %in% c("combined", "stages")) p else p + theme_paper2
+  themed <- if (spec$type %in% c("combined", "stages", "annual")) p else p + theme_paper2
 
   if (make_figures)
     ggsave(for_writing(plot_file(spec$name)), plot = themed,
@@ -544,6 +590,31 @@ testing_likelihood_for <- function(keys) {
                `Redrawn each year` = if (isTRUE(scen[["select_persists"]])) "No" else "Yes",
                check.names = FALSE)
   }))
+}
+
+# Testing uptake inputs, the two parts of testing_likelihood_for() shown apart: offered
+# (probs_select), completed if offered (probs_accept, 1 where unset), and completed after
+# refusing the last offer (p.accept_after_decline; N/A where no one can refuse). Measures
+# down, strategies across; `labels` names the columns, in the order of `keys`. Block is
+# for the Word report to group rows on. Read from the configs, like the table above.
+uptake_inputs_for <- function(keys, labels) {
+  fmt <- function(p) ifelse(p < 0.01, sprintf("%.1f%%", 100 * p), sprintf("%.0f%%", 100 * p))
+  cols <- lapply(keys, function(k) {
+    scen   <- load_scenario(file.path(config_dir, reg_row(k)$config), l.inputs_calibrated)[["scenario"]]
+    sel    <- unlist(scen[["probs_select"]][1, c("h", "mci", "dem")])
+    acc    <- if (is.null(scen[["probs_accept"]])) c(h = 1, mci = 1, dem = 1)
+              else unlist(scen[["probs_accept"]][1, c("h", "mci", "dem")])
+    refuse <- scen[["p.accept_after_decline"]]
+    c(fmt(sel), fmt(acc), if (is.null(refuse) || all(acc == 1)) "N/A" else fmt(refuse))
+  })
+  out <- data.frame(
+    Block   = c(rep("Probability of being offered a test", 3),
+                rep("Probability of completing a test if offered", 4)),
+    Measure = c("Healthy", "MCI", "Dementia", "Healthy", "MCI", "Dementia",
+                "Refused last cycle, any cognitive status"),
+    check.names = FALSE)
+  out[labels] <- cols
+  out
 }
 
 tab1 <- flextable(testing_likelihood_for(c(main_keys, sens_selective_keys[-1],
@@ -622,7 +693,7 @@ first_visit_mix
 
 # Counts behind the figures. NB this folds early_pos into fp and converted_tp into tp,
 # so the early-catch split is deliberately collapsed here; use scenario_reports for it.
-counts_table <- function(keys, ages = c(65, 67, 75)) {
+counts_table <- function(keys, ages = c(65, 67, 80)) {
   test_data_for(keys) %>%
     filter(age %in% ages) %>%
     mutate(age = age,
@@ -671,14 +742,22 @@ pct_ci <- function(x, n, z = qnorm(0.975)) {
   p      <- x / n
   centre <- (p + z^2 / (2 * n)) / (1 + z^2 / n)
   half   <- z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2)) / (1 + z^2 / n)
-  sprintf("%.1f (%.1f–%.1f)", 100 * p, 100 * (centre - half), 100 * (centre + half))
+  sprintf("%.1f (%.1f\u2013%.1f)", 100 * p, 100 * (centre - half), 100 * (centre + half))
 }
+
+# The interval alone, "44.2-56.6", for a footnote.
+ci_only <- function(x, n) sub("^[^(]*\\((.*)\\)$", "\\1", pct_ci(x, n))
+
+# Percent alone, as a table cell. The tables carry point estimates only; the one interval
+# worth reporting, dementia sensitivity (the cell on the fewest people), goes in the
+# footnote -- see results_table_for.
+pct <- function(x, n) sprintf("%.1f", 100 * x / n)
 
 # `n_tested` / `n_eligible` are supplied by the caller rather than read off `d`, because
 # the denominator is row-specific -- see results_table_for.
 as_pct_row <- function(d, time, strategy, n_tested, n_eligible) {
   m    <- metric_counts(d)
-  cell <- function(k) pct_ci(m[[k]][["x"]], m[[k]][["n"]])
+  cell <- function(k) pct(m[[k]][["x"]], m[[k]][["n"]])
   data.frame(Time                     = time,
              Strategy                 = strategy,
              `Eligible tested, N (%)` = sprintf("%s (%.1f)", format(n_tested, big.mark = ","),
@@ -690,6 +769,7 @@ as_pct_row <- function(d, time, strategy, n_tested, n_eligible) {
              PPV                      = cell("ppv"),
              NPV                      = cell("npv"),
              Accuracy                 = cell("acc"),
+             sens_dem_ci              = ci_only(m$sens_dem[["x"]], m$sens_dem[["n"]]),
              check.names = FALSE)
 }
 
@@ -726,7 +806,13 @@ results_table_for <- function(keys, at_end_followup = end_age,
                n_tested = st$n_people, n_eligible = st$n_eligible)
   }))
 
-  rbind(first, later)
+  # The dementia-sensitivity intervals ride along as an attribute rather than a column,
+  # for the table's footnote: one row per table row, Time and Strategy to label it.
+  out <- rbind(first, later)
+  ci  <- out[, c("Time", "Strategy", "sens_dem_ci")]
+  out$sens_dem_ci <- NULL
+  attr(out, "sens_dem_ci") <- ci
+  out
 }
 
 # Number needed to test: how many BHAs a strategy runs per 10 people it correctly
@@ -747,20 +833,62 @@ results_table_for <- function(keys, at_end_followup = end_age,
 # Early catches used to sit inside "caught at MCI", because they enter the
 # identified state at conversion and conversion is by definition MCI. They are
 # their own column now so "caught at MCI" means MCI at the time of the test.
+#
+# The table says "detected" for all of these, and its "correctly detected" is
+# narrower than n_identified: only people impaired at the positive test, MCI plus
+# dementia. A positive given before onset is reported beside it as a count, with no
+# ratio -- the test that gave it was not detecting impairment, which had not begun.
+# So the table's overall ratio is NOT strategy_stats$nnt10_any, which counts early
+# catches in its denominator.
+#
+# The shares are another matter: they are of EVERYONE the program flagged who was
+# impaired by the end, early catches included, so MCI + dementia + coincidental sum to
+# 100 and "any CI" is MCI + dementia. They say what a positive turned out to be; the
+# ratios say what it took to find impairment that was already there.
+#
+# Deliberately not the results table's definition. There a converter is credited to
+# program sensitivity from conversion onward, which is accurate: from then on the
+# program does hold a correct positive on them. NNT asks something else -- how many
+# tests it takes to detect someone while they are impaired -- and an early catch is
+# not that. It stays out of the denominator here, and the results table keeps
+# crediting it from conversion. Do not align the two.
+#
+# Ratios are point estimates only, as the paper reports them. Their 95% bootstrap
+# intervals stay in strategy_stats (nnt10_*_lo / _hi, from nnt_boot()) if wanted.
+#
+# Column order is MCI, dementia, then any CI and the early catches: the two stages
+# side by side, then the total and what sits outside it. The two timing columns come
+# from onset_timing() (see timing_table_for), so they describe a narrower group
+# than the counts beside them -- people whose impairment began during the program
+# while they were in it. Years from onset is among those caught after onset, which
+# leaves out everyone already impaired at the start of the window; years before
+# onset is among the early catches, and onset_timing()'s entry rules (a provider,
+# no prior clinical diagnosis) drop a handful of them. The Word note says so.
 nnt_table_for <- function(keys) {
   if (skip_incomplete(keys, "NNT table")) return(NULL)
   d <- strategy_stats[match(keys, strategy_stats$scenario), ]
+  n_detected <- d$n_at_mci + d$n_at_dem
+  n_all      <- n_detected + d$n_early_catch   # = n_identified
+  one_dp   <- function(x) formatC(x, format = "f", digits = 1, big.mark = ",")
+  timing_mean_sd <- function(outcome, col) vapply(keys, function(scen) {
+    t <- scenario_reports[[scen]]$timing
+    x <- t[[col]][t$outcome == outcome]
+    if (length(x) < 2) return(NA_character_)
+    sprintf("%.1f (%.1f)", mean(x), sd(x))
+  }, character(1), USE.NAMES = FALSE)
   data.frame(
-    Strategy                    = reg_row(keys)$label,
-    Tests                       = d$n_tests,
-    `Correctly identified`      = d$n_identified,
-    `Tests per 10 identified`   = round(d$nnt10_any, 1),
-    `Caught at MCI`             = d$n_at_mci,
-    `Tests per 10 at MCI`       = round(d$nnt10_at_mci, 1),
-    `Caught at dementia`        = d$n_at_dem,
-    `Tests per 10 at dementia`  = round(d$nnt10_at_dem, 1),
-    `Caught early`              = d$n_early_catch,
-    `Tests per 10 caught early` = round(d$nnt10_early, 1),
+    Strategy                                           = reg_row(keys)$label,
+    `Tests administered`                               = d$n_tests,
+    `Tests per person tested`                          = d$per_person,
+    `MCI at detection, n (%)`                          = n_pct(d$n_at_mci, n_all),
+    `MCI at detection, tests per 10`                    = one_dp(d$nnt10_at_mci),
+    `Dementia at detection, n (%)`                     = n_pct(d$n_at_dem, n_all),
+    `Dementia at detection, tests per 10`               = one_dp(d$nnt10_at_dem),
+    `Any CI at detection, n (%)`                       = n_pct(n_detected, n_all),
+    `Any CI at detection, tests per 10`                 = one_dp(d$nnt10_detected),
+    `Any CI at detection, years from onset, mean (SD)` = timing_mean_sd("caught", "lag"),
+    `Coincidentally detected before onset, n (%)`      = n_pct(d$n_early_catch, n_all),
+    `Coincidentally detected before onset, years before onset, mean (SD)` = timing_mean_sd("early", "lead"),
     check.names = FALSE)
 }
 
@@ -773,9 +901,9 @@ nnt_table_for <- function(keys) {
 # "Within k years" is caught by a positive test no more than k years after the onset
 # year, among people whose onset left at least k years of window to be caught in --
 # onset at 79 cannot show a 2-year catch by 80, so it would dilute the share. Deaths
-# and clinical diagnoses inside those k years count as not caught. Same 95% Wilson
-# interval as the results table.
-n_pct <- function(x, n) sprintf("%s (%.1f)", format(x, big.mark = ","), 100 * x / n)
+# and clinical diagnoses inside those k years count as not caught. Point estimate only,
+# as in the results table.
+n_pct <- function(x, n) sprintf("%s (%.1f)", format(x, big.mark = ",", trim = TRUE), 100 * x / n)
 
 timing_table_for <- function(keys) {
   if (skip_incomplete(keys, "timing table")) return(NULL)
@@ -787,11 +915,12 @@ timing_table_for <- function(keys) {
     lead <- d$lead[d$outcome == "early"]
     med_iqr <- function(x) {
       q <- quantile(x, c(0.25, 0.5, 0.75), type = 1, names = FALSE)
-      sprintf("%d (%d–%d)", q[2], q[1], q[3])
+      sprintf("%d (%d\u2013%d)", q[2], q[1], q[3])
     }
+    mean_sd <- function(x) sprintf("%.1f (%.1f)", mean(x), sd(x))
     within <- function(k) {
       at_risk <- d$onset_age <= max(testing_window) - k
-      pct_ci(sum(at_risk & d$outcome == "caught" & d$lag <= k, na.rm = TRUE), sum(at_risk))
+      pct(sum(at_risk & d$outcome == "caught" & d$lag <= k, na.rm = TRUE), sum(at_risk))
     }
     data.frame(Strategy                          = reg_row(scen)$label,
                `Impaired during program, N`      = format(n, big.mark = ","),
@@ -800,9 +929,9 @@ timing_table_for <- function(keys) {
                `Clinic diagnosed first, n (%)`   = n_pct(k_n("clinic"), n),
                `Not caught, n (%)`               = n_pct(k_n("neither"), n),
                `Years flagged before onset, median (IQR)` = med_iqr(lead),
-               `Years flagged before onset, mean`         = sprintf("%.1f", mean(lead)),
+               `Years flagged before onset, mean (SD)`    = mean_sd(lead),
                `Years to catch, median (IQR)`    = med_iqr(lag),
-               `Years to catch, mean`            = sprintf("%.1f", mean(lag)),
+               `Years to catch, mean (SD)`       = mean_sd(lag),
                `Caught within 1 year, %`         = within(1),
                `Caught within 2 years, %`        = within(2),
                check.names = FALSE)
@@ -826,16 +955,63 @@ labeled_table_for <- function(keys) {
     data.frame(Strategy                            = reg_row(scen)$label,
                `People labeled while unimpaired`   = format(nrow(d), big.mark = ","),
                `Person-years labeled`              = format(py, big.mark = ","),
-               `Mean years per person`             = sprintf("%.1f", mean(d$years)),
+               `Years per person, mean (SD)`       = sprintf("%.1f (%.1f)", mean(d$years), sd(d$years)),
                `Person-years, later impaired, n (%)` = n_pct(sum(d$years[d$later_impaired]), py),
                `Person-years, never impaired, n (%)` = n_pct(sum(d$years[!d$later_impaired]), py),
-               `Person-years per 1,000 eligible`   = sprintf("%.0f", 1000 * py / st$n_eligible),
+               `Person-years per 1,000 eligible`   = format(round(1000 * py / st$n_eligible),
+                                                            big.mark = ","),
                check.names = FALSE)
   }))
 }
 
 labeled_table <- labeled_table_for(main_keys)
 as_flex(labeled_table)
+
+# The paper's table: timing and labeling together, since they answer one question --
+# how early does a strategy find people, and what does finding them early cost.
+# Transposed, measures down and strategies across, because there are three strategies
+# and over a dozen measures. Each duration is given as both median (IQR) and mean (SD):
+# years are whole cycles, so the medians bunch at 1-2 and the means carry the spread.
+# Block is for the Word report to group rows on.
+timing_burden_table_for <- function(keys) {
+  tt <- timing_table_for(keys)
+  lt <- labeled_table_for(keys)
+  if (is.null(tt) || is.null(lt)) return(NULL)
+  block <- function(name, src, cols) {
+    m <- t(as.matrix(src[, unname(cols), drop = FALSE]))
+    colnames(m) <- src$Strategy
+    data.frame(Block = name, Measure = names(cols), m, check.names = FALSE, row.names = NULL)
+  }
+  burden <- "Labeled positive while unimpaired"
+  rbind(
+    block("Impairment beginning during the program", tt, c(
+      "People, N"                         = "Impaired during program, N",
+      "Flagged before onset, n (%)"       = "Flagged before onset, n (%)",
+      "Detected after onset, n (%)"       = "Caught after onset, n (%)",
+      "Clinic diagnosed first, n (%)"     = "Clinic diagnosed first, n (%)",
+      "Not detected, n (%)"               = "Not caught, n (%)")),
+    block("Time to detection, among those detected after onset", tt, c(
+      "Years from onset, median (IQR)"    = "Years to catch, median (IQR)",
+      "Years from onset, mean (SD)"       = "Years to catch, mean (SD)",
+      "Detected within 1 year, %"  = "Caught within 1 year, %",
+      "Detected within 2 years, %" = "Caught within 2 years, %")),
+    # Consecutive rows with one Block value make one group, so the early-catch lead
+    # time heads the burden block although it comes from the timing table
+    block(burden, tt, c(
+      "Flagged before onset: years flagged, median (IQR)" = "Years flagged before onset, median (IQR)",
+      "Flagged before onset: years flagged, mean (SD)"    = "Years flagged before onset, mean (SD)")),
+    block(burden, lt, c(
+      "People, N"                         = "People labeled while unimpaired",
+      "Person-years"                      = "Person-years labeled",
+      "Years per person, mean (SD)"       = "Years per person, mean (SD)",
+      "Person-years, later impaired, n (%)" = "Person-years, later impaired, n (%)",
+      "Person-years, never impaired, n (%)" = "Person-years, never impaired, n (%)",
+      "Person-years per 1,000 eligible"   = "Person-years per 1,000 eligible"))
+  )
+}
+
+timing_burden_table <- timing_burden_table_for(main_keys_by_intensity)
+as_flex(timing_burden_table)
 
 nnt_table <- nnt_table_for(main_keys)
 as_flex(nnt_table)

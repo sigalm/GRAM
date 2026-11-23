@@ -230,6 +230,22 @@ post_processing_outputs <- function(output_array, age_first_test = 65) {
   at_dem <- sev_status >= 1
   n_mci  <- function(m) rowSums(m & at_mci, na.rm = TRUE)
   n_dem  <- function(m) rowSums(m & at_dem, na.rm = TRUE)
+
+  # Annual FLOWS, beside the stocks above: what changed in cycle t. A true positive is
+  # new in t if the person holds one in t but did not in t-1 -- tested positive while
+  # impaired this year, or converted this year while holding an earlier positive (the
+  # results table credits a converter from conversion, so this does too; the converted
+  # part is kept so it can be read apart). The pool they are drawn from is everyone
+  # impaired and in the program in t who was not already a true positive in t-1:
+  # new_tp + fn + notest_fn, the sensitivity denominator minus last year's true
+  # positives. A positive is new in t if it is the person's first, whatever their state.
+  lag1 <- function(m) {
+    out <- rbind(rep(FALSE, ncol(m)), m[-nrow(m), , drop = FALSE])
+    out[is.na(out)] <- FALSE
+    out
+  }
+  new_tp  <- tp_total & !lag1(tp_total)
+  new_pos <- pos & !lag1(pos)
   
   # create data frame
   plot_data <- data.frame(
@@ -247,6 +263,10 @@ post_processing_outputs <- function(output_array, age_first_test = 65) {
     converted_tp_mci = n_mci(converted_tp), converted_tp_dem = n_dem(converted_tp),
     fn_mci = n_mci(fn), fn_dem = n_dem(fn),
     notest_fn_mci = n_mci(notest_fn), notest_fn_dem = n_dem(notest_fn),
+    new_tp           = rowSums(new_tp, na.rm = TRUE),
+    new_tp_converted = rowSums(new_tp & lag1(pos), na.rm = TRUE),
+    new_pos          = rowSums(new_pos, na.rm = TRUE),
+    new_pos_impaired = rowSums(new_pos & syn_status == 1, na.rm = TRUE),
     identified       = identified_by(rep(TRUE, length(got))),
     identified_mci   = identified_by(!is_early & sev_caught == 0),
     identified_dem   = identified_by(!is_early & sev_caught >= 1),
@@ -612,27 +632,35 @@ outcome_levels <- c("Deaths", "Alive", "TP", "FN", "TN", "FP",
 # involved, relaxing until nothing moves. A single bottom-up pass instead anchors
 # the lowest label and shunts the whole stack upward, leaving labels floating
 # above the line ends they belong to. `trans` works in the transformed space so
-# this behaves on a square-root axis.
-f.spread_labels <- function(y, gap, trans = c("identity", "sqrt")) {
+# this behaves on a square-root axis. `floor` is enforced inside the relaxation, in
+# the transformed space: clamping afterwards would drop the lowest labels back onto
+# each other, which is how Reactive's two thin bottom bands came to overprint.
+f.spread_labels <- function(y, gap, trans = c("identity", "sqrt"), floor = 0) {
   trans <- match.arg(trans)
   f  <- if (trans == "sqrt") sqrt else identity
   fi <- if (trans == "sqrt") function(x) x^2 else identity
   ord <- order(y)
   z <- f(y[ord])
-  for (iter in seq_len(80)) {
+  for (iter in seq_len(200)) {
     moved <- FALSE
+    if (z[1] < floor) {
+      z[1] <- floor
+      moved <- TRUE
+    }
     for (i in seq_along(z)[-1]) {
       deficit <- gap - (z[i] - z[i - 1])
       if (deficit > 1e-9) {
-        z[i - 1] <- z[i - 1] - deficit / 2
-        z[i]     <- z[i]     + deficit / 2
+        # the bottom label cannot give ground once it is on the floor
+        share <- if (i == 2 && z[1] <= floor) 0 else deficit / 2
+        z[i - 1] <- z[i - 1] - share
+        z[i]     <- z[i]     + deficit - share
         moved <- TRUE
       }
     }
     if (!moved) break
   }
   out <- numeric(length(y))
-  out[ord] <- fi(pmax(z, 0))
+  out[ord] <- fi(z)
   out
 }
 
@@ -644,16 +672,23 @@ plot_counts_and_shares <- function(plot_data,
                                    top_title    = "Cumulative strategy-level outcomes among eligible and alive",
                                    top_subtitle = NULL,
                                    bottom_title    = "Share of the cohort in each outcome",
-                                   bottom_subtitle = "Stack totals 100% of the starting cohort; the tested block at the bottom is programme reach",
+                                   bottom_subtitle = "Stack totals 100% of the starting cohort; the tested block at the bottom is program reach",
                                    bottom_caption  = "* Not eligible: no healthcare provider, or diagnosed with cognitive impairment before testing began",
                                    y_breaks   = c(0, 1000, 5000, 15000, 30000, 60000),
                                    mortality = c("alive", "deaths", "none"),
                                    split_untested = FALSE,  # bottom row: one "Not tested" band, or cut healthy / impaired
+                                   # bottom row: cut "Not tested" healthy / impaired but keep ONE
+                                   # fill, and hatch the impaired part with thin darker-teal lines,
+                                   # so the untested misses stand out without competing with the
+                                   # test-result bands. Implies split_untested. Needs ggpattern.
+                                   hatch_missed = FALSE,
                                    base_size  = 15,     # everything else scales off this
                                    label_size = 3.15,   # line-end and band labels
                                    gap_frac   = 0.062,  # minimum label separation, as a share of the axis
+                                   band_gap   = 0.075,  # same, for the band labels on the 0-1 share axis
                                    right_pad  = NULL,   # gutter for the labels; defaults to fit label_size
-                                   heights    = c(1.15, 1)) {
+                                   heights    = c(1.15, 1),
+                                   rows       = c("both", "shares")) {  # "shares": bottom row alone
 
   keys <- names(scenario_names)
 
@@ -661,6 +696,7 @@ plot_counts_and_shares <- function(plot_data,
   # (the default) or the cumulative deaths they are the complement of. Both come
   # straight from post_processing_outputs(), so no cohort size is needed here.
   mortality <- match.arg(mortality)
+  rows      <- match.arg(rows)
 
   # The gutter has to grow with the type, or bigger labels run off the panel.
   # 0.146 per point of label_size is what fits the longest label at the default.
@@ -745,11 +781,27 @@ plot_counts_and_shares <- function(plot_data,
   # position_stack puts the FIRST factor level on TOP, so the level order below
   # is the reverse of the bottom-up reading order.
   w_share <- wide %>% select(-Deaths, -Alive)
+  if (hatch_missed) split_untested <- TRUE
   if (!split_untested) {
     w_share <- w_share %>%
       mutate(`No test` = `No test, healthy` + `No test, impaired`, .keep = "unused")
   }
-  untested_lv <- if (split_untested) c("No test, impaired", "No test, healthy") else "No test"
+  # Hatched, the impaired part goes at the BOTTOM of the untested block, against the
+  # test results, so the eye meets the misses next to the outcomes they are missing from.
+  untested_lv <- if (hatch_missed) c("No test, healthy", "No test, impaired")
+                 else if (split_untested) c("No test, impaired", "No test, healthy")
+                 else "No test"
+
+  # Local copies: hatching repaints both untested bands in the single "Not tested"
+  # fill. The hatch lines are a darker shade of it, which also colours the impaired label.
+  fill_pal <- pal_outcome
+  lab_pal  <- pal_label
+  hatch_colour <- "#4E6E68"
+  if (hatch_missed) {
+    fill_pal[c("No test, healthy", "No test, impaired")] <- pal_outcome[["No test"]]
+    lab_pal[["No test, healthy"]]  <- pal_outcome[["No test"]]
+    lab_pal[["No test, impaired"]] <- hatch_colour
+  }
   band_levels <- c("Deceased", "Not eligible", untested_lv, "FP", "TN", "FN", "TP")
 
   d_share <- w_share %>%
@@ -764,41 +816,87 @@ plot_counts_and_shares <- function(plot_data,
     group_by(Scenario) %>%
     arrange(desc(Band), .by_group = TRUE) %>%
     mutate(ymid = cumsum(Share) - Share / 2,
-           y    = f.spread_labels(ymid, 0.075),
+           # floor at half a label, so the lowest one stays on the panel
+           y    = f.spread_labels(ymid, band_gap, floor = band_gap / 2),
            lab  = outcome_long[as.character(Band)],
            # asterisk points at the caption; "not eligible" is the one band whose
            # membership rule is not obvious from its name
            lab  = ifelse(Band == "Not eligible", paste0(lab, "*"), lab)) %>%
     ungroup()
 
-  strip_fn <- if (is.null(strategy_stats)) {
-    identity
-  } else {
+  stats_text <- if (!is.null(strategy_stats)) {
     st <- strategy_stats
     st$label <- unname(scenario_names[st$scenario])
-    as_labeller(setNames(
-      sprintf("N ever tested = %s\nN total tests done = %s\nTests per person tested = %.1f",
-              comma(st$n_people), comma(st$n_tests), st$per_person),
-      st$label))
+    setNames(sprintf("N ever tested = %s\nN total tests done = %s\nTests per person tested = %.1f",
+                     comma(st$n_people), comma(st$n_tests), st$per_person),
+             st$label)
+  }
+
+  # With the counts row above it, the strategy names are in ITS strips, so this row's
+  # strips carry the stats. Alone, the strips take the names, and the stats move into
+  # the headroom above 100% -- a strip is one text style, and the names are bold.
+  alone    <- rows == "shares"
+  strip_fn <- if (alone || is.null(stats_text)) "label_value" else as_labeller(stats_text)
+  stats_df <- if (alone && !is.null(stats_text))
+    data.frame(Scenario = factor(names(stats_text), levels = scen_levels), lab = stats_text)
+
+  # The stripes go on top of the ordinary areas as a ribbon with the band's own
+  # limits, stacked by hand in the bottom-up order position_stack uses. Not
+  # geom_area_pattern: its pattern region runs down to zero, and the bands drawn
+  # over it leave a dotted sliver of stripes down the right edge of every panel.
+  hatch_layer <- if (hatch_missed) {
+    hatch_band <- d_share %>%
+      group_by(Scenario, Age) %>%
+      arrange(desc(Band), .by_group = TRUE) %>%
+      mutate(ymax = cumsum(Share), ymin = ymax - Share) %>%
+      ungroup() %>%
+      filter(Band == "No test, impaired")
+    ggpattern::geom_ribbon_pattern(
+      data = hatch_band, aes(x = Age, ymin = ymin, ymax = ymax), inherit.aes = FALSE,
+      fill = NA, colour = NA, pattern = "stripe",
+      # Fill only: a stroke round each stripe spills half its width past the band
+      # edge, onto the thin false-positive band next to it.
+      pattern_colour = NA, pattern_fill = hatch_colour,
+      pattern_angle = 45, pattern_density = 0.28, pattern_spacing = 0.011)
   }
 
   p_bottom <- ggplot(d_share, aes(Age, Share, fill = Band)) +
     geom_area(colour = "white", linewidth = 0.25) +
+    hatch_layer +
+    # the white band boundaries again, over the stripes, so every band edge stays crisp
+    # (group = Band: setting fill as a parameter drops it from the grouping, and the
+    # ungrouped stack draws a vertical line at every age)
+    (if (hatch_missed) geom_area(aes(group = Band), fill = NA, colour = "white", linewidth = 0.25)) +
+    # Thin bands' labels cannot sit beside them once spread apart, so a leader ties
+    # each label back to the middle of its band at the right edge.
+    geom_segment(data = band_labels,
+                 aes(x = Age, xend = Age + 0.8, y = ymid, yend = y),
+                 linewidth = 0.4, inherit.aes = FALSE,
+                 colour = lab_pal[as.character(band_labels$Band)]) +
     geom_text(data = band_labels, aes(x = Age, y = y, label = lab),
-              hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
-              inherit.aes = FALSE, colour = pal_label[as.character(band_labels$Band)]) +
+              hjust = 0, nudge_x = 1, size = label_size, fontface = "bold",
+              inherit.aes = FALSE, colour = lab_pal[as.character(band_labels$Band)]) +
     facet_wrap(~Scenario, labeller = strip_fn) +
-    scale_fill_manual(values = pal_outcome) +
+    scale_fill_manual(values = fill_pal) +
     x_shared +
-    scale_y_continuous(labels = percent, expand = expansion(mult = c(0.035, 0.02))) +
+    scale_y_continuous(labels = percent, breaks = seq(0, 1, 0.25),
+                       expand = expansion(mult = c(0.035, if (is.null(stats_df)) 0.02 else 0.2))) +
     labs(title = bottom_title, subtitle = bottom_subtitle, caption = bottom_caption,
          y = "Share of the\nstarting cohort") +
     base +
-    theme(strip.text   = element_text(size = base_size * 0.62, face = "plain",
-                                      colour = "grey35", hjust = 0),
-          plot.caption = element_text(hjust = 0, colour = "grey35",
+    theme(plot.caption = element_text(hjust = 0, colour = "grey35",
                                       size = base_size * 0.62, margin = margin(t = 10)))
+  if (!alone)
+    p_bottom <- p_bottom +
+      theme(strip.text = element_text(size = base_size * 0.62, face = "plain",
+                                      colour = "grey35", hjust = 0))
+  if (!is.null(stats_df))
+    p_bottom <- p_bottom +
+      geom_text(data = stats_df, aes(x = min(ages), y = 1.03, label = lab),
+                hjust = 0, vjust = 0, lineheight = 0.95, size = label_size * 0.85,
+                colour = "grey35", inherit.aes = FALSE)
 
+  if (alone) return(p_bottom)
   (p_top / p_bottom) + plot_layout(heights = heights)
 }
 
@@ -871,4 +969,80 @@ plot_identified_by_stage <- function(plot_data,
           plot.title         = element_text(face = "bold", size = base_size * 1.15),
           plot.subtitle      = element_text(colour = "grey35", size = base_size * 0.8),
           legend.position    = "none")
+}
+
+
+# Year-on-year program performance: the annual FLOWS from post_processing_outputs(),
+# where the counts-and-shares figure shows stocks. One line per strategy, two panels:
+#   A  share of the impaired people in the program not yet detected who are detected
+#      that year: new_tp / (new_tp + fn + notest_fn). Solid counts a converter -- an
+#      earlier positive in someone who becomes impaired this year -- as detected, as
+#      the results table does; dashed counts only that year's positive tests.
+#   B  share of that year's first positives who are impaired at the time.
+# Strategies are labelled at the line end, so there is no colour legend; the only
+# legend is the solid / dashed key.
+pal_strategy <- c(Reactive = "#6B4C9A", Selective = "#2A9D8F", Inclusive = "#E76F51")
+
+plot_annual_performance <- function(plot_data,
+                                    scenario_names,      # named vector, key -> label
+                                    ages       = 65:80,
+                                    base_size  = 15,
+                                    label_size = 3.15,
+                                    gap_frac   = 0.06,   # minimum label separation, share of the axis
+                                    right_pad  = NULL) { # label gutter; defaults to fit label_size
+  # As in plot_counts_and_shares: the gutter is a share of the x axis but the labels
+  # are sized in points, so it grows with them. 0.058 per point fits "Inclusive".
+  if (is.null(right_pad)) right_pad <- 0.058 * label_size
+  keys <- names(scenario_names)
+  d <- plot_data %>%
+    filter(age %in% ages, scenario %in% keys) %>%
+    transmute(Age      = age,
+              Strategy = factor(scenario_names[scenario], levels = unname(scenario_names)),
+              pool     = new_tp + fn + notest_fn,
+              all      = new_tp / pool,
+              by_test  = (new_tp - new_tp_converted) / pool,
+              ppv      = new_pos_impaired / new_pos)
+
+  age_breaks <- pretty(range(ages), n = 4)
+  age_breaks <- age_breaks[age_breaks >= min(ages) & age_breaks <= max(ages)]
+
+  base <- theme_minimal(base_size = base_size) +
+    theme(panel.grid.minor   = element_blank(),
+          panel.grid.major.x = element_line(colour = "grey92"),
+          axis.title         = element_text(face = "bold"),
+          plot.tag           = element_text(face = "bold"),
+          legend.position    = "bottom",
+          legend.title       = element_blank())
+
+  # Labels at the end of the solid lines, pushed apart where strategies end close
+  ends <- function(col, limits) {
+    d %>%
+      filter(Age == max(Age)) %>%
+      mutate(y = f.spread_labels(.data[[col]], gap_frac * diff(limits)))
+  }
+  panel <- function(p, col, limits, ylab) {
+    lab <- ends(col, limits)
+    p +
+      geom_text(data = lab, aes(x = Age, y = y, label = Strategy, colour = Strategy),
+                hjust = 0, nudge_x = 0.3, size = label_size, fontface = "bold",
+                inherit.aes = FALSE, show.legend = FALSE) +
+      scale_colour_manual(values = pal_strategy, guide = "none") +
+      scale_x_continuous(breaks = age_breaks, expand = expansion(mult = c(0.03, right_pad))) +
+      scale_y_continuous(labels = percent, limits = limits, expand = expansion(mult = c(0, 0.02))) +
+      labs(x = "Age", y = ylab) +
+      base
+  }
+
+  lim_a <- c(0, max(d$all) * 1.08)
+  p_a <- ggplot(d, aes(Age, colour = Strategy)) +
+    geom_line(aes(y = all, linetype = "All new detections"), linewidth = 1.1) +
+    geom_line(aes(y = by_test, linetype = "Detected by that year's test"), linewidth = 0.8) +
+    scale_linetype_manual(values = c("All new detections" = "solid",
+                                     "Detected by that year's test" = "22"))
+  p_a <- panel(p_a, "all", lim_a, "Detected that year\n(% of impaired not yet detected)")
+
+  p_b <- ggplot(d, aes(Age, ppv, colour = Strategy)) + geom_line(linewidth = 1.1)
+  p_b <- panel(p_b, "ppv", c(0, 1), "Impaired at the time\n(% of that year's first positives)")
+
+  (p_a | p_b) + plot_annotation(tag_levels = "A")
 }
