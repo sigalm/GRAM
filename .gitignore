@@ -91,3 +91,6 @@ docs/presentations/
 # Knitted Paper 2 report and the reference doc 00_reference_docx.R writes
 # (both rebuilt by word_report/build.R)
 analyses/testing_strategies/word_report/*.docx
+
+# S2 figures, drawn at knit time by docs/_s2_figures.R
+docs/figures/
