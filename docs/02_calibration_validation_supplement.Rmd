@@ -111,7 +111,7 @@ Variation by personal characteristics is shown in Figure S2.2. As expected, the 
 
 \<\< figure s2.2 here \>\>
 
-Fit to the mortality target was also good (Figure S2.3). Mean absolute deviation was 1.6 deaths per 1,000 at ages under 75, and 36.3 deaths per 1,000 at ages 75 and older. Predicted cumulative mortality was 110, 279, and 623 per 1,000 by ages 65, 75, and 85, respectively. The average absolute difference between modeled and observed cumulative mortality was 21.0 per 1,000 and the maximum absolute difference was 39.9 per 1,000 at age 90. Overall life expectancy at age 50 was predicted as 30.7 years, consistent with estimates by the US National Center for Health Statistics.[@arias2025]
+Fit to the mortality target was also good (Figure S2.3). Mean absolute deviation was 1.6 deaths per 1,000 at ages under 75, and 36.3 deaths per 1,000 at ages 75 and older. Predicted cumulative mortality was 122, 303, and 660 per 1,000 by ages 65, 75, and 85, respectively. The average absolute difference between modeled and observed cumulative mortality was 21.0 per 1,000 and the maximum absolute difference was 39.9 per 1,000 at age 90. Overall life expectancy at age 50 was predicted as 30.7 years, consistent with estimates by the US National Center for Health Statistics.[@arias2025]
 
 \<\< figure s2.3 here \>\>
 
