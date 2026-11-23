@@ -1,0 +1,322 @@
+---
+title: "GRAM Testing Strategies: figures and tables"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  word_document:
+    reference_docx: reference_landscape.docx
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(flextable)
+
+d <- readRDS("report_data.rds")
+
+# One table style for the whole document. layout = "autofit" with width = 1 makes the
+# table fill the text block and stay a real Word table -- resizable, editable, and
+# selectable cell by cell -- rather than a picture of one.
+# A grouped_data (flextable::as_grouped_data) gets its group labels as spanning rows.
+# `header` reshapes the header (extra rows, merges) BEFORE the styling, so the styling
+# reaches every header row.
+ft <- function(x, size = 9.5, header = identity) {
+  (if (inherits(x, "grouped_data")) as_flextable(x, hide_grouplabel = TRUE) else flextable(x)) |>
+    header() |>
+    theme_booktabs() |>
+    font(fontname = "Calibri", part = "all") |>
+    fontsize(size = size, part = "all") |>
+    bold(part = "header") |>
+    align(align = "center", part = "all") |>
+    align(j = 1, align = "left", part = "all") |>
+    valign(valign = "bottom", part = "header") |>
+    padding(padding.top = 2.5, padding.bottom = 2.5, part = "all") |>
+    set_table_properties(layout = "autofit", width = 1)
+}
+
+counts <- function(x, j) colformat_num(x, j = j, big.mark = ",", digits = 0)
+one_dp <- function(x, j) colformat_double(x, j = j, digits = 1)
+two_dp <- function(x, j) colformat_double(x, j = j, digits = 2)
+
+rule       <- fp_border_default(color = "grey45", width = 1)
+group_rule <- fp_border_default(color = "grey65", width = 1)
+
+# Every NNT table is the same shape, so it takes the same treatment: two header rows,
+# the stage on top spanning its columns, with the single columns merged down through
+# both; counts with thousands separators (the stage cells arrive as formatted text and
+# need none); and rules marking off the blocks. MCI and dementia come first, then any
+# CI and the early catches, with a heavier rule between the two pairs. The PCP tables have no early-catch block (see 01_paper2_tables.R).
+nnt_ft <- function(x) {
+  early <- any(startsWith(names(x), "Coincidentally detected before onset"))
+  ratio <- "Tests per 10 detected"
+  top <- c("Strategy", "Tests completed", "Mean tests per person ever tested",
+           "MCI at time of positive test", "Dementia at time of positive test",
+           "Any CI at time of positive test",
+           if (early) "Healthy at time of positive test")
+  sub <- c("", "", "", "n (%)", ratio, "n (%)", ratio,
+           "n (%)", ratio, "Time from onset to detection, mean (SD)",
+           if (early) c("n (%)", "Time from detection to onset, mean (SD)"))
+  header <- function(f) {
+    f <- f |>
+      set_header_labels(values = setNames(as.list(sub), names(x))) |>
+      add_header_row(values = top, colwidths = c(1, 1, 1, 2, 2, 3, if (early) 2))
+    for (j in 1:3) f <- merge_at(f, i = 1:2, j = j, part = "header")
+    f
+  }
+  ft(x, header = header) |>
+    counts(j = "Tests administered") |>
+    two_dp(j = "Tests per person tested") |>
+    hline(i = 1, j = 4:ncol(x), border = group_rule, part = "header") |>
+    vline(j = intersect(c(3, 5, 10), seq_len(ncol(x) - 1)), border = group_rule, part = "all") |>
+    vline(j = 7, border = rule, part = "all")
+}
+
+# The results tables stack two blocks of the same strategies, first cycle then program
+# end. Two header rows, "Sensitivity" spanning its three columns and the single columns
+# merged down through both; the Time label merged down its block, with the rule between
+# the blocks. Superscripts 1-3 point at the numbered notes under each table.
+start_age    <- min(d$testing_window)
+program_yrs  <- d$end_age - start_age
+# Built as text: as_paragraph() would print a bare number as "80.0".
+time_labels  <- list(
+  as_paragraph("First cycle in which a test is offered", as_sup("1"),
+               paste0("\n(cohort aged ", start_age, ")")),
+  as_paragraph(paste0("By year ", program_yrs, " (end of program,\ncohort aged ", d$end_age, ")")))
+time_short   <- c(`First Cycle` = "First cycle", `By Program End` = paste("By year", program_yrs))
+
+results_ft <- function(x) {
+  n <- nrow(x) %/% 2
+  top <- c("Time", "Strategy", "Eligible tested", "Sensitivity",
+           "Specificity", "PPV", "NPV", "Accuracy")
+  header <- function(f) {
+    f <- f |>
+      set_header_labels(Sensitivity = "Any CI", `Sensitivity, MCI` = "MCI",
+                        `Sensitivity, dementia` = "Dementia") |>
+      add_header_row(values = top, colwidths = c(1, 1, 1, 3, 1, 1, 1, 1))
+    for (j in c(1:3, 7:10)) f <- merge_at(f, i = 1:2, j = j, part = "header")
+    f |>
+      compose(i = 1, j = 3, part = "header",
+              value = as_paragraph("Eligible tested", as_sup("2"), ",\nn (%)")) |>
+      compose(i = 2, j = 6, part = "header", value = as_paragraph("Dementia", as_sup("3")))
+  }
+  ft(x, header = header) |>
+    hline(i = 1, j = 4:6, border = group_rule, part = "header") |>
+    compose(i = 1,     j = 1, value = time_labels[[1]]) |>
+    compose(i = n + 1, j = 1, value = time_labels[[2]]) |>
+    merge_at(i = 1:n, j = 1) |>
+    merge_at(i = (n + 1):(2 * n), j = 1) |>
+    valign(j = 1, valign = "center", part = "body") |>
+    hline(i = n, border = rule)
+}
+
+# The tables carry point estimates only; the dementia-sensitivity intervals, carried on
+# the table as an attribute, are spelled out in its note 3 instead.
+sens_dem_note <- function(x) {
+  ci <- attr(x, "sens_dem_ci")
+  by_time <- vapply(unique(ci$Time), function(tm) {
+    r <- ci[ci$Time == tm, ]
+    paste0("*", time_short[[tm]], "*: ", paste(r$Strategy, r$sens_dem_ci, collapse = "; "), ".")
+  }, character(1))
+  paste("^3^ 95% Wilson intervals for dementia sensitivity.", paste(by_time, collapse = " "),
+        "Intervals reflect Monte Carlo error only; because the strategies share random",
+        "numbers, differences between them are more precise than overlapping intervals suggest.")
+}
+```
+
+Cohort of `r format(d$n_ind, big.mark = ",", scientific = FALSE)` individuals, simulated
+from age 50. Testing window ages `r min(d$testing_window)`--`r max(d$testing_window)`;
+program end reported at age `r d$end_age`. All figures and tables are drawn from
+simulation run `r d$run_id`.
+
+\newpage
+
+# 1. Main text
+
+## Figure 1. Share of the starting cohort in each outcome, by strategy and age
+
+![](figures/counts_and_shares.png){width=9.2in}
+
+\newpage
+
+## Table 1. Program performance, by strategy
+
+```{r tab1}
+results_ft(d$results_main)
+```
+
+All values other than counts are percentages and describe the program, not the test:
+eligible people who were never tested count as misses (false negatives or true negatives).
+The second block is the cumulative snapshot at age `r d$end_age`. CI, cognitive
+impairment; MCI, mild cognitive impairment; PPV, positive predictive value; NPV, negative
+predictive value.
+
+^1^ Read at each person's own first cycle due for a test.
+
+^2^ The number tested and their share of those eligible: of those due a test that cycle in
+the first block; of everyone ever eligible during the program in the second.
+
+`r sens_dem_note(d$results_main)`
+
+\newpage
+
+## Figure 2. Annual program performance, by strategy and age
+
+![](figures/annual_performance.png){width=9.2in}
+
+(A) Of the impaired people in the program not yet detected at the start of the year
+(including those newly impaired that year), the share the program detects that year;
+eligible people who were never tested count as not detected, as in Table 1. The solid line
+counts a person who already held a positive result and became impaired that year as
+detected, as Table 1 does; the dashed line counts only positive tests given that year.
+(B) Of the people given their first positive result that year, the share impaired at the
+time. The inclusive strategy tests a third of its cohort each year, so everyone is first
+offered a test by age 67; its curves rise over those years as the first round completes.
+
+\newpage
+
+## Table 2. Number needed to test, by strategy
+
+```{r tab2}
+nnt_ft(d$nnt_main)
+```
+
+*Tests completed* counts every BHA from age `r min(d$testing_window)` to
+`r max(d$testing_window)`, and is the numerator of every ratio in the table: no test can
+be aimed at one stage alone, so the stage-specific ratios do not average to the overall
+one. *Mean tests per person ever tested* is tests completed over people tested at least
+once. People are grouped by their state at the positive test: MCI and dementia, which
+together make *any CI*, and *healthy*, people who tested positive while not yet impaired
+(healthy or transitional cognitive impairment) and became impaired later in the program.
+Percentages are shares of everyone detected, healthy included, so MCI, dementia and
+healthy sum to 100. No ratio is given for the healthy group, since the test that flagged
+them preceded the impairment, and they are left out of every ratio's denominator. Table 1
+counts them differently: there a positive given before onset counts as a true positive
+once the person is impaired, so its sensitivity and PPV include them. The two timing
+columns, in years, are among people whose impairment began during the program, as in
+Table S3: *time from onset to detection* among those detected after onset, which leaves
+out people already impaired at age `r min(d$testing_window)`; *time from detection to
+onset* among those flagged before onset, 1 for a positive the year before onset. BHA,
+brief cognitive assessment; CI, cognitive impairment.
+
+\newpage
+
+# 2. Supplement: testing strategies
+
+## Table S1. Testing uptake inputs
+
+```{r tabS1}
+tu <- as_grouped_data(d$uptake_inputs, groups = "Block")
+ft(tu) |>
+  set_header_labels(Measure = "") |>
+  bold(i = ~ !is.na(Block)) |>
+  padding(i = ~ is.na(Block), j = 1, padding.left = 14) |>
+  align(j = -1, align = "right", part = "body")
+```
+
+Among people due for a test. The probability of being tested at a first offer is the
+probability of being offered one times the probability of completing it. *Refused last
+cycle* is the probability of completing a test at the next offer after refusing one,
+whatever the cognitive status; under the reactive strategy every offer is completed, so
+no one refuses. \*Both selective strategies use the same probabilities of completing a
+test, set for the eRADAR strategy. They differ in who is offered one and in whether it
+persists: an eRADAR flag, once raised, stays on the record, while the question is asked
+anew at each visit. MCI, mild cognitive impairment.
+
+## Table S2. Brief cognitive assessment (BHA) test performance characteristics
+
+```{r tabS2}
+ft(d$bha_params) |> width(j = 1, width = 2.4) |>
+  set_table_properties(layout = "autofit", width = 0.45)
+```
+
+Source: Tsoy et al. 2021, BHA-Global Score (including the informant survey) at the -1.5z cutoff.
+
+\newpage
+
+## Table S3. Timing of detection and time labeled positive while unimpaired, by strategy
+
+```{r tabS3}
+tb <- as_grouped_data(d$timing_burden, groups = "Block")
+ft(tb) |>
+  set_header_labels(Measure = "") |>
+  bold(i = ~ !is.na(Block)) |>
+  padding(i = ~ is.na(Block), j = 1, padding.left = 14) |>
+  align(j = -1, align = "right", part = "body")
+```
+
+The first two blocks describe people whose impairment began during the program while they
+were in it (with a provider and no prior clinical diagnosis); people already impaired at
+age `r min(d$testing_window)` are excluded. Each falls in exactly one outcome by age
+`r max(d$testing_window)`: flagged positive before onset, detected by a positive test after
+onset, diagnosed clinically before the program detected them, or not detected (including
+deaths). Years from onset counts 0 for detection in the onset year. *Detected within k
+years* is among people whose onset left at least k years of program to be detected in. The last
+block counts everyone who held a positive result while unimpaired (healthy or transitional
+cognitive impairment), from that positive to impairment, death, or age
+`r max(d$testing_window)`, whichever came first; *later impaired* means impaired at any
+age. IQR, interquartile range; SD, standard deviation.
+
+\newpage
+
+## Table S4. Program performance by selection mechanism, selective strategy
+
+```{r tabS4}
+results_ft(d$results_sens_selective)
+```
+
+Definitions, and notes 1 and 2, as in Table 1.
+
+`r sens_dem_note(d$results_sens_selective)`
+
+## Table S5. Number needed to test by selection mechanism, selective strategy
+
+```{r tabS5}
+nnt_ft(d$nnt_sens_selective)
+```
+
+Definitions as in Table 2.
+
+\newpage
+
+## Table S6. Program performance with non-random uptake, inclusive strategy
+
+```{r tabS6}
+results_ft(d$results_sens_inclusive)
+```
+
+Definitions, and notes 1 and 2, as in Table 1.
+
+`r sens_dem_note(d$results_sens_inclusive)`
+
+## Table S7. Number needed to test with non-random uptake, inclusive strategy
+
+```{r tabS7}
+nnt_ft(d$nnt_sens_inclusive)
+```
+
+Definitions as in Table 2.
+
+\newpage
+
+## Table S8. Program performance with perfect primary care follow-up of a positive BHA
+
+```{r tabS8}
+results_ft(d$results_pcp)
+```
+
+A positive BHA is followed up by the primary care provider (PCP), who confirms every
+impaired person and dismisses every false positive; the PCP verdict replaces the BHA
+result in the same cycle. People whose positive is dismissed stay in the program and
+are offered testing again; testing stops at a confirmed positive. This bounds how much
+confirmatory follow-up could reduce the burden of false positives. Definitions, and notes
+1 and 2, as in Table 1.
+
+`r sens_dem_note(d$results_pcp)`
+
+## Table S9. Number needed to test with perfect primary care follow-up of a positive BHA
+
+```{r tabS9}
+nnt_ft(d$nnt_pcp)
+```
+
+Definitions as in Table 2 and Table S8. There is no *healthy at time of positive test*
+block: the PCP dismisses every positive given before onset, so there are none by
+construction.
