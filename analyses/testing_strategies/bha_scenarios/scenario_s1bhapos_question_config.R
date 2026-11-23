@@ -49,7 +49,9 @@ scenario_inputs <- list(
   # Someone who declined their last offer takes the next one up at this, whatever their
   # state, as in the eRADAR arm. They are asked again the next year, but must endorse the
   # question again to be offered; the 0.2 applies whenever that next offer comes.
-  # Source: email from Jim; citation to be added.
+  # Source: uptake among earlier non-participants in later rounds of colorectal cancer
+  # screening: Kooyker et al., Int J Cancer 2020;147:1098-1106; Lo et al., Gut
+  # 2015;64:282-291.
   p.accept_after_decline = 0.2,
   # A negative test means no re-test for 3 years, as in the eRADAR arm. A decline does
   # not start the interval, and neither does not being selected: anyone due and not

@@ -70,6 +70,7 @@ benchmark_prev_by_race <<- data.frame(
            0.23, 0.22, 0.28)
 )
 
+# Years lived with MCI and with dementia: Bruck et al., J Alzheimers Dis 2021;84:1515-1522.
 benchmark_reside_time <<- data.frame(
   age_group = "Benchmark",
   condition = c("benchmark_mci", "benchmark_dem"),

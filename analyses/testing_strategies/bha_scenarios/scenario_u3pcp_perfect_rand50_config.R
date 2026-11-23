@@ -25,8 +25,11 @@ scenario_inputs <- list(
   # Workbook TCI folds into h; workbook memory loss folds into mci.
   probs_accept = f.select_matrix(h = 0.5, mci = 0.5, dem = 0.5),
   # Someone who declined their last offer takes the next one up at this, whatever their
-  # state. Source: email from Jim; citation to be added. A decline does not start
-  # repeat_interval: the next offer is the next year, not 3 years on.
+  # state. Source: uptake among earlier non-participants in later rounds of colorectal cancer
+  # screening: Kooyker et al., Int J Cancer 2020;147:1098-1106; Lo et al., Gut
+  # 2015;64:282-291.
+  # A decline does not start repeat_interval: the next offer is the next year, not
+  # 3 years on.
   p.accept_after_decline = 0.2,
   # No rr.select_prior: a prior test result carries no reassurance or persistence effect.
   prob_pcpfu = 1,  # the probability that a patient with a regular healthcare provider will receive PCP follow up after a cognitive test

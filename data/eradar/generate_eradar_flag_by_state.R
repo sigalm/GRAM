@@ -1,5 +1,6 @@
 # Generate eRADAR flag rates by true cognitive status, P(flagged | state)
-# From the published eRADAR validation at the 85th-percentile cutoff (citation to be added).
+# From the published eRADAR validation at the 85th-percentile cutoff: Barnes DE et al.,
+# J Am Geriatr Soc 2020;68(1):103-111, doi:10.1111/jgs.16182.
 #
 #   dem   the published dementia sensitivity.
 #   mci   backed out of the sensitivity with MCI and dementia both counted as cases:

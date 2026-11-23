@@ -40,7 +40,9 @@ scenario_inputs <- list(
   # whatever their state -- dementia too, in place of its first-offer acceptance of 1.
   # Since no one with dementia declines a first offer, this reaches dementia only through
   # someone who declined while healthy or MCI and has since progressed.
-  # Source: email from Jim; citation to be added.
+  # Source: uptake among earlier non-participants in later rounds of colorectal cancer
+  # screening: Kooyker et al., Int J Cancer 2020;147:1098-1106; Lo et al., Gut
+  # 2015;64:282-291.
   p.accept_after_decline = 0.2,
   # A negative test does not clear the flag, but the person is not re-tested for 3
   # years, mirroring the inclusive arm. A decline does not start the interval: a
